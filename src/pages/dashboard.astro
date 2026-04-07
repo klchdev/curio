@@ -1,0 +1,70 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+import { getActiveSlots, canSpin, getUnplayedGames } from "../lib/queries";
+import SlotCard from "../components/SlotCard";
+import RouletteButton from "../components/RouletteButton";
+import SyncButton from "../components/SyncButton";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const activeSlots = getActiveSlots(user.id);
+const canSpinNow = canSpin(user.id);
+const poolSize = getUnplayedGames(user.id).length;
+
+const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
+  slotId: slot.id,
+  title: game.title,
+  headerImage: game.headerImage,
+  hltbMinutes: game.hltbMinutes,
+  startedAt: slot.startedAt instanceof Date ? slot.startedAt.toISOString() : String(slot.startedAt),
+  playedMinutes: (currentPlaytime ?? 0) - slot.playtimeOnStart,
+}));
+---
+
+<Layout title="Дашборд">
+  <div class="mb-8 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      {user.avatarUrl && (
+        <img src={user.avatarUrl} alt="" class="h-12 w-12 rounded-full" />
+      )}
+      <div>
+        <h1 class="text-2xl font-bold">{user.username}</h1>
+        <p class="text-sm text-gray-400">Игр в пуле: {poolSize}</p>
+      </div>
+    </div>
+    <div class="flex gap-3">
+      <SyncButton client:idle />
+      <a href="/history" class="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:bg-gray-800">
+        Дневник
+      </a>
+      <a href="/profile" class="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:bg-gray-800">
+        Профиль
+      </a>
+      <a href="/auth/logout" class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-red-400 transition hover:bg-gray-800">
+        Выйти
+      </a>
+    </div>
+  </div>
+
+  <section class="mb-10">
+    <h2 class="mb-4 text-center text-xl font-semibold">Активные слоты ({activeSlots.length}/3)</h2>
+    <div class="mx-auto grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-3">
+      {slotData.map((props) => (
+        <SlotCard client:idle {...props} />
+      ))}
+
+      {canSpinNow && poolSize > 0 && (
+        <RouletteButton client:idle />
+      )}
+    </div>
+
+    {!canSpinNow && (
+      <div class="mx-auto mt-6 max-w-4xl rounded-xl border border-gray-800 bg-gray-900/50 py-6 text-center text-gray-500">
+        <span class="text-2xl">🔒</span>
+        <p class="mt-2">Все слоты заняты. Закрой или пропусти игру, чтобы крутить снова.</p>
+      </div>
+    )}
+  </section>
+</Layout>

@@ -1,0 +1,29 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+
+const user = await getSessionUser(Astro);
+
+if (user) {
+  return Astro.redirect("/dashboard");
+}
+---
+
+<Layout title="Главная">
+  <div class="flex flex-col items-center justify-center gap-8 py-20">
+    <h1 class="text-center text-5xl font-bold">
+      Хватит откладывать.<br />
+      <span class="text-indigo-400">Крути рулетку.</span>
+    </h1>
+    <p class="max-w-lg text-center text-lg text-gray-400">
+      BacklogRoulette выбирает случайную игру из твоего Steam бэклога и создаёт контракт —
+      ты играешь минимум 30 минут, пишешь заметку, ставишь оценку. Сдаться можно, но это будет записано.
+    </p>
+    <a
+      href="/auth/login"
+      class="rounded-lg bg-indigo-600 px-8 py-4 text-lg font-semibold text-white transition hover:bg-indigo-500"
+    >
+      Войти через Steam
+    </a>
+  </div>
+</Layout>

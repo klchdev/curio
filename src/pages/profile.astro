@@ -1,0 +1,69 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+import { getStats } from "../lib/queries";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const stats = getStats(user.id);
+---
+
+<Layout title="Профиль">
+  <div class="mb-6 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      {user.avatarUrl && (
+        <img src={user.avatarUrl} alt="" class="h-16 w-16 rounded-full" />
+      )}
+      <h1 class="text-2xl font-bold">{user.username}</h1>
+    </div>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+  </div>
+
+  <div class="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-400">{stats.totalGames}</div>
+      <div class="mt-1 text-sm text-gray-400">Закрыто игр</div>
+    </div>
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-400">
+        {stats.totalMinutes >= 60
+          ? `${Math.round(stats.totalMinutes / 60)}ч`
+          : `${stats.totalMinutes}м`}
+      </div>
+      <div class="mt-1 text-sm text-gray-400">Суммарное время</div>
+    </div>
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
+      <div class="text-3xl font-bold text-indigo-400">
+        {stats.avgMinutes >= 60
+          ? `${Math.round(stats.avgMinutes / 60)}ч`
+          : `${stats.avgMinutes}м`}
+      </div>
+      <div class="mt-1 text-sm text-gray-400">Среднее на игру</div>
+    </div>
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
+      <div class="text-3xl font-bold text-green-400">{stats.streak}</div>
+      <div class="mt-1 text-sm text-gray-400">Стрик (недель)</div>
+    </div>
+  </div>
+
+  {stats.wallOfShame.length > 0 && (
+    <section>
+      <h2 class="mb-4 text-xl font-semibold text-red-400">Стена стыда 😔</h2>
+      <div class="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
+        <ul class="space-y-1">
+          {stats.wallOfShame.map((title) => (
+            <li class="text-gray-300">• {title}</li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )}
+
+  {stats.wallOfShame.length === 0 && stats.totalGames > 0 && (
+    <div class="rounded-xl border border-green-900/50 bg-green-950/20 p-6 text-center">
+      <span class="text-3xl">🏆</span>
+      <p class="mt-2 text-green-400">Чистая совесть! Ни одной сданной игры.</p>
+    </div>
+  )}
+</Layout>

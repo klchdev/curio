@@ -1,0 +1,76 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+import { getHistory } from "../lib/queries";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const history = getHistory(user.id);
+---
+
+<Layout title="Дневник">
+  <div class="mb-6 flex items-center justify-between">
+    <h1 class="text-2xl font-bold">Дневник</h1>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+  </div>
+
+  {history.length === 0 ? (
+    <p class="text-gray-500">Пока пусто. Крути рулетку!</p>
+  ) : (
+    <div class="space-y-4">
+      {history.map((entry) => (
+        <div class="flex gap-4 rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <img
+            src={entry.gameImage || ""}
+            alt=""
+            class="h-20 w-32 shrink-0 rounded-lg object-cover"
+          />
+          <div class="flex-1">
+            <div class="mb-1 flex items-center gap-3">
+              <span class="text-lg">
+                {entry.type === "completed" && "🎮"}
+                {entry.type === "skipped" && entry.reasonType === "shame" && "😔"}
+                {entry.type === "skipped" && entry.reasonType === "legitimate" && "⏭️"}
+              </span>
+              <h3 class="font-semibold">{entry.gameTitle}</h3>
+              {entry.rating && (
+                <span class="rounded bg-indigo-900 px-2 py-0.5 text-sm font-medium text-indigo-300">
+                  {entry.rating}/10
+                </span>
+              )}
+            </div>
+
+            {entry.type === "completed" && (
+              <div>
+                <p class="text-sm text-gray-300">{entry.note}</p>
+                <p class="mt-1 text-xs text-gray-500">
+                  Наиграно: {entry.playtimeMinutes} мин &middot;{" "}
+                  {new Date(entry.date!).toLocaleDateString("ru")}
+                </p>
+              </div>
+            )}
+
+            {entry.type === "skipped" && entry.reasonType === "shame" && (
+              <div>
+                <p class="text-sm text-yellow-400">Сдался: {entry.reasonText}</p>
+                <p class="mt-1 text-xs text-gray-500">
+                  {new Date(entry.date!).toLocaleDateString("ru")}
+                </p>
+              </div>
+            )}
+
+            {entry.type === "skipped" && entry.reasonType === "legitimate" && (
+              <div>
+                <p class="text-sm text-gray-400">Пропущено: {entry.reasonText}</p>
+                <p class="mt-1 text-xs text-gray-500">
+                  {new Date(entry.date!).toLocaleDateString("ru")}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</Layout>

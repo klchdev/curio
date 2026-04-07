@@ -1,0 +1,53 @@
+import type { APIRoute } from "astro";
+import { verifyAssertion, getSteamProfile } from "../../lib/steam";
+import { db } from "../../db";
+import { users } from "../../db/schema";
+import { eq } from "drizzle-orm";
+
+export const GET: APIRoute = async ({ url, session, redirect }) => {
+  const returnUrl = new URL("/auth/callback", url.origin).toString();
+
+  try {
+    const steamId = await verifyAssertion(returnUrl, url.toString());
+    const profile = await getSteamProfile(steamId);
+
+    const existing = db
+      .select()
+      .from(users)
+      .where(eq(users.steamId, steamId))
+      .get();
+
+    let userId: number;
+
+    if (!existing) {
+      const result = db
+        .insert(users)
+        .values({
+          steamId: profile.steamId,
+          username: profile.username,
+          avatarUrl: profile.avatarUrl,
+          createdAt: new Date(),
+        })
+        .returning({ id: users.id })
+        .get();
+      userId = result.id;
+    } else {
+      db.update(users)
+        .set({
+          username: profile.username,
+          avatarUrl: profile.avatarUrl,
+        })
+        .where(eq(users.steamId, steamId))
+        .run();
+      userId = existing.id;
+    }
+
+    console.log("Saving userId to session:", userId);
+    await session?.set("userId", userId);
+
+    return redirect("/dashboard");
+  } catch (e) {
+    console.error("Steam auth error:", e);
+    return redirect("/?error=auth_failed");
+  }
+};
