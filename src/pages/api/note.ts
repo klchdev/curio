@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
-import { reviewSlot } from "../../lib/queries";
+import { addNote } from "../../lib/queries";
 import { getRecentPlaytime } from "../../lib/steam";
 import { db } from "../../db";
-import { users, slots, games } from "../../db/schema";
+import { users, slots, games, userGames } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 
 export const POST: APIRoute = async ({ request, session }) => {
@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ request, session }) => {
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();
-  const { slotId, verdict, rating, note } = body;
+  const { slotId, text } = body;
 
   const user = db
     .select({ steamId: users.steamId })
@@ -32,7 +32,7 @@ export const POST: APIRoute = async ({ request, session }) => {
   }
 
   const game = db
-    .select({ steamAppId: games.steamAppId })
+    .select({ steamAppId: games.steamAppId, id: games.id })
     .from(games)
     .where(eq(games.id, slot.gameId))
     .get();
@@ -49,7 +49,13 @@ export const POST: APIRoute = async ({ request, session }) => {
     game.steamAppId
   );
 
-  const result = reviewSlot(slotId, userId, verdict, rating, note, currentPlaytime);
+  // Update cached playtime
+  db.update(userGames)
+    .set({ playtimeMinutes: currentPlaytime })
+    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, game.id)))
+    .run();
+
+  const result = addNote(slotId, userId, text, currentPlaytime);
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

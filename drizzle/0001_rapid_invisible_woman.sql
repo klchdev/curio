@@ -1,0 +1,1 @@
+ALTER TABLE `slot_reviews` ADD `verdict` text DEFAULT 'finished' NOT NULL;

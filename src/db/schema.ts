@@ -42,7 +42,7 @@ export const slots = sqliteTable("slots", {
   gameId: integer("game_id")
     .notNull()
     .references(() => games.id),
-  status: text("status", { enum: ["active", "completed", "skipped"] })
+  status: text("status", { enum: ["active", "reviewed", "skipped"] })
     .notNull()
     .default("active"),
   playtimeOnStart: integer("playtime_on_start").notNull().default(0),
@@ -56,10 +56,42 @@ export const slotReviews = sqliteTable("slot_reviews", {
   slotId: integer("slot_id")
     .notNull()
     .references(() => slots.id),
+  verdict: text("verdict", { enum: ["finished", "dropped", "playing", "later"] })
+    .notNull()
+    .default("finished"),
   rating: integer("rating").notNull(),
   note: text("note").notNull(),
   playtimeMinutes: integer("playtime_minutes").notNull(),
+  tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
   completedAt: integer("completed_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const slotNotes = sqliteTable("slot_notes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  slotId: integer("slot_id")
+    .notNull()
+    .references(() => slots.id),
+  text: text("text").notNull(),
+  playtimeMinutes: integer("playtime_minutes").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const gameReviews = sqliteTable("game_reviews", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  gameId: integer("game_id")
+    .notNull()
+    .references(() => games.id),
+  tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
+  rating: integer("rating"),
+  note: text("note"),
+  createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
 });

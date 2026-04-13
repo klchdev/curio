@@ -1,43 +1,47 @@
-# Astro Starter Kit: Minimal
+# BacklogRoulette
+
+**Живой игровой дневник с многослойными отзывами.**
+
+Большинство платформ предлагают оставить один отзыв после прохождения. Но впечатления от игры меняются: первые 20 минут — восторг, на 5-м часу — сомнения, после финала — переосмысление. BacklogRoulette фиксирует эту эволюцию.
+
+## Ключевая идея
+
+Отзыв — это не снэпшот, а нарратив. Каждая часть автоматически привязана к playtime из Steam:
+
+```
+Первое впечатление · 45 мин
+  "Механика боя интересная, графика приятная..."
+
+Дополнение · 4 ч 20 мин
+  "Сюжет начал провисать, но побочные квесты спасают..."
+
+Вердикт · 12 ч · Прошёл · 4/5
+  "В итоге рад что прошёл, финал сильный..."
+```
+
+## Как работает
+
+1. **Рулетка** крутит случайную игру из Steam бэклога
+2. Играешь минимум 20 минут — оставляешь **первое впечатление** (вердикт + рейтинг + текст)
+3. Слот освобождается — можно крутить дальше
+4. Продолжаешь играть — **дополняешь отзыв** новыми частями
+5. Вердикт и рейтинг можно менять по мере прохождения
+
+## Что отличает
+
+- **Многослойный отзыв** — не один снэпшот, а история впечатлений
+- **Автоматический playtime** — каждая часть помечена реальным временем из Steam
+- **Эволюция мнения** — видно как менялся вердикт и оценка
+- **Рулетка бэклога** — геймифицированный способ разобрать коллекцию
+
+## Стек
+
+Astro + React + SQLite (Drizzle ORM) + Steam Web API
+
+## Запуск
 
 ```sh
-npm create astro@latest -- --template minimal
+npm install
+cp .env.example .env  # заполнить STEAM_API_KEY и SESSION_SECRET
+npm run dev
 ```
-
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
-
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
-
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).

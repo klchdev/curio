@@ -23,7 +23,8 @@ export default function SlotCard({
   const [showSkip, setShowSkip] = useState(false);
   const [playedMinutes, setPlayedMinutes] = useState(initialPlayed);
   const [refreshing, setRefreshing] = useState(false);
-  const canComplete = playedMinutes >= 30;
+  const [freed, setFreed] = useState(false);
+  const canReview = playedMinutes >= 20;
 
   const refreshPlaytime = async () => {
     setRefreshing(true);
@@ -43,7 +44,13 @@ export default function SlotCard({
 
   return (
     <>
-      <div className="flex flex-col overflow-hidden rounded-xl border border-gray-800 bg-gray-900">
+      <div
+        className={`flex flex-col overflow-hidden rounded-xl border border-gray-800 bg-gray-900 transition-all duration-700 ${
+          freed
+            ? "scale-90 opacity-0 -translate-y-16 blur-sm"
+            : "scale-100 opacity-100 translate-y-0"
+        }`}
+      >
         <img
           src={headerImage || ""}
           alt={title}
@@ -52,7 +59,7 @@ export default function SlotCard({
         <div className="flex flex-1 flex-col p-4">
           <h3 className="mb-2 font-semibold">{title}</h3>
           <div className="mb-2 flex items-center gap-2 text-sm">
-            <span className={canComplete ? "text-green-400" : "text-yellow-400"}>
+            <span className={canReview ? "text-green-400" : "text-yellow-400"}>
               Наиграно: {playedMinutes} мин
             </span>
             <button
@@ -71,35 +78,35 @@ export default function SlotCard({
               </span>
             )}
           </div>
-          {!canComplete && (
+          {!canReview && (
             <div className="mb-2">
               <div className="h-1.5 w-full rounded-full bg-gray-700">
                 <div
                   className="h-1.5 rounded-full bg-yellow-500 transition-all"
-                  style={{ width: `${Math.min(100, Math.round((playedMinutes / 30) * 100))}%` }}
+                  style={{ width: `${Math.min(100, Math.round((playedMinutes / 20) * 100))}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-500">Минимум 30 мин для закрытия</p>
+              <p className="mt-1 text-xs text-gray-500">Минимум 20 мин для первого впечатления</p>
             </div>
           )}
           <p className="mb-3 text-xs text-gray-500">
             Начато: {new Date(startedAt).toLocaleDateString("ru")}
           </p>
           <div className="mt-auto flex gap-2">
-            {canComplete ? (
+            {canReview ? (
               <button
                 onClick={() => setShowComplete(true)}
-                className="flex-1 rounded-lg bg-green-700 px-3 py-2 text-sm font-medium transition hover:bg-green-600"
+                className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium transition hover:bg-indigo-500"
               >
-                Завершить
+                Оставить впечатление
               </button>
             ) : (
               <>
                 <button
                   disabled
-                  className="flex-1 rounded-lg bg-green-900/50 px-3 py-2 text-sm font-medium text-green-800 cursor-not-allowed"
+                  className="flex-1 rounded-lg bg-indigo-900/30 px-3 py-2 text-sm font-medium text-indigo-800 cursor-not-allowed"
                 >
-                  Завершить
+                  Оставить впечатление
                 </button>
                 <button
                   onClick={() => setShowSkip(true)}
@@ -117,7 +124,12 @@ export default function SlotCard({
       </div>
 
       {showComplete && (
-        <CompleteModal slotId={slotId} onClose={() => setShowComplete(false)} />
+        <CompleteModal
+          slotId={slotId}
+          gameTitle={title}
+          onClose={() => setShowComplete(false)}
+          onFreed={() => setFreed(true)}
+        />
       )}
       {showSkip && (
         <SkipModal slotId={slotId} onClose={() => setShowSkip(false)} />
