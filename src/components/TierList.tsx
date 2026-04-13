@@ -1,0 +1,242 @@
+import { useState } from "react";
+
+type TierValue = "S" | "A" | "B" | "C" | "D";
+type Source = "roulette" | "retro";
+type Filter = "all" | "roulette" | "retro";
+
+interface Game {
+  slotId: number;
+  gameTitle: string;
+  gameImage: string | null;
+  steamAppId: number;
+  tier: TierValue | null;
+  verdict: string | null;
+  rating: number;
+  source: Source;
+  gameId?: number;
+}
+
+interface Props {
+  games: Game[];
+}
+
+const TIERS: { value: TierValue; label: string; labelBg: string; labelText: string }[] = [
+  { value: "S", label: "S", labelBg: "bg-yellow-500", labelText: "text-yellow-950" },
+  { value: "A", label: "A", labelBg: "bg-emerald-500", labelText: "text-emerald-950" },
+  { value: "B", label: "B", labelBg: "bg-sky-500", labelText: "text-sky-950" },
+  { value: "C", label: "C", labelBg: "bg-orange-500", labelText: "text-orange-950" },
+  { value: "D", label: "D", labelBg: "bg-red-500", labelText: "text-red-950" },
+];
+
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "Все" },
+  { value: "roulette", label: "Рулетка" },
+  { value: "retro", label: "Ретроспектива" },
+];
+
+export default function TierList({ games: initialGames }: Props) {
+  const [games, setGames] = useState(initialGames);
+  const [draggedSlotId, setDraggedSlotId] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<TierValue | "unranked" | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+
+  const filtered = filter === "all" ? games : games.filter((g) => g.source === filter);
+
+  const hasRoulette = games.some((g) => g.source === "roulette");
+  const hasRetro = games.some((g) => g.source === "retro");
+  const showFilters = hasRoulette && hasRetro;
+
+  async function handleSetTier(slotId: number, tier: TierValue | null) {
+    const game = games.find((g) => g.slotId === slotId);
+    if (!game) return;
+
+    // Optimistic update
+    setGames((prev) => prev.map((g) => (g.slotId === slotId ? { ...g, tier } : g)));
+
+    const url = game.source === "retro" ? "/api/retrospective" : "/api/set-tier";
+    const body = game.source === "retro"
+      ? { gameId: game.gameId, tier }
+      : { slotId, tier };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      setGames(initialGames);
+    }
+  }
+
+  function onDragStart(e: React.DragEvent, slotId: number) {
+    setDraggedSlotId(slotId);
+    e.dataTransfer.effectAllowed = "move";
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 60, 36);
+    }
+  }
+
+  function onDragEnd() {
+    setDraggedSlotId(null);
+    setDropTarget(null);
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  function onDrop(tier: TierValue | null) {
+    if (draggedSlotId !== null) {
+      handleSetTier(draggedSlotId, tier);
+    }
+    setDraggedSlotId(null);
+    setDropTarget(null);
+  }
+
+  const unranked = filtered.filter((g) => !g.tier);
+
+  return (
+    <div>
+      {showFilters && (
+        <div className="mb-4 flex gap-1 rounded-lg bg-gray-900 p-1 w-fit">
+          {FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                filter === f.value
+                  ? "bg-gray-700 text-white"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-1">
+        {TIERS.map((tier) => {
+          const tierGames = filtered.filter((g) => g.tier === tier.value);
+          const isOver = dropTarget === tier.value;
+
+          return (
+            <div
+              key={tier.value}
+              className={`flex min-h-[88px] rounded-lg border transition-colors ${
+                isOver
+                  ? "border-white/30 bg-gray-800"
+                  : "border-gray-800 bg-gray-900"
+              }`}
+              onDragOver={(e) => {
+                onDragOver(e);
+                setDropTarget(tier.value);
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                onDrop(tier.value);
+              }}
+            >
+              <div className={`flex w-16 flex-shrink-0 items-center justify-center rounded-l-lg ${tier.labelBg}`}>
+                <span className={`text-3xl font-black ${tier.labelText}`}>{tier.label}</span>
+              </div>
+              <div className="flex flex-1 flex-wrap items-start gap-1.5 p-2">
+                {tierGames.length === 0 && !isOver && (
+                  <span className="self-center px-2 text-sm text-gray-700">—</span>
+                )}
+                {tierGames.map((game) => (
+                  <GameCard
+                    key={game.slotId}
+                    game={game}
+                    isDragging={draggedSlotId === game.slotId}
+                    onDragStart={onDragStart}
+                    onDragEnd={onDragEnd}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {unranked.length > 0 && (
+          <div
+            className={`mt-6 rounded-lg border p-4 transition-colors ${
+              dropTarget === "unranked"
+                ? "border-white/30 bg-gray-800"
+                : "border-gray-800 bg-gray-900"
+            }`}
+            onDragOver={(e) => {
+              onDragOver(e);
+              setDropTarget("unranked");
+            }}
+            onDragLeave={() => setDropTarget(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              onDrop(null);
+            }}
+          >
+            <h3 className="mb-3 text-sm font-medium text-gray-400">
+              Не распределены <span className="text-gray-600">({unranked.length})</span>
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {unranked.map((game) => (
+                <GameCard
+                  key={game.slotId}
+                  game={game}
+                  isDragging={draggedSlotId === game.slotId}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GameCard({
+  game,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+}: {
+  game: Game;
+  isDragging: boolean;
+  onDragStart: (e: React.DragEvent, slotId: number) => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, game.slotId)}
+      onDragEnd={onDragEnd}
+      title={game.gameTitle}
+      className={`relative aspect-[460/215] w-[138px] cursor-grab overflow-hidden rounded border transition-all active:cursor-grabbing ${
+        isDragging ? "opacity-30 scale-95" : "border-gray-700/50 hover:border-gray-500 hover:scale-105"
+      }`}
+    >
+      {game.gameImage ? (
+        <img
+          src={game.gameImage}
+          alt={game.gameTitle}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gray-800 p-1">
+          <span className="text-center text-[10px] text-gray-400">{game.gameTitle}</span>
+        </div>
+      )}
+      {game.source === "retro" && (
+        <div className="absolute top-1 right-1 rounded bg-indigo-500/80 px-1 py-0.5 text-[8px] font-medium text-white">
+          R
+        </div>
+      )}
+    </div>
+  );
+}

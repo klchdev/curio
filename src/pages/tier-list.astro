@@ -1,0 +1,37 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+import { getTierList, getRetroReviews } from "../lib/queries";
+import TierList from "../components/TierList";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const rouletteGames = getTierList(user.id).map((g) => ({ ...g, source: "roulette" as const }));
+const retroGames = getRetroReviews(user.id).map((g) => ({
+  slotId: -g.gameId, // negative to avoid collision with slot IDs
+  gameTitle: g.gameTitle,
+  gameImage: g.gameImage,
+  steamAppId: g.steamAppId,
+  tier: g.tier,
+  verdict: null,
+  rating: g.rating ?? 0,
+  source: "retro" as const,
+  gameId: g.gameId,
+}));
+
+const allGames = [...rouletteGames, ...retroGames];
+---
+
+<Layout title="Тир лист">
+  <div class="mb-8 flex items-center justify-between">
+    <h1 class="text-2xl font-bold">Тир лист</h1>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+  </div>
+
+  {allGames.length === 0 ? (
+    <p class="text-gray-500">Пока нет обзоров. Крути рулетку и пиши отзывы!</p>
+  ) : (
+    <TierList client:load games={allGames} />
+  )}
+</Layout>
