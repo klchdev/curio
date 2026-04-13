@@ -1,10 +1,12 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getActiveSlots, canSpin, getUnplayedGames } from "../lib/queries";
+import { getActiveSlots, canSpin, getUnplayedGames, getStillPlaying, getUnreviewedPlayedGames } from "../lib/queries";
 import SlotCard from "../components/SlotCard";
 import RouletteButton from "../components/RouletteButton";
 import SyncButton from "../components/SyncButton";
+import StillPlayingCard from "../components/StillPlayingCard";
+import UnreviewedGames from "../components/UnreviewedGames";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
@@ -12,6 +14,8 @@ if (!user) return Astro.redirect("/");
 const activeSlots = getActiveSlots(user.id);
 const canSpinNow = canSpin(user.id);
 const poolSize = getUnplayedGames(user.id).length;
+const stillPlaying = getStillPlaying(user.id);
+const unreviewedGames = getUnreviewedPlayedGames(user.id);
 
 const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
   slotId: slot.id,
@@ -38,6 +42,9 @@ const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
       <SyncButton client:idle />
       <a href="/history" class="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:bg-gray-800">
         Дневник
+      </a>
+      <a href="/tier-list" class="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:bg-gray-800">
+        Тир лист
       </a>
       <a href="/profile" class="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:bg-gray-800">
         Профиль
@@ -67,4 +74,27 @@ const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
       </div>
     )}
   </section>
+
+  {stillPlaying.length > 0 && (
+    <section>
+      <h2 class="mb-4 text-lg font-semibold text-gray-400">Вы ещё играли...</h2>
+      <div class="mx-auto max-w-4xl space-y-3">
+        {stillPlaying.map((sp) => (
+          <StillPlayingCard
+            client:idle
+            slotId={sp.slotId}
+            gameTitle={sp.gameTitle}
+            gameImage={sp.gameImage}
+            totalPlayed={sp.totalPlayed}
+            lastRecordedPlaytime={sp.lastRecordedPlaytime}
+            delta={sp.delta}
+            verdict={sp.verdict}
+            rating={sp.rating}
+          />
+        ))}
+      </div>
+    </section>
+  )}
+
+  <UnreviewedGames client:idle games={unreviewedGames} />
 </Layout>

@@ -1,76 +1,273 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getHistory } from "../lib/queries";
+import { getHistory, getRetroReviews } from "../lib/queries";
+import AddNoteButton from "../components/AddNoteButton";
+import RetroGrid from "../components/RetroGrid.tsx";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
+const retroReviews = getRetroReviews(user.id);
+
 const history = getHistory(user.id);
+
+function formatPlaytime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
+}
 ---
 
 <Layout title="Дневник">
-  <div class="mb-6 flex items-center justify-between">
+  <div class="mb-8 flex items-center justify-between">
     <h1 class="text-2xl font-bold">Дневник</h1>
     <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
   </div>
 
   {history.length === 0 ? (
     <p class="text-gray-500">Пока пусто. Крути рулетку!</p>
-  ) : (
-    <div class="space-y-4">
-      {history.map((entry) => (
-        <div class="flex gap-4 rounded-xl border border-gray-800 bg-gray-900 p-4">
-          <img
-            src={entry.gameImage || ""}
-            alt=""
-            class="h-20 w-32 shrink-0 rounded-lg object-cover"
-          />
-          <div class="flex-1">
-            <div class="mb-1 flex items-center gap-3">
-              <span class="text-lg">
-                {entry.type === "completed" && "🎮"}
-                {entry.type === "skipped" && entry.reasonType === "shame" && "😔"}
-                {entry.type === "skipped" && entry.reasonType === "legitimate" && "⏭️"}
-              </span>
-              <h3 class="font-semibold">{entry.gameTitle}</h3>
-              {entry.rating && (
-                <span class="rounded bg-indigo-900 px-2 py-0.5 text-sm font-medium text-indigo-300">
-                  {entry.rating}/10
-                </span>
-              )}
+  ) : (() => {
+    const reviewed = history.filter((e) => e.type === "reviewed");
+    const skipped = history.filter((e) => e.type !== "reviewed");
+    return (
+    <div>
+    <div class="space-y-5">
+      {reviewed.map((entry) => {
+        const verdictConfig = {
+          finished: { label: "Прошёл", color: "emerald", icon: "✅" },
+          playing: { label: "Продолжаю", color: "indigo", icon: "🎮" },
+          dropped: { label: "Бросил", color: "red", icon: "❌" },
+          later: { label: "Вернусь позже", color: "amber", icon: "⏸️" },
+        } as const;
+
+        const isReviewed = true;
+        const v = entry.verdict ? verdictConfig[entry.verdict as keyof typeof verdictConfig] : null;
+
+        const worthLabels = ["Зря потратил время", "Скорее нет", "Нормально", "Скорее да", "Рад что попробовал"];
+        const worthColors = ["text-red-400", "text-orange-400", "text-gray-400", "text-sky-400", "text-emerald-400"];
+        const worthBg = ["bg-red-500", "bg-orange-500", "bg-gray-500", "bg-sky-500", "bg-emerald-500"];
+
+        const borderColor = v
+          ? v.color === "emerald" ? "border-emerald-800/50" : v.color === "indigo" ? "border-indigo-800/50" : v.color === "red" ? "border-red-800/50" : "border-amber-800/50"
+          : "border-gray-800";
+
+        const notes = entry.notes || [];
+
+        return (
+          <div class={`group relative overflow-hidden rounded-2xl border ${borderColor} bg-gray-900 transition-all duration-300 hover:scale-[1.01] hover:shadow-lg hover:shadow-black/30`}>
+            {/* Header with game image as background */}
+            <div class="relative h-28 overflow-hidden">
+              <img
+                src={entry.gameImage || ""}
+                alt=""
+                class="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/70 to-transparent" />
+
+              {/* Title overlay */}
+              <div class="absolute bottom-0 left-0 right-0 flex items-end justify-between p-4">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-lg font-bold drop-shadow-lg">{entry.gameTitle}</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                  {v && (
+                    <span class={`rounded-full px-3 py-1 text-xs font-semibold backdrop-blur-sm ${
+                      v.color === "emerald" ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30" :
+                      v.color === "indigo" ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/30" :
+                      v.color === "red" ? "bg-red-500/20 text-red-300 ring-1 ring-red-500/30" :
+                      "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
+                    }`}>
+                      {v.icon} {v.label}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {entry.type === "completed" && (
-              <div>
-                <p class="text-sm text-gray-300">{entry.note}</p>
-                <p class="mt-1 text-xs text-gray-500">
-                  Наиграно: {entry.playtimeMinutes} мин &middot;{" "}
-                  {new Date(entry.date!).toLocaleDateString("ru")}
-                </p>
-              </div>
-            )}
+            {/* Content */}
+            <div class="p-4 pt-2">
+              {/* Worth-it bar for reviewed games */}
+              {isReviewed && entry.rating && (
+                <div class="mb-3">
+                  <div class="mb-1 flex items-center justify-between">
+                    <span class={`text-sm font-medium ${worthColors[entry.rating - 1]}`}>
+                      {worthLabels[entry.rating - 1]}
+                    </span>
+                  </div>
+                  <div class="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        class={`h-1.5 flex-1 rounded-full transition-all ${
+                          i <= entry.rating! ? worthBg[entry.rating! - 1] : "bg-gray-800"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            {entry.type === "skipped" && entry.reasonType === "shame" && (
-              <div>
-                <p class="text-sm text-yellow-400">Сдался: {entry.reasonText}</p>
-                <p class="mt-1 text-xs text-gray-500">
-                  {new Date(entry.date!).toLocaleDateString("ru")}
-                </p>
-              </div>
-            )}
+              {/* Timeline */}
+              {isReviewed && (() => {
+                const totalParts = notes.length + 1;
+                const isFinalized = entry.verdict !== "playing";
+                const getLabel = (index: number) => {
+                  if (totalParts === 1) return isFinalized ? "Отзыв" : "Первое впечатление";
+                  if (index === 0) return "Первое впечатление";
+                  if (index === totalParts - 1 && isFinalized) return "Вердикт";
+                  return "Дополнение";
+                };
+                const getLabelColor = (index: number) => {
+                  if (totalParts === 1) return "text-indigo-400";
+                  if (index === 0) return "text-indigo-400";
+                  if (index === totalParts - 1 && isFinalized) return "text-emerald-400";
+                  return "text-gray-500";
+                };
+                const getDotColor = (index: number) => {
+                  if (totalParts === 1) return "bg-indigo-500";
+                  if (index === 0) return "bg-indigo-500";
+                  if (index === totalParts - 1 && isFinalized) return "bg-emerald-500";
+                  return "bg-gray-500";
+                };
 
-            {entry.type === "skipped" && entry.reasonType === "legitimate" && (
-              <div>
-                <p class="text-sm text-gray-400">Пропущено: {entry.reasonText}</p>
-                <p class="mt-1 text-xs text-gray-500">
-                  {new Date(entry.date!).toLocaleDateString("ru")}
-                </p>
+                return (
+                  <div class="mb-3 space-y-0">
+                    {/* First part */}
+                    <div class="flex gap-3">
+                      <div class="flex flex-col items-center">
+                        <div class={`h-2 w-2 rounded-full ${getDotColor(0)} mt-1.5`} />
+                        {notes.length > 0 && <div class="w-px flex-1 bg-gray-700" />}
+                      </div>
+                      <div class="flex-1 pb-3">
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class={`text-xs font-medium ${getLabelColor(0)}`}>
+                            {getLabel(0)}
+                          </span>
+                          {entry.playtimeMinutes != null && (
+                            <span class="text-xs text-gray-500">
+                              {formatPlaytime(entry.playtimeMinutes)}
+                            </span>
+                          )}
+                          {entry.date && (
+                            <span class="text-xs text-gray-600">
+                              {new Date(entry.date).toLocaleDateString("ru", { day: "numeric", month: "short" })}
+                            </span>
+                          )}
+                        </div>
+                        <p class="whitespace-pre-line text-sm leading-relaxed text-gray-300">{entry.note}</p>
+                      </div>
+                    </div>
+
+                    {/* Additional parts */}
+                    {notes.map((n: any, idx: number) => {
+                      const partIndex = idx + 1;
+                      return (
+                        <div class="flex gap-3">
+                          <div class="flex flex-col items-center">
+                            <div class={`h-2 w-2 rounded-full ${getDotColor(partIndex)} mt-1.5`} />
+                            {idx < notes.length - 1 && <div class="w-px flex-1 bg-gray-700" />}
+                          </div>
+                          <div class="flex-1 pb-3">
+                            <div class="flex items-center gap-2 mb-1">
+                              <span class={`text-xs font-medium ${getLabelColor(partIndex)}`}>
+                                {getLabel(partIndex)}
+                              </span>
+                              <span class="text-xs text-gray-500">
+                                {formatPlaytime(n.playtimeMinutes)}
+                              </span>
+                              <span class="text-xs text-gray-600">
+                                {new Date(n.createdAt).toLocaleDateString("ru", { day: "numeric", month: "short" })}
+                              </span>
+                            </div>
+                            <p class="whitespace-pre-line text-sm leading-relaxed text-gray-400">{n.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Footer meta */}
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 text-xs text-gray-500">
+                  {entry.playtimeMinutes != null && (
+                    <span class="flex items-center gap-1">
+                      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+                      </svg>
+                      {formatPlaytime(entry.playtimeMinutes)}
+                    </span>
+                  )}
+                  {entry.date && (
+                    <span class="flex items-center gap-1">
+                      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 4h10M5 11h14M5 11a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2" />
+                      </svg>
+                      {new Date(entry.date).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  )}
+                  {notes.length > 0 && (
+                    <span class="flex items-center gap-1">
+                      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                      {notes.length + 1} {notes.length + 1 === 1 ? "часть" : notes.length + 1 < 5 ? "части" : "частей"}
+                    </span>
+                  )}
+                </div>
+                {isReviewed && entry.verdict && entry.rating && (
+                  <AddNoteButton
+                    client:idle
+                    slotId={entry.slotId}
+                    gameTitle={entry.gameTitle}
+                    totalPlayed={entry.playtimeMinutes ?? 0}
+                    lastRecordedPlaytime={notes.length > 0 ? notes[notes.length - 1].playtimeMinutes : (entry.playtimeMinutes ?? 0)}
+                    currentVerdict={entry.verdict}
+                    currentRating={entry.rating}
+                  />
+                )}
               </div>
-            )}
+            </div>
           </div>
+        );
+      })}
+    </div>
+
+    {skipped.length > 0 && (
+      <div class="mt-10">
+        <h2 class="mb-3 text-sm font-medium text-gray-500">Пропущенные</h2>
+        <div class="space-y-1">
+          {skipped.map((entry) => {
+            const isShame = entry.reasonType === "shame";
+            return (
+              <div class="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-gray-900/50">
+                <div class="flex items-center gap-2">
+                  <span class={isShame ? "text-yellow-500" : "text-gray-600"}>{isShame ? "😔" : "⏭️"}</span>
+                  <span class={isShame ? "text-gray-300" : "text-gray-500"}>{entry.gameTitle}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-gray-600">
+                  {isShame && entry.reasonText && (
+                    <span class="text-yellow-500/70">{entry.reasonText}</span>
+                  )}
+                  {entry.date && (
+                    <span>{new Date(entry.date).toLocaleDateString("ru", { day: "numeric", month: "short" })}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      </div>
+    )}
+    </div>
+    );
+  })()}
+
+  {retroReviews.length > 0 && (
+    <div class="mt-10">
+      <h2 class="mb-4 text-lg font-semibold text-gray-400">Ретроспектива ({retroReviews.length})</h2>
+      <RetroGrid client:idle reviews={retroReviews} />
     </div>
   )}
 </Layout>
