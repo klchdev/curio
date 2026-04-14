@@ -4,8 +4,16 @@ import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
-export const GET: APIRoute = async ({ url, session, redirect }) => {
-  const returnUrl = new URL("/auth/callback", url.origin).toString();
+function getOrigin(request: Request, url: URL): string {
+  const forwarded = request.headers.get("x-forwarded-host");
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  if (forwarded) return `${proto}://${forwarded}`;
+  return url.origin;
+}
+
+export const GET: APIRoute = async ({ url, request, session, redirect }) => {
+  const origin = getOrigin(request, url);
+  const returnUrl = new URL("/auth/callback", origin).toString();
 
   try {
     const steamId = await verifyAssertion(returnUrl, url.toString());
