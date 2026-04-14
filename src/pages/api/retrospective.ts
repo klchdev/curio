@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request, session }) => {
     });
   }
 
-  const result = createRetrospectiveReview(userId, gameId, { tier, rating, note });
+  const result = await createRetrospectiveReview(userId, gameId, { tier, rating, note });
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

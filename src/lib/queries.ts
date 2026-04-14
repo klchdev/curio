@@ -15,7 +15,7 @@ const MAX_ACTIVE_SLOTS = 3;
 const MIN_PLAYTIME_TO_REVIEW = 20;
 const STILL_PLAYING_THRESHOLD = 30;
 
-export function getActiveSlots(userId: number) {
+export async function getActiveSlots(userId: number) {
   return db
     .select({
       slot: {
@@ -41,33 +41,32 @@ export function getActiveSlots(userId: number) {
       userGames,
       and(eq(userGames.userId, userId), eq(userGames.gameId, slots.gameId))
     )
-    .where(and(eq(slots.userId, userId), eq(slots.status, "active")))
-    .all();
+    .where(and(eq(slots.userId, userId), eq(slots.status, "active")));
 }
 
-export function canSpin(userId: number): boolean {
-  const active = getActiveSlots(userId);
+export async function canSpin(userId: number): Promise<boolean> {
+  const active = await getActiveSlots(userId);
   return active.length < MAX_ACTIVE_SLOTS;
 }
 
-export function getUnplayedGames(userId: number) {
-  const usedGameIds = db
-    .select({ gameId: slots.gameId })
-    .from(slots)
-    .where(and(eq(slots.userId, userId), ne(slots.status, "skipped")))
-    .all()
-    .map((s) => s.gameId);
+export async function getUnplayedGames(userId: number) {
+  const usedGameIds = (
+    await db
+      .select({ gameId: slots.gameId })
+      .from(slots)
+      .where(and(eq(slots.userId, userId), ne(slots.status, "skipped")))
+  ).map((s) => s.gameId);
 
-  const excludedGameIds = db
-    .select({ id: games.id })
-    .from(games)
-    .where(eq(games.excluded, true))
-    .all()
-    .map((g) => g.id);
+  const excludedGameIds = (
+    await db
+      .select({ id: games.id })
+      .from(games)
+      .where(eq(games.excluded, true))
+  ).map((g) => g.id);
 
   const blockedIds = [...new Set([...usedGameIds, ...excludedGameIds])];
 
-  const rows = db
+  const rows = await db
     .select({
       id: games.id,
       steamAppId: games.steamAppId,
@@ -82,28 +81,27 @@ export function getUnplayedGames(userId: number) {
         eq(userGames.userId, userId),
         lte(userGames.playtimeMinutes, MAX_PLAYTIME_MINUTES)
       )
-    )
-    .all()
-    .filter((row) => !blockedIds.includes(row.id));
+    );
 
-  return rows;
+  return rows.filter((row) => !blockedIds.includes(row.id));
 }
 
-export function spinRoulette(userId: number) {
-  if (!canSpin(userId)) return null;
+export async function spinRoulette(userId: number) {
+  if (!(await canSpin(userId))) return null;
 
-  const pool = getUnplayedGames(userId);
+  const pool = await getUnplayedGames(userId);
   if (pool.length === 0) return null;
 
   const picked = pool[Math.floor(Math.random() * pool.length)];
 
-  const ug = db
+  const ug = await db
     .select({ playtimeMinutes: userGames.playtimeMinutes })
     .from(userGames)
     .where(and(eq(userGames.userId, userId), eq(userGames.gameId, picked.id)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
-  const slot = db
+  const [slot] = await db
     .insert(slots)
     .values({
       userId,
@@ -118,10 +116,8 @@ export function spinRoulette(userId: number) {
       status: slots.status,
       playtimeOnStart: slots.playtimeOnStart,
       startedAt: slots.startedAt,
-    })
-    .get();
+    });
 
-  // Pick random decoys for roulette animation
   const decoys = pool
     .filter((g) => g.id !== picked.id)
     .sort(() => Math.random() - 0.5)
@@ -133,7 +129,7 @@ export function spinRoulette(userId: number) {
 
 const VALID_VERDICTS = ["finished", "dropped", "playing", "later"] as const;
 
-export function reviewSlot(
+export async function reviewSlot(
   slotId: number,
   userId: number,
   verdict: string,
@@ -141,7 +137,7 @@ export function reviewSlot(
   note: string,
   currentPlaytime: number
 ) {
-  const slot = db
+  const slot = await db
     .select({
       id: slots.id,
       status: slots.status,
@@ -150,7 +146,8 @@ export function reviewSlot(
     })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!slot || slot.status !== "active") return { error: "Invalid slot" };
 
@@ -164,12 +161,11 @@ export function reviewSlot(
   if (rating < 1 || rating > 5) return { error: "Оценка от 1 до 5" };
   if (note.length < 50) return { error: "Заметка минимум 50 символов" };
 
-  db.update(slots)
+  await db.update(slots)
     .set({ status: "reviewed" })
-    .where(eq(slots.id, slotId))
-    .run();
+    .where(eq(slots.id, slotId));
 
-  db.insert(slotReviews)
+  await db.insert(slotReviews)
     .values({
       slotId,
       verdict: verdict as (typeof VALID_VERDICTS)[number],
@@ -177,20 +173,19 @@ export function reviewSlot(
       note,
       playtimeMinutes: delta,
       completedAt: new Date(),
-    })
-    .run();
+    });
 
   return { ok: true };
 }
 
-export function updateReview(
+export async function updateReview(
   slotId: number,
   userId: number,
   verdict: string,
   rating: number,
   currentPlaytime: number
 ) {
-  const slot = db
+  const slot = await db
     .select({
       id: slots.id,
       status: slots.status,
@@ -198,7 +193,8 @@ export function updateReview(
     })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
 
@@ -207,26 +203,25 @@ export function updateReview(
 
   const delta = currentPlaytime - slot.playtimeOnStart;
 
-  db.update(slotReviews)
+  await db.update(slotReviews)
     .set({
       verdict: verdict as (typeof VALID_VERDICTS)[number],
       rating,
       playtimeMinutes: delta,
       completedAt: new Date(),
     })
-    .where(eq(slotReviews.slotId, slotId))
-    .run();
+    .where(eq(slotReviews.slotId, slotId));
 
   return { ok: true };
 }
 
-export function addNote(
+export async function addNote(
   slotId: number,
   userId: number,
   text: string,
   currentPlaytime: number
 ) {
-  const slot = db
+  const slot = await db
     .select({
       id: slots.id,
       status: slots.status,
@@ -234,26 +229,26 @@ export function addNote(
     })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
   if (text.length < 10) return { error: "Заметка минимум 10 символов" };
 
   const delta = currentPlaytime - slot.playtimeOnStart;
 
-  db.insert(slotNotes)
+  await db.insert(slotNotes)
     .values({
       slotId,
       text,
       playtimeMinutes: delta,
       createdAt: new Date(),
-    })
-    .run();
+    });
 
   return { ok: true };
 }
 
-export function getSlotNotes(slotId: number) {
+export async function getSlotNotes(slotId: number) {
   return db
     .select({
       id: slotNotes.id,
@@ -263,12 +258,11 @@ export function getSlotNotes(slotId: number) {
     })
     .from(slotNotes)
     .where(eq(slotNotes.slotId, slotId))
-    .orderBy(slotNotes.createdAt)
-    .all();
+    .orderBy(slotNotes.createdAt);
 }
 
-export function getStillPlaying(userId: number) {
-  const reviewed = db
+export async function getStillPlaying(userId: number) {
+  const reviewed = await db
     .select({
       slotId: slots.id,
       gameId: slots.gameId,
@@ -287,30 +281,29 @@ export function getStillPlaying(userId: number) {
       userGames,
       and(eq(userGames.userId, userId), eq(userGames.gameId, slots.gameId))
     )
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
-    .all();
+    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
 
-  return reviewed
-    .map((r) => {
-      const totalPlayed = (r.currentPlaytime ?? 0) - r.playtimeOnStart;
-      const lastReviewedAt = r.reviewPlaytime ?? 0;
+  const results = [];
+  for (const r of reviewed) {
+    const totalPlayed = (r.currentPlaytime ?? 0) - r.playtimeOnStart;
+    const lastReviewedAt = r.reviewPlaytime ?? 0;
 
-      // Check last note playtime too
-      const lastNote = db
-        .select({ playtimeMinutes: slotNotes.playtimeMinutes })
-        .from(slotNotes)
-        .where(eq(slotNotes.slotId, r.slotId))
-        .orderBy(desc(slotNotes.createdAt))
-        .limit(1)
-        .get();
+    const lastNote = await db
+      .select({ playtimeMinutes: slotNotes.playtimeMinutes })
+      .from(slotNotes)
+      .where(eq(slotNotes.slotId, r.slotId))
+      .orderBy(desc(slotNotes.createdAt))
+      .limit(1)
+      .then((rows) => rows[0]);
 
-      const lastRecordedPlaytime = Math.max(
-        lastReviewedAt,
-        lastNote?.playtimeMinutes ?? 0
-      );
-      const delta = totalPlayed - lastRecordedPlaytime;
+    const lastRecordedPlaytime = Math.max(
+      lastReviewedAt,
+      lastNote?.playtimeMinutes ?? 0
+    );
+    const delta = totalPlayed - lastRecordedPlaytime;
 
-      return {
+    if (delta >= STILL_PLAYING_THRESHOLD) {
+      results.push({
         slotId: r.slotId,
         gameTitle: r.gameTitle,
         gameImage: r.gameImage,
@@ -319,20 +312,22 @@ export function getStillPlaying(userId: number) {
         delta,
         verdict: r.verdict,
         rating: r.rating,
-      };
-    })
-    .filter((r) => r.delta >= STILL_PLAYING_THRESHOLD);
+      });
+    }
+  }
+
+  return results;
 }
 
-export function getFreeSkips(userId: number) {
-  const reviewedCount = db
+export async function getFreeSkips(userId: number) {
+  const reviewedCount = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(slots)
     .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
     .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
-    .get()?.count ?? 0;
+    .then((rows) => rows[0]))?.count ?? 0;
 
-  const freeSkipsUsed = db
+  const freeSkipsUsed = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(slots)
     .innerJoin(slotSkips, eq(slotSkips.slotId, slots.id))
@@ -343,47 +338,45 @@ export function getFreeSkips(userId: number) {
         eq(slotSkips.reasonText, "Бесплатный скип")
       )
     )
-    .get()?.count ?? 0;
+    .then((rows) => rows[0]))?.count ?? 0;
 
   const earned = Math.floor(reviewedCount / 3);
   return { available: Math.max(0, earned - freeSkipsUsed), earned, used: freeSkipsUsed, reviewedCount };
 }
 
-export function skipSlot(
+export async function skipSlot(
   slotId: number,
   userId: number,
   reasonType: "legitimate" | "shame",
   reasonText: string
 ) {
-  const slot = db
+  const slot = await db
     .select({ id: slots.id, status: slots.status, gameId: slots.gameId })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!slot || slot.status !== "active") return { error: "Invalid slot" };
 
-  db.update(slots)
+  await db.update(slots)
     .set({ status: "skipped" })
-    .where(eq(slots.id, slotId))
-    .run();
+    .where(eq(slots.id, slotId));
 
-  db.insert(slotSkips)
-    .values({ slotId, reasonType, reasonText, skippedAt: new Date() })
-    .run();
+  await db.insert(slotSkips)
+    .values({ slotId, reasonType, reasonText, skippedAt: new Date() });
 
   if (reasonType === "legitimate" && reasonText !== "Бесплатный скип") {
-    db.update(games)
+    await db.update(games)
       .set({ excluded: true })
-      .where(eq(games.id, slot.gameId))
-      .run();
+      .where(eq(games.id, slot.gameId));
   }
 
   return { ok: true };
 }
 
-export function getHistory(userId: number) {
-  const reviewed = db
+export async function getHistory(userId: number) {
+  const reviewed = await db
     .select({
       type: sql<string>`'reviewed'`.as("type"),
       slotId: slots.id,
@@ -393,26 +386,25 @@ export function getHistory(userId: number) {
       rating: slotReviews.rating,
       note: slotReviews.note,
       playtimeMinutes: slotReviews.playtimeMinutes,
-      reasonType: sql<string | null>`null`,
-      reasonText: sql<string | null>`null`,
+      reasonType: sql<string | null>`null`.as("reason_type_alias"),
+      reasonText: sql<string | null>`null`.as("reason_text_alias"),
       date: slotReviews.completedAt,
     })
     .from(slots)
     .innerJoin(games, eq(slots.gameId, games.id))
     .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
-    .all();
+    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
 
-  const skipped = db
+  const skipped = await db
     .select({
       type: sql<string>`'skipped'`.as("type"),
       slotId: slots.id,
       gameTitle: games.title,
       gameImage: games.headerImage,
-      verdict: sql<string | null>`null`,
-      rating: sql<number | null>`null`,
-      note: sql<string | null>`null`,
-      playtimeMinutes: sql<number | null>`null`,
+      verdict: sql<string | null>`null`.as("verdict_alias"),
+      rating: sql<number | null>`null`.as("rating_alias"),
+      note: sql<string | null>`null`.as("note_alias"),
+      playtimeMinutes: sql<number | null>`null`.as("playtime_alias"),
       reasonType: slotSkips.reasonType,
       reasonText: slotSkips.reasonText,
       date: slotSkips.skippedAt,
@@ -420,24 +412,25 @@ export function getHistory(userId: number) {
     .from(slots)
     .innerJoin(games, eq(slots.gameId, games.id))
     .innerJoin(slotSkips, eq(slotSkips.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "skipped")))
-    .all();
+    .where(and(eq(slots.userId, userId), eq(slots.status, "skipped")));
 
-  // Fetch notes for each reviewed entry
   const entries = [...reviewed, ...skipped].sort(
     (a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime()
   );
 
-  return entries.map((entry) => {
+  const result = [];
+  for (const entry of entries) {
     if (entry.type === "reviewed") {
-      const notes = getSlotNotes(entry.slotId);
-      return { ...entry, notes };
+      const notes = await getSlotNotes(entry.slotId);
+      result.push({ ...entry, notes });
+    } else {
+      result.push({ ...entry, notes: [] });
     }
-    return { ...entry, notes: [] };
-  });
+  }
+  return result;
 }
 
-export function getTierList(userId: number) {
+export async function getTierList(userId: number) {
   return db
     .select({
       slotId: slots.id,
@@ -451,51 +444,49 @@ export function getTierList(userId: number) {
     .from(slots)
     .innerJoin(games, eq(slots.gameId, games.id))
     .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
-    .all();
+    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
 }
 
-export function setTier(
+export async function setTier(
   slotId: number,
   userId: number,
   tier: "S" | "A" | "B" | "C" | "D" | null
 ) {
-  const slot = db
+  const slot = await db
     .select({ id: slots.id, status: slots.status })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
 
-  db.update(slotReviews)
+  await db.update(slotReviews)
     .set({ tier })
-    .where(eq(slotReviews.slotId, slotId))
-    .run();
+    .where(eq(slotReviews.slotId, slotId));
 
   return { ok: true };
 }
 
-export function getUnreviewedPlayedGames(userId: number) {
-  // Games with playtime > 60 min that have no slot_review and no game_review
-  const reviewedViaSlot = db
-    .select({ gameId: slots.gameId })
-    .from(slots)
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(eq(slots.userId, userId))
-    .all()
-    .map((r) => r.gameId);
+export async function getUnreviewedPlayedGames(userId: number) {
+  const reviewedViaSlot = (
+    await db
+      .select({ gameId: slots.gameId })
+      .from(slots)
+      .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+      .where(eq(slots.userId, userId))
+  ).map((r) => r.gameId);
 
-  const reviewedViaRetro = db
-    .select({ gameId: gameReviews.gameId })
-    .from(gameReviews)
-    .where(eq(gameReviews.userId, userId))
-    .all()
-    .map((r) => r.gameId);
+  const reviewedViaRetro = (
+    await db
+      .select({ gameId: gameReviews.gameId })
+      .from(gameReviews)
+      .where(eq(gameReviews.userId, userId))
+  ).map((r) => r.gameId);
 
   const reviewedIds = [...new Set([...reviewedViaSlot, ...reviewedViaRetro])];
 
-  return db
+  const rows = await db
     .select({
       gameId: games.id,
       steamAppId: games.steamAppId,
@@ -511,43 +502,42 @@ export function getUnreviewedPlayedGames(userId: number) {
         gt(userGames.playtimeMinutes, 60)
       )
     )
-    .orderBy(desc(userGames.playtimeMinutes))
-    .all()
-    .filter((row) => !reviewedIds.includes(row.gameId));
+    .orderBy(desc(userGames.playtimeMinutes));
+
+  return rows.filter((row) => !reviewedIds.includes(row.gameId));
 }
 
-export function createRetrospectiveReview(
+export async function createRetrospectiveReview(
   userId: number,
   gameId: number,
   data: { tier?: "S" | "A" | "B" | "C" | "D" | null; rating?: number | null; note?: string | null }
 ) {
-  // Verify game belongs to user
-  const ug = db
+  const ug = await db
     .select({ gameId: userGames.gameId })
     .from(userGames)
     .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!ug) return { error: "Game not found" };
 
-  // Upsert — check if review exists
-  const existing = db
+  const existing = await db
     .select({ id: gameReviews.id })
     .from(gameReviews)
     .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (existing) {
-    db.update(gameReviews)
+    await db.update(gameReviews)
       .set({
         tier: data.tier ?? null,
         rating: data.rating ?? null,
         note: data.note ?? null,
       })
-      .where(eq(gameReviews.id, existing.id))
-      .run();
+      .where(eq(gameReviews.id, existing.id));
   } else {
-    db.insert(gameReviews)
+    await db.insert(gameReviews)
       .values({
         userId,
         gameId,
@@ -555,14 +545,13 @@ export function createRetrospectiveReview(
         rating: data.rating ?? null,
         note: data.note ?? null,
         createdAt: new Date(),
-      })
-      .run();
+      });
   }
 
   return { ok: true };
 }
 
-export function getRetroReviews(userId: number) {
+export async function getRetroReviews(userId: number) {
   return db
     .select({
       gameId: games.id,
@@ -575,22 +564,20 @@ export function getRetroReviews(userId: number) {
     })
     .from(gameReviews)
     .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .where(eq(gameReviews.userId, userId))
-    .all();
+    .where(eq(gameReviews.userId, userId));
 }
 
-export function getStats(userId: number) {
-  const reviewedSlots = db
+export async function getStats(userId: number) {
+  const reviewedSlots = await db
     .select({
       playtime: slotReviews.playtimeMinutes,
       completedAt: slotReviews.completedAt,
     })
     .from(slots)
     .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
-    .all();
+    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
 
-  const shameSkips = db
+  const shameSkips = await db
     .select({
       gameTitle: games.title,
       skippedAt: slotSkips.skippedAt,
@@ -604,8 +591,7 @@ export function getStats(userId: number) {
         eq(slots.status, "skipped"),
         eq(slotSkips.reasonType, "shame")
       )
-    )
-    .all();
+    );
 
   const totalGames = reviewedSlots.length;
   const totalMinutes = reviewedSlots.reduce(
@@ -631,77 +617,75 @@ export function getStats(userId: number) {
     );
   }
 
-  // Backlog progress
-  const totalLibrary = db
+  const totalLibrary = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(userGames)
     .where(eq(userGames.userId, userId))
-    .get()?.count ?? 0;
+    .then((rows) => rows[0]))?.count ?? 0;
 
-  const poolSize = getUnplayedGames(userId).length;
+  const poolSize = (await getUnplayedGames(userId)).length;
 
-  const excludedCount = db
+  const excludedCount = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(games)
     .where(eq(games.excluded, true))
-    .get()?.count ?? 0;
+    .then((rows) => rows[0]))?.count ?? 0;
 
-  const activeCount = db
+  const activeCount = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(slots)
     .where(and(eq(slots.userId, userId), eq(slots.status, "active")))
-    .get()?.count ?? 0;
+    .then((rows) => rows[0]))?.count ?? 0;
 
-  const skippedCount = db
+  const skippedCount = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(slots)
     .where(and(eq(slots.userId, userId), eq(slots.status, "skipped")))
-    .get()?.count ?? 0;
+    .then((rows) => rows[0]))?.count ?? 0;
 
-  // Verdict breakdown
   const finishedCount = reviewedSlots.length > 0
-    ? db
+    ? (await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(slotReviews)
         .innerJoin(slots, eq(slotReviews.slotId, slots.id))
         .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "finished")))
-        .get()?.count ?? 0
+        .then((rows) => rows[0]))?.count ?? 0
     : 0;
 
   const droppedCount = reviewedSlots.length > 0
-    ? db
+    ? (await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(slotReviews)
         .innerJoin(slots, eq(slotReviews.slotId, slots.id))
         .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "dropped")))
-        .get()?.count ?? 0
+        .then((rows) => rows[0]))?.count ?? 0
     : 0;
 
   const playingCount = reviewedSlots.length > 0
-    ? db
+    ? (await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(slotReviews)
         .innerJoin(slots, eq(slotReviews.slotId, slots.id))
         .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "playing")))
-        .get()?.count ?? 0
+        .then((rows) => rows[0]))?.count ?? 0
     : 0;
 
   const laterCount = reviewedSlots.length > 0
-    ? db
+    ? (await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(slotReviews)
         .innerJoin(slots, eq(slotReviews.slotId, slots.id))
         .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "later")))
-        .get()?.count ?? 0
+        .then((rows) => rows[0]))?.count ?? 0
     : 0;
 
   const avgRating = reviewedSlots.length > 0
-    ? db
-        .select({ avg: sql<number>`ROUND(AVG(${slotReviews.rating}), 1)` })
+    ? (await db
+        .select({ avg: sql<number>`ROUND(AVG(${slotReviews.rating})::numeric, 1)` })
         .from(slotReviews)
         .innerJoin(slots, eq(slotReviews.slotId, slots.id))
         .where(eq(slots.userId, userId))
-        .get()?.avg ?? 0
+        .then((rows) => rows[0]))?.avg ?? 0
     : 0;
 
   return {

@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, session }) => {
     });
   }
 
-  const result = setTier(slotId, userId, tier);
+  const result = await setTier(slotId, userId, tier);
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

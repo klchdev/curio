@@ -7,8 +7,8 @@ import TierList from "../components/TierList";
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
-const rouletteGames = getTierList(user.id).map((g) => ({ ...g, source: "roulette" as const }));
-const retroGames = getRetroReviews(user.id).map((g) => ({
+const rouletteGames = (await getTierList(user.id)).map((g) => ({ ...g, source: "roulette" as const }));
+const retroGames = (await getRetroReviews(user.id)).map((g) => ({
   slotId: -g.gameId, // negative to avoid collision with slot IDs
   gameTitle: g.gameTitle,
   gameImage: g.gameImage,

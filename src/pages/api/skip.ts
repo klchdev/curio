@@ -15,14 +15,14 @@ export const POST: APIRoute = async ({ request, session }) => {
   const { slotId, reason, useFreeSkip } = body;
 
   if (useFreeSkip) {
-    const { available } = getFreeSkips(userId);
+    const { available } = await getFreeSkips(userId);
     if (available <= 0) {
       return new Response(JSON.stringify({ error: "Нет бесплатных скипов" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
-    const result = skipSlot(slotId, userId, "legitimate", "Бесплатный скип");
+    const result = await skipSlot(slotId, userId, "legitimate", "Бесплатный скип");
     if ("error" in result) {
       return new Response(JSON.stringify(result), {
         status: 400,
@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request, session }) => {
   const isLegitimate = LEGITIMATE_REASONS.includes(reason);
   const reasonType = isLegitimate ? "legitimate" : "shame";
 
-  const result = skipSlot(slotId, userId, reasonType, reason);
+  const result = await skipSlot(slotId, userId, reasonType, reason);
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

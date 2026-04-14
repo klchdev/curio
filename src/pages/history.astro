@@ -8,9 +8,9 @@ import RetroGrid from "../components/RetroGrid.tsx";
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
-const retroReviews = getRetroReviews(user.id);
+const retroReviews = await getRetroReviews(user.id);
 
-const history = getHistory(user.id);
+const history = await getHistory(user.id);
 
 function formatPlaytime(minutes: number) {
   const hours = Math.floor(minutes / 60);

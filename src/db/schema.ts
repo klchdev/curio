@@ -1,30 +1,30 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, serial, boolean, timestamp } from "drizzle-orm/pg-core";
 
-export const users = sqliteTable("users", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   steamId: text("steam_id").notNull().unique(),
   username: text("username").notNull(),
   avatarUrl: text("avatar_url"),
-  lastLibrarySync: integer("last_library_sync", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  lastLibrarySync: timestamp("last_library_sync"),
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const games = sqliteTable("games", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const games = pgTable("games", {
+  id: serial("id").primaryKey(),
   steamAppId: integer("steam_app_id").notNull().unique(),
   title: text("title").notNull(),
   headerImage: text("header_image"),
   hltbMinutes: integer("hltb_minutes"),
-  excluded: integer("excluded", { mode: "boolean" }).notNull().default(false),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  excluded: boolean("excluded").notNull().default(false),
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const userGames = sqliteTable("user_games", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const userGames = pgTable("user_games", {
+  id: serial("id").primaryKey(),
   userId: integer("user_id")
     .notNull()
     .references(() => users.id),
@@ -34,8 +34,8 @@ export const userGames = sqliteTable("user_games", {
   playtimeMinutes: integer("playtime_minutes").notNull().default(0),
 });
 
-export const slots = sqliteTable("slots", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const slots = pgTable("slots", {
+  id: serial("id").primaryKey(),
   userId: integer("user_id")
     .notNull()
     .references(() => users.id),
@@ -46,13 +46,13 @@ export const slots = sqliteTable("slots", {
     .notNull()
     .default("active"),
   playtimeOnStart: integer("playtime_on_start").notNull().default(0),
-  startedAt: integer("started_at", { mode: "timestamp" })
+  startedAt: timestamp("started_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const slotReviews = sqliteTable("slot_reviews", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const slotReviews = pgTable("slot_reviews", {
+  id: serial("id").primaryKey(),
   slotId: integer("slot_id")
     .notNull()
     .references(() => slots.id),
@@ -63,25 +63,25 @@ export const slotReviews = sqliteTable("slot_reviews", {
   note: text("note").notNull(),
   playtimeMinutes: integer("playtime_minutes").notNull(),
   tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
-  completedAt: integer("completed_at", { mode: "timestamp" })
+  completedAt: timestamp("completed_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const slotNotes = sqliteTable("slot_notes", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const slotNotes = pgTable("slot_notes", {
+  id: serial("id").primaryKey(),
   slotId: integer("slot_id")
     .notNull()
     .references(() => slots.id),
   text: text("text").notNull(),
   playtimeMinutes: integer("playtime_minutes").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const gameReviews = sqliteTable("game_reviews", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const gameReviews = pgTable("game_reviews", {
+  id: serial("id").primaryKey(),
   userId: integer("user_id")
     .notNull()
     .references(() => users.id),
@@ -91,19 +91,19 @@ export const gameReviews = sqliteTable("game_reviews", {
   tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
   rating: integer("rating"),
   note: text("note"),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });
 
-export const slotSkips = sqliteTable("slot_skips", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const slotSkips = pgTable("slot_skips", {
+  id: serial("id").primaryKey(),
   slotId: integer("slot_id")
     .notNull()
     .references(() => slots.id),
   reasonType: text("reason_type", { enum: ["legitimate", "shame"] }).notNull(),
   reasonText: text("reason_text").notNull(),
-  skippedAt: integer("skipped_at", { mode: "timestamp" })
+  skippedAt: timestamp("skipped_at")
     .notNull()
     .$defaultFn(() => new Date()),
 });

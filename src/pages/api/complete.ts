@@ -12,17 +12,19 @@ export const POST: APIRoute = async ({ request, session }) => {
   const body = await request.json();
   const { slotId, verdict, rating, note } = body;
 
-  const user = db
+  const user = await db
     .select({ steamId: users.steamId })
     .from(users)
     .where(eq(users.id, userId))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
-  const slot = db
+  const slot = await db
     .select({ gameId: slots.gameId })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!user || !slot) {
     return new Response(JSON.stringify({ error: "Not found" }), {
@@ -31,11 +33,12 @@ export const POST: APIRoute = async ({ request, session }) => {
     });
   }
 
-  const game = db
+  const game = await db
     .select({ steamAppId: games.steamAppId })
     .from(games)
     .where(eq(games.id, slot.gameId))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!game) {
     return new Response(JSON.stringify({ error: "Game not found" }), {
@@ -49,7 +52,7 @@ export const POST: APIRoute = async ({ request, session }) => {
     game.steamAppId
   );
 
-  const result = reviewSlot(slotId, userId, verdict, rating, note, currentPlaytime);
+  const result = await reviewSlot(slotId, userId, verdict, rating, note, currentPlaytime);
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

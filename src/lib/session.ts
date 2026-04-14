@@ -16,7 +16,7 @@ export async function getSessionUser(
   const userId = await astro.session?.get<number>("userId");
   if (!userId) return null;
 
-  const user = db
+  const user = await db
     .select({
       id: users.id,
       steamId: users.steamId,
@@ -25,7 +25,8 @@ export async function getSessionUser(
     })
     .from(users)
     .where(eq(users.id, userId))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   return user ?? null;
 }

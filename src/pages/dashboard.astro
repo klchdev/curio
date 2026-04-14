@@ -11,12 +11,12 @@ import UnreviewedGames from "../components/UnreviewedGames";
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
-const activeSlots = getActiveSlots(user.id);
-const canSpinNow = canSpin(user.id);
-const poolSize = getUnplayedGames(user.id).length;
-const stillPlaying = getStillPlaying(user.id);
-const unreviewedGames = getUnreviewedPlayedGames(user.id);
-const freeSkipInfo = getFreeSkips(user.id);
+const activeSlots = await getActiveSlots(user.id);
+const canSpinNow = await canSpin(user.id);
+const poolSize = (await getUnplayedGames(user.id)).length;
+const stillPlaying = await getStillPlaying(user.id);
+const unreviewedGames = await getUnreviewedPlayedGames(user.id);
+const freeSkipInfo = await getFreeSkips(user.id);
 
 const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
   slotId: slot.id,

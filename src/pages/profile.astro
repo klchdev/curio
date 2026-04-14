@@ -6,7 +6,7 @@ import { getStats } from "../lib/queries";
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
-const stats = getStats(user.id);
+const stats = await getStats(user.id);
 
 const alreadyPlayed = stats.totalLibrary - stats.poolSize - stats.excludedCount;
 const progressPercent = stats.poolSize > 0

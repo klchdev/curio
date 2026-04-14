@@ -10,27 +10,30 @@ export const POST: APIRoute = async ({ request, session }) => {
 
   const { slotId } = await request.json();
 
-  const user = db
+  const user = await db
     .select({ steamId: users.steamId })
     .from(users)
     .where(eq(users.id, userId))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
-  const slot = db
+  const slot = await db
     .select({ gameId: slots.gameId, playtimeOnStart: slots.playtimeOnStart })
     .from(slots)
     .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!user || !slot) {
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
   }
 
-  const game = db
+  const game = await db
     .select({ steamAppId: games.steamAppId, id: games.id })
     .from(games)
     .where(eq(games.id, slot.gameId))
-    .get();
+    .limit(1)
+    .then((rows) => rows[0]);
 
   if (!game) {
     return new Response(JSON.stringify({ error: "Game not found" }), { status: 404 });
@@ -38,11 +41,9 @@ export const POST: APIRoute = async ({ request, session }) => {
 
   const currentPlaytime = await getRecentPlaytime(user.steamId, game.steamAppId);
 
-  // Update user_games with fresh playtime
-  db.update(userGames)
+  await db.update(userGames)
     .set({ playtimeMinutes: currentPlaytime })
-    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, game.id)))
-    .run();
+    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, game.id)));
 
   const played = currentPlaytime - slot.playtimeOnStart;
 

@@ -11,16 +11,17 @@ export const GET: APIRoute = async ({ url, session, redirect }) => {
     const steamId = await verifyAssertion(returnUrl, url.toString());
     const profile = await getSteamProfile(steamId);
 
-    const existing = db
+    const existing = await db
       .select()
       .from(users)
       .where(eq(users.steamId, steamId))
-      .get();
+      .limit(1)
+      .then((rows) => rows[0]);
 
     let userId: number;
 
     if (!existing) {
-      const result = db
+      const [result] = await db
         .insert(users)
         .values({
           steamId: profile.steamId,
@@ -28,17 +29,15 @@ export const GET: APIRoute = async ({ url, session, redirect }) => {
           avatarUrl: profile.avatarUrl,
           createdAt: new Date(),
         })
-        .returning({ id: users.id })
-        .get();
+        .returning({ id: users.id });
       userId = result.id;
     } else {
-      db.update(users)
+      await db.update(users)
         .set({
           username: profile.username,
           avatarUrl: profile.avatarUrl,
         })
-        .where(eq(users.steamId, steamId))
-        .run();
+        .where(eq(users.steamId, steamId));
       userId = existing.id;
     }
 
