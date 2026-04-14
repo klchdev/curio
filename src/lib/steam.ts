@@ -3,19 +3,14 @@ import { STEAM_API_KEY } from "astro:env/server";
 
 const STEAM_OPENID_URL = "https://steamcommunity.com/openid";
 
-let relyingParty: openid.RelyingParty | null = null;
-
 function getRelyingParty(returnUrl: string): openid.RelyingParty {
-  if (!relyingParty) {
-    relyingParty = new openid.RelyingParty(
-      returnUrl,
-      null,
-      true,
-      true,
-      []
-    );
-  }
-  return relyingParty;
+  return new openid.RelyingParty(
+    returnUrl,
+    null,
+    true,
+    true,
+    []
+  );
 }
 
 export function getAuthUrl(returnUrl: string): Promise<string> {
