@@ -10,6 +10,10 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
 
+  security: {
+    checkOrigin: false,
+  },
+
   env: {
     schema: {
       STEAM_API_KEY: envField.string({ context: "server", access: "secret" }),
