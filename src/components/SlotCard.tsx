@@ -9,6 +9,7 @@ interface Props {
   hltbMinutes: number | null;
   startedAt: string;
   playedMinutes: number;
+  freeSkips: number;
 }
 
 export default function SlotCard({
@@ -18,6 +19,7 @@ export default function SlotCard({
   hltbMinutes,
   startedAt,
   playedMinutes: initialPlayed,
+  freeSkips,
 }: Props) {
   const [showComplete, setShowComplete] = useState(false);
   const [showSkip, setShowSkip] = useState(false);
@@ -132,7 +134,7 @@ export default function SlotCard({
         />
       )}
       {showSkip && (
-        <SkipModal slotId={slotId} onClose={() => setShowSkip(false)} />
+        <SkipModal slotId={slotId} freeSkips={freeSkips} onClose={() => setShowSkip(false)} />
       )}
     </>
   );

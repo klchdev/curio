@@ -324,6 +324,31 @@ export function getStillPlaying(userId: number) {
     .filter((r) => r.delta >= STILL_PLAYING_THRESHOLD);
 }
 
+export function getFreeSkips(userId: number) {
+  const reviewedCount = db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(slots)
+    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
+    .get()?.count ?? 0;
+
+  const freeSkipsUsed = db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(slots)
+    .innerJoin(slotSkips, eq(slotSkips.slotId, slots.id))
+    .where(
+      and(
+        eq(slots.userId, userId),
+        eq(slotSkips.reasonType, "legitimate"),
+        eq(slotSkips.reasonText, "Бесплатный скип")
+      )
+    )
+    .get()?.count ?? 0;
+
+  const earned = Math.floor(reviewedCount / 3);
+  return { available: Math.max(0, earned - freeSkipsUsed), earned, used: freeSkipsUsed, reviewedCount };
+}
+
 export function skipSlot(
   slotId: number,
   userId: number,
@@ -347,7 +372,7 @@ export function skipSlot(
     .values({ slotId, reasonType, reasonText, skippedAt: new Date() })
     .run();
 
-  if (reasonType === "legitimate") {
+  if (reasonType === "legitimate" && reasonText !== "Бесплатный скип") {
     db.update(games)
       .set({ excluded: true })
       .where(eq(games.id, slot.gameId))

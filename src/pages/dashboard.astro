@@ -1,7 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getActiveSlots, canSpin, getUnplayedGames, getStillPlaying, getUnreviewedPlayedGames } from "../lib/queries";
+import { getActiveSlots, canSpin, getUnplayedGames, getStillPlaying, getUnreviewedPlayedGames, getFreeSkips } from "../lib/queries";
 import SlotCard from "../components/SlotCard";
 import RouletteButton from "../components/RouletteButton";
 import SyncButton from "../components/SyncButton";
@@ -16,6 +16,7 @@ const canSpinNow = canSpin(user.id);
 const poolSize = getUnplayedGames(user.id).length;
 const stillPlaying = getStillPlaying(user.id);
 const unreviewedGames = getUnreviewedPlayedGames(user.id);
+const freeSkipInfo = getFreeSkips(user.id);
 
 const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
   slotId: slot.id,
@@ -24,6 +25,7 @@ const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
   hltbMinutes: game.hltbMinutes,
   startedAt: slot.startedAt instanceof Date ? slot.startedAt.toISOString() : String(slot.startedAt),
   playedMinutes: (currentPlaytime ?? 0) - slot.playtimeOnStart,
+  freeSkips: freeSkipInfo.available,
 }));
 ---
 

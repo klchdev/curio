@@ -2,6 +2,7 @@ import { useState } from "react";
 
 interface Props {
   slotId: number;
+  freeSkips: number;
   onClose: () => void;
 }
 
@@ -11,11 +12,33 @@ const LEGITIMATE_REASONS = [
   "Уже не в библиотеке",
 ];
 
-export default function SkipModal({ slotId, onClose }: Props) {
+export default function SkipModal({ slotId, freeSkips, onClose }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleFreeSkip = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/skip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotId, useFreeSkip: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error);
+        setLoading(false);
+        return;
+      }
+      location.reload();
+    } catch {
+      setError("Ошибка сети");
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     let reason = selected;
@@ -59,6 +82,31 @@ export default function SkipModal({ slotId, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-gray-900 p-8" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-6 text-xl font-bold">Пропустить игру</h3>
+
+        {freeSkips > 0 && (
+          <div className="mb-5">
+            <button
+              onClick={handleFreeSkip}
+              disabled={loading}
+              className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-left transition hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-emerald-300">Бесплатный скип</p>
+                  <p className="text-sm text-emerald-400/70">Без позора. Заслужил обзорами!</p>
+                </div>
+                <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-bold text-emerald-300">
+                  {freeSkips} шт
+                </span>
+              </div>
+            </button>
+            <div className="my-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-700" />
+              <span className="text-xs text-gray-500">или выбери причину</span>
+              <div className="h-px flex-1 bg-gray-700" />
+            </div>
+          </div>
+        )}
 
         <div className="mb-4 space-y-2">
           <p className="mb-3 text-sm text-gray-400">Легитимные причины (нейтрально):</p>
