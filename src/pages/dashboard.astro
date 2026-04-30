@@ -1,12 +1,11 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getActiveSlots, canSpin, getUnplayedGames, getStillPlaying, getUnreviewedPlayedGames, getFreeSkips } from "../lib/queries";
+import { getActiveSlots, canSpin, getUnplayedGames, getGamesNeedingReview, getFreeSkips } from "../lib/queries";
 import SlotCard from "../components/SlotCard";
 import RouletteButton from "../components/RouletteButton";
 import SyncButton from "../components/SyncButton";
-import StillPlayingCard from "../components/StillPlayingCard";
-import UnreviewedGames from "../components/UnreviewedGames";
+import NeedsReviewList from "../components/NeedsReviewList";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
@@ -14,8 +13,7 @@ if (!user) return Astro.redirect("/");
 const activeSlots = await getActiveSlots(user.id);
 const canSpinNow = await canSpin(user.id);
 const poolSize = (await getUnplayedGames(user.id)).length;
-const stillPlaying = await getStillPlaying(user.id);
-const unreviewedGames = await getUnreviewedPlayedGames(user.id);
+const needsReview = await getGamesNeedingReview(user.id);
 const freeSkipInfo = await getFreeSkips(user.id);
 
 const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
@@ -77,26 +75,5 @@ const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
     )}
   </section>
 
-  {stillPlaying.length > 0 && (
-    <section>
-      <h2 class="mb-4 text-lg font-semibold text-gray-400">Вы ещё играли...</h2>
-      <div class="mx-auto max-w-4xl space-y-3">
-        {stillPlaying.map((sp) => (
-          <StillPlayingCard
-            client:idle
-            slotId={sp.slotId}
-            gameTitle={sp.gameTitle}
-            gameImage={sp.gameImage}
-            totalPlayed={sp.totalPlayed}
-            lastRecordedPlaytime={sp.lastRecordedPlaytime}
-            delta={sp.delta}
-            verdict={sp.verdict}
-            rating={sp.rating}
-          />
-        ))}
-      </div>
-    </section>
-  )}
-
-  <UnreviewedGames client:idle games={unreviewedGames} />
+  <NeedsReviewList client:idle items={needsReview} />
 </Layout>

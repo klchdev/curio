@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { setTier } from "../../lib/queries";
+import { setRetroTier } from "../../lib/queries";
 
 const VALID_TIERS = ["S", "A", "B", "C", "D", "F"] as const;
 
@@ -7,8 +7,14 @@ export const POST: APIRoute = async ({ request, session }) => {
   const userId = await session?.get<number>("userId");
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  const body = await request.json();
-  const { slotId, tier } = body;
+  const { gameId, tier } = await request.json();
+
+  if (!gameId) {
+    return new Response(JSON.stringify({ error: "gameId required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   if (tier !== null && !VALID_TIERS.includes(tier)) {
     return new Response(JSON.stringify({ error: "Invalid tier" }), {
@@ -17,7 +23,7 @@ export const POST: APIRoute = async ({ request, session }) => {
     });
   }
 
-  const result = await setTier(slotId, userId, tier);
+  const result = await setRetroTier(gameId, userId, tier);
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

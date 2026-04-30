@@ -1,13 +1,22 @@
 import { useState, useEffect } from "react";
 
-type TierValue = "S" | "A" | "B" | "C" | "D";
+type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
+type VerdictValue = "finished" | "dropped" | "playing" | "later";
 
-const TIERS: { value: TierValue; label: string; bg: string; text: string }[] = [
-  { value: "S", label: "S", bg: "bg-yellow-500", text: "text-yellow-950" },
-  { value: "A", label: "A", bg: "bg-emerald-500", text: "text-emerald-950" },
-  { value: "B", label: "B", bg: "bg-sky-500", text: "text-sky-950" },
-  { value: "C", label: "C", bg: "bg-orange-500", text: "text-orange-950" },
-  { value: "D", label: "D", bg: "bg-red-500", text: "text-red-950" },
+const TIERS: { value: TierValue; label: string; bg: string; text: string; hint: string }[] = [
+  { value: "S", label: "S", bg: "bg-yellow-500", text: "text-yellow-950", hint: "Шедевр" },
+  { value: "A", label: "A", bg: "bg-emerald-500", text: "text-emerald-950", hint: "Крутая" },
+  { value: "B", label: "B", bg: "bg-sky-500", text: "text-sky-950", hint: "Хорошая" },
+  { value: "C", label: "C", bg: "bg-orange-500", text: "text-orange-950", hint: "Сойдёт" },
+  { value: "D", label: "D", bg: "bg-red-500", text: "text-red-950", hint: "Не зашло" },
+  { value: "F", label: "F", bg: "bg-rose-800", text: "text-rose-100", hint: "Провал" },
+];
+
+const VERDICTS: { value: VerdictValue; label: string; icon: string }[] = [
+  { value: "finished", label: "Прошёл", icon: "✅" },
+  { value: "playing", label: "Продолжаю", icon: "🎮" },
+  { value: "dropped", label: "Бросил", icon: "❌" },
+  { value: "later", label: "Вернусь", icon: "⏸️" },
 ];
 
 const WORTH_LABELS = [
@@ -18,19 +27,47 @@ const WORTH_LABELS = [
   "Рад что попробовал",
 ] as const;
 
+function formatPlaytime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
+}
+
 interface Props {
   gameId: number;
   gameTitle: string;
   gameImage: string | null;
-  playtimeMinutes: number;
+  currentPlaytime: number;
   onClose: () => void;
   onSaved: () => void;
+  existingVerdict?: string | null;
+  existingRating?: number | null;
+  existingNote?: string | null;
+  existingTier?: string | null;
+  playtimeAtReview?: number;
 }
 
-export default function RetroReviewModal({ gameId, gameTitle, gameImage, playtimeMinutes, onClose, onSaved }: Props) {
-  const [tier, setTier] = useState<TierValue | null>(null);
-  const [rating, setRating] = useState(3);
-  const [note, setNote] = useState("");
+export default function RetroReviewModal({
+  gameId,
+  gameTitle,
+  gameImage,
+  currentPlaytime,
+  onClose,
+  onSaved,
+  existingVerdict,
+  existingRating,
+  existingNote,
+  existingTier,
+  playtimeAtReview,
+}: Props) {
+  const [verdict, setVerdict] = useState<VerdictValue | null>(
+    (existingVerdict as VerdictValue) ?? null
+  );
+  const [tier, setTier] = useState<TierValue | null>(
+    (existingTier as TierValue) ?? null
+  );
+  const [rating, setRating] = useState(existingRating ?? 3);
+  const [note, setNote] = useState(existingNote ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [visible, setVisible] = useState(false);
@@ -44,13 +81,16 @@ export default function RetroReviewModal({ gameId, gameTitle, gameImage, playtim
     setTimeout(onClose, 200);
   };
 
-  const hours = Math.floor(playtimeMinutes / 60);
-  const mins = playtimeMinutes % 60;
-  const playtimeStr = hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
+  const delta =
+    playtimeAtReview !== undefined ? currentPlaytime - playtimeAtReview : null;
 
   const handleSubmit = async () => {
-    if (!tier && !note && rating === 3) {
-      setError("Выбери хотя бы тир или напиши заметку");
+    if (!verdict) {
+      setError("Выбери вердикт");
+      return;
+    }
+    if (note.length < 50) {
+      setError(`Заметка минимум 50 символов (сейчас ${note.length})`);
       return;
     }
 
@@ -61,7 +101,14 @@ export default function RetroReviewModal({ gameId, gameTitle, gameImage, playtim
       const res = await fetch("/api/retrospective", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId, tier, rating, note: note || null }),
+        body: JSON.stringify({
+          gameId,
+          verdict,
+          tier,
+          rating,
+          note,
+          playtimeMinutes: currentPlaytime,
+        }),
       });
       const data = await res.json();
 
@@ -92,24 +139,50 @@ export default function RetroReviewModal({ gameId, gameTitle, gameImage, playtim
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Game header */}
         <div className="mb-5 flex items-center gap-3">
           {gameImage && (
             <img src={gameImage} alt="" className="h-12 w-24 rounded object-cover" />
           )}
           <div>
             <h3 className="font-bold">{gameTitle}</h3>
-            <p className="text-xs text-gray-500">Наиграно: {playtimeStr}</p>
+            <p className="text-xs text-gray-500">
+              Наиграно: {formatPlaytime(currentPlaytime)}
+              {delta !== null && delta > 0 && (
+                <span className="ml-2 text-indigo-400">
+                  (+{formatPlaytime(delta)} с отзыва)
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
-        {/* Tier */}
+        <div className="mb-4">
+          <label className="mb-2 block text-sm text-gray-400">Вердикт</label>
+          <div className="flex gap-2">
+            {VERDICTS.map((v) => (
+              <button
+                key={v.value}
+                type="button"
+                onClick={() => setVerdict(verdict === v.value ? null : v.value)}
+                className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                  verdict === v.value
+                    ? "border-indigo-500 bg-indigo-500/20 text-indigo-300"
+                    : "border-gray-700 text-gray-400 hover:border-gray-500"
+                }`}
+              >
+                {v.icon} {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="mb-4">
           <label className="mb-2 block text-sm text-gray-400">Тир</label>
           <div className="flex gap-2">
             {TIERS.map((t) => (
               <button
                 key={t.value}
+                title={t.hint}
                 onClick={() => setTier(tier === t.value ? null : t.value)}
                 className={`flex-1 rounded-lg py-2 text-center text-lg font-black transition ${
                   tier === t.value
@@ -123,7 +196,6 @@ export default function RetroReviewModal({ gameId, gameTitle, gameImage, playtim
           </div>
         </div>
 
-        {/* Rating */}
         <div className="mb-4">
           <label className="mb-2 block text-sm text-gray-400">Стоило ли времени?</label>
           <input
@@ -134,23 +206,33 @@ export default function RetroReviewModal({ gameId, gameTitle, gameImage, playtim
             onChange={(e) => setRating(Number(e.target.value))}
             className="w-full accent-indigo-500"
           />
-          <div className="mt-1 text-center text-sm font-medium">{WORTH_LABELS[rating - 1]}</div>
+          <div className="mt-1 text-center text-sm font-medium">
+            {WORTH_LABELS[rating - 1]}
+          </div>
         </div>
 
-        {/* Note */}
         <div className="mb-4">
-          <label className="mb-2 block text-sm text-gray-400">Заметка (необязательно)</label>
+          <label className="mb-2 block text-sm text-gray-400">Заметка</label>
           <textarea
             rows={3}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="w-full rounded-lg border border-gray-700 bg-gray-800 p-3 text-sm focus:border-indigo-500 focus:outline-none transition"
-            placeholder="Что помнишь об этой игре?"
+            placeholder="Что думаешь об игре? Минимум 50 символов."
           />
+          <p
+            className={`mt-1 text-xs ${
+              note.length >= 50 ? "text-green-500" : "text-gray-500"
+            }`}
+          >
+            {note.length}/50
+          </p>
         </div>
 
         {error && (
-          <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+          <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {error}
+          </p>
         )}
 
         <div className="flex gap-3">

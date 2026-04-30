@@ -2,7 +2,16 @@ import type { APIRoute } from "astro";
 import { getOwnedGames } from "../../lib/steam";
 import { db } from "../../db";
 import { users, games, userGames } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
+const CHUNK = 500;
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 export const POST: APIRoute = async ({ session }) => {
   const userId = await session?.get<number>("userId");
@@ -17,59 +26,72 @@ export const POST: APIRoute = async ({ session }) => {
   if (!user) return new Response("User not found", { status: 404 });
 
   const steamGames = await getOwnedGames(user.steamId);
+  if (steamGames.length === 0) {
+    return new Response(JSON.stringify({ synced: 0 }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
-  let synced = 0;
-  for (const sg of steamGames) {
-    const existing = await db
-      .select({ id: games.id })
-      .from(games)
-      .where(eq(games.steamAppId, sg.appid))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    let gameId: number;
-    if (existing) {
-      gameId = existing.id;
-    } else {
-      const [result] = await db
-        .insert(games)
-        .values({
+  // 1. Bulk upsert games table
+  for (const ch of chunk(steamGames, CHUNK)) {
+    await db
+      .insert(games)
+      .values(
+        ch.map((sg) => ({
           steamAppId: sg.appid,
           title: sg.name,
           headerImage: `https://cdn.akamai.steamstatic.com/steam/apps/${sg.appid}/header.jpg`,
           createdAt: new Date(),
-        })
-        .returning({ id: games.id });
-      gameId = result.id;
-    }
-
-    const existingUg = await db
-      .select({ id: userGames.id })
-      .from(userGames)
-      .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (existingUg) {
-      await db.update(userGames)
-        .set({ playtimeMinutes: sg.playtime_forever })
-        .where(eq(userGames.id, existingUg.id));
-    } else {
-      await db.insert(userGames)
-        .values({
-          userId,
-          gameId,
-          playtimeMinutes: sg.playtime_forever,
-        });
-    }
-    synced++;
+        }))
+      )
+      .onConflictDoUpdate({
+        target: games.steamAppId,
+        set: {
+          title: sql`excluded.title`,
+          headerImage: sql`excluded.header_image`,
+        },
+      });
   }
 
-  await db.update(users)
+  // 2. Get gameId mapping steamAppId → id
+  const appIds = steamGames.map((sg) => sg.appid);
+  const gameRows = await db
+    .select({ id: games.id, steamAppId: games.steamAppId })
+    .from(games)
+    .where(inArray(games.steamAppId, appIds));
+
+  const gameIdMap = new Map(gameRows.map((g) => [g.steamAppId, g.id]));
+
+  // 3. Bulk upsert userGames
+  const ugValues = steamGames.flatMap((sg) => {
+    const gameId = gameIdMap.get(sg.appid);
+    if (!gameId) return [];
+    const lastPlayedAt =
+      sg.rtime_last_played && sg.rtime_last_played > 0
+        ? new Date(sg.rtime_last_played * 1000)
+        : null;
+    return [{ userId, gameId, playtimeMinutes: sg.playtime_forever, lastPlayedAt }];
+  });
+
+  for (const ch of chunk(ugValues, CHUNK)) {
+    await db
+      .insert(userGames)
+      .values(ch)
+      .onConflictDoUpdate({
+        target: [userGames.userId, userGames.gameId],
+        set: {
+          playtimeMinutes: sql`excluded.playtime_minutes`,
+          lastPlayedAt: sql`excluded.last_played_at`,
+        },
+      });
+  }
+
+  await db
+    .update(users)
     .set({ lastLibrarySync: new Date() })
     .where(eq(users.id, userId));
 
-  return new Response(JSON.stringify({ synced }), {
+  return new Response(JSON.stringify({ synced: ugValues.length }), {
     headers: { "Content-Type": "application/json" },
   });
 };

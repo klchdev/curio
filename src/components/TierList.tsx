@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-type TierValue = "S" | "A" | "B" | "C" | "D";
+type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
 type Source = "roulette" | "retro";
 type Filter = "all" | "roulette" | "retro";
 
@@ -20,12 +20,13 @@ interface Props {
   games: Game[];
 }
 
-const TIERS: { value: TierValue; label: string; labelBg: string; labelText: string }[] = [
-  { value: "S", label: "S", labelBg: "bg-yellow-500", labelText: "text-yellow-950" },
-  { value: "A", label: "A", labelBg: "bg-emerald-500", labelText: "text-emerald-950" },
-  { value: "B", label: "B", labelBg: "bg-sky-500", labelText: "text-sky-950" },
-  { value: "C", label: "C", labelBg: "bg-orange-500", labelText: "text-orange-950" },
-  { value: "D", label: "D", labelBg: "bg-red-500", labelText: "text-red-950" },
+const TIERS: { value: TierValue; label: string; labelBg: string; labelText: string; barBg: string; hint: string; rec: [number, number] }[] = [
+  { value: "S", label: "S", labelBg: "bg-yellow-500", labelText: "text-yellow-950", barBg: "bg-yellow-500", hint: "Шедевр",   rec: [5, 10]  },
+  { value: "A", label: "A", labelBg: "bg-emerald-500", labelText: "text-emerald-950", barBg: "bg-emerald-500", hint: "Крутая",   rec: [15, 25] },
+  { value: "B", label: "B", labelBg: "bg-sky-500",     labelText: "text-sky-950",     barBg: "bg-sky-500",     hint: "Хорошая",  rec: [25, 35] },
+  { value: "C", label: "C", labelBg: "bg-orange-500",  labelText: "text-orange-950",  barBg: "bg-orange-500",  hint: "Сойдёт",   rec: [15, 25] },
+  { value: "D", label: "D", labelBg: "bg-red-500",     labelText: "text-red-950",     barBg: "bg-red-500",     hint: "Не зашло", rec: [10, 20] },
+  { value: "F", label: "F", labelBg: "bg-rose-800",    labelText: "text-rose-100",    barBg: "bg-rose-800",    hint: "Провал",   rec: [5, 10]  },
 ];
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -53,7 +54,7 @@ export default function TierList({ games: initialGames }: Props) {
     // Optimistic update
     setGames((prev) => prev.map((g) => (g.slotId === slotId ? { ...g, tier } : g)));
 
-    const url = game.source === "retro" ? "/api/retrospective" : "/api/set-tier";
+    const url = game.source === "retro" ? "/api/set-retro-tier" : "/api/set-tier";
     const body = game.source === "retro"
       ? { gameId: game.gameId, tier }
       : { slotId, tier };
@@ -96,6 +97,15 @@ export default function TierList({ games: initialGames }: Props) {
   }
 
   const unranked = filtered.filter((g) => !g.tier);
+  const ranked = filtered.filter((g) => g.tier);
+  const rankedTotal = ranked.length;
+
+  const distribution = TIERS.map((t) => {
+    const count = filtered.filter((g) => g.tier === t.value).length;
+    const pct = rankedTotal > 0 ? Math.round((count / rankedTotal) * 100) : 0;
+    const over = pct > t.rec[1];
+    return { ...t, count, pct, over };
+  });
 
   return (
     <div>
@@ -114,6 +124,57 @@ export default function TierList({ games: initialGames }: Props) {
               {f.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {rankedTotal > 0 && (
+        <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+            <span>Распределение по тирам</span>
+            <span>{rankedTotal} оценено</span>
+          </div>
+
+          <div className="mb-1">
+            <div className="flex h-5 w-full overflow-hidden rounded">
+              {distribution.map((t) => (
+                t.pct > 0 && (
+                  <div
+                    key={t.value}
+                    className={`flex items-center justify-center text-[9px] font-bold transition-all ${t.barBg} ${t.labelText}`}
+                    style={{ width: `${t.pct}%` }}
+                    title={`${t.label}: ${t.pct}%`}
+                  >
+                    {t.pct >= 7 ? `${t.label} ${t.pct}%` : t.pct >= 4 ? t.label : ""}
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <div className="flex h-2 w-full overflow-hidden rounded opacity-25">
+              {distribution.map((t) => (
+                <div
+                  key={t.value}
+                  className={t.barBg}
+                  style={{ width: `${(t.rec[0] + t.rec[1]) / 2}%` }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {distribution.map((t) => (
+              t.count > 0 && (
+                <div key={t.value} className="flex items-center gap-1.5 text-xs">
+                  <div className={`h-2.5 w-2.5 rounded-sm ${t.barBg}`} />
+                  <span className={t.over ? "font-medium text-red-400" : "text-gray-400"}>
+                    {t.label} {t.pct}%{t.over ? " ↑" : ""}
+                  </span>
+                </div>
+              )
+            ))}
+          </div>
         </div>
       )}
 
@@ -140,8 +201,9 @@ export default function TierList({ games: initialGames }: Props) {
                 onDrop(tier.value);
               }}
             >
-              <div className={`flex w-16 flex-shrink-0 items-center justify-center rounded-l-lg ${tier.labelBg}`}>
-                <span className={`text-3xl font-black ${tier.labelText}`}>{tier.label}</span>
+              <div className={`flex w-16 flex-shrink-0 flex-col items-center justify-center rounded-l-lg ${tier.labelBg}`}>
+                <span className={`text-3xl font-black leading-none ${tier.labelText}`}>{tier.label}</span>
+                <span className={`mt-0.5 text-center text-[9px] font-medium leading-tight opacity-70 ${tier.labelText}`}>{tier.hint}</span>
               </div>
               <div className="flex flex-1 flex-wrap items-start gap-1.5 p-2">
                 {tierGames.length === 0 && !isOver && (

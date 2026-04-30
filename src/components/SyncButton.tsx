@@ -6,8 +6,14 @@ export default function SyncButton() {
 
   const sync = async () => {
     setState("syncing");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
     try {
-      const res = await fetch("/api/sync-library", { method: "POST" });
+      const res = await fetch("/api/sync-library", {
+        method: "POST",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       const data = await res.json();
       if (res.ok) {
         setCount(data.synced);
@@ -17,6 +23,7 @@ export default function SyncButton() {
         setState("error");
       }
     } catch {
+      clearTimeout(timeout);
       setState("error");
     }
   };
