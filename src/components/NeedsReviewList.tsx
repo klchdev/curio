@@ -1,6 +1,7 @@
 import { useState } from "react";
 import RetroReviewModal from "./RetroReviewModal";
 import NoteModal from "./NoteModal";
+import GameNoteModal from "./GameNoteModal";
 
 type UnreviewedItem = {
   kind: "unreviewed";
@@ -96,36 +97,29 @@ export default function NeedsReviewList({ items: initialItems }: Props) {
           onClose={() => setReviewing(null)}
         />
       )}
-      {(reviewing.kind === "unreviewed" || reviewing.kind === "game_update") && (
+      {reviewing.kind === "unreviewed" && (
         <RetroReviewModal
           gameId={reviewing.gameId}
           gameTitle={reviewing.title}
           gameImage={reviewing.headerImage}
-          currentPlaytime={
-            reviewing.kind === "unreviewed"
-              ? reviewing.playtimeMinutes
-              : reviewing.currentPlaytime
-          }
-          playtimeAtReview={
-            reviewing.kind === "game_update" ? reviewing.playtimeAtReview : undefined
-          }
-          existingVerdict={
-            reviewing.kind === "game_update" ? reviewing.existingVerdict : undefined
-          }
-          existingRating={
-            reviewing.kind === "game_update" ? reviewing.existingRating : undefined
-          }
-          existingNote={
-            reviewing.kind === "game_update" ? reviewing.existingNote : undefined
-          }
-          existingTier={
-            reviewing.kind === "game_update" ? reviewing.existingTier : undefined
-          }
+          currentPlaytime={reviewing.playtimeMinutes}
           onClose={() => setReviewing(null)}
           onSaved={() => {
             removeItem(reviewing.gameId);
             setReviewing(null);
           }}
+        />
+      )}
+      {reviewing.kind === "game_update" && (
+        <GameNoteModal
+          gameId={reviewing.gameId}
+          gameTitle={reviewing.title}
+          currentPlaytime={reviewing.currentPlaytime}
+          lastRecordedPlaytime={reviewing.playtimeAtReview}
+          currentVerdict={reviewing.existingVerdict}
+          currentRating={reviewing.existingRating}
+          currentTier={reviewing.existingTier}
+          onClose={() => setReviewing(null)}
         />
       )}
     </>

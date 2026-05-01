@@ -261,6 +261,77 @@ export async function getSlotNotes(slotId: number) {
     .orderBy(slotNotes.createdAt);
 }
 
+export async function addGameNote(
+  userId: number,
+  gameId: number,
+  text: string,
+  currentPlaytime: number
+) {
+  const review = await db
+    .select({ id: gameReviews.id })
+    .from(gameReviews)
+    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!review) return { error: "Review not found" };
+  if (text.length < 10) return { error: "Заметка минимум 10 символов" };
+
+  await db.insert(slotNotes).values({
+    userId,
+    gameId,
+    text,
+    playtimeMinutes: currentPlaytime,
+    createdAt: new Date(),
+  });
+
+  return { ok: true };
+}
+
+export async function updateGameReview(
+  userId: number,
+  gameId: number,
+  data: {
+    verdict?: "finished" | "dropped" | "playing" | "later" | null;
+    rating?: number | null;
+    tier?: "S" | "A" | "B" | "C" | "D" | "F" | null;
+    playtimeMinutes?: number;
+  }
+) {
+  const existing = await db
+    .select({ id: gameReviews.id })
+    .from(gameReviews)
+    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!existing) return { error: "Review not found" };
+
+  const patch: Record<string, unknown> = {};
+  if (data.verdict !== undefined) patch.verdict = data.verdict;
+  if (data.rating !== undefined) patch.rating = data.rating;
+  if (data.tier !== undefined) patch.tier = data.tier;
+  if (data.playtimeMinutes !== undefined) patch.playtimeMinutes = data.playtimeMinutes;
+
+  if (Object.keys(patch).length === 0) return { ok: true };
+
+  await db.update(gameReviews).set(patch).where(eq(gameReviews.id, existing.id));
+  return { ok: true };
+}
+
+export async function getGameNotes(userId: number, gameId: number) {
+  return db
+    .select({
+      id: slotNotes.id,
+      text: slotNotes.text,
+      playtimeMinutes: slotNotes.playtimeMinutes,
+      createdAt: slotNotes.createdAt,
+    })
+    .from(slotNotes)
+    .where(and(eq(slotNotes.userId, userId), eq(slotNotes.gameId, gameId)))
+    .orderBy(slotNotes.createdAt);
+}
+
 export type NeedsReviewItem =
   | {
       kind: "unreviewed";
@@ -324,25 +395,39 @@ export async function getGamesNeedingReview(userId: number): Promise<NeedsReview
 
   const gameReviewedIds = new Set(gameReviewRows.map((r) => r.gameId));
 
-  const gameUpdateItems: NeedsReviewItem[] = gameReviewRows
-    .filter(
-      (r) =>
-        (r.currentPlaytime ?? 0) - r.playtimeAtReview >= STILL_PLAYING_THRESHOLD
-    )
-    .map((r) => ({
-      kind: "game_update" as const,
-      gameId: r.gameId,
-      steamAppId: r.steamAppId,
-      title: r.title,
-      headerImage: r.headerImage,
-      currentPlaytime: r.currentPlaytime ?? 0,
-      delta: (r.currentPlaytime ?? 0) - r.playtimeAtReview,
-      playtimeAtReview: r.playtimeAtReview,
-      existingVerdict: r.existingVerdict,
-      existingRating: r.existingRating,
-      existingNote: r.existingNote,
-      existingTier: r.existingTier,
-    }));
+  const gameUpdateItems: NeedsReviewItem[] = [];
+  for (const r of gameReviewRows) {
+    const lastGameNote = await db
+      .select({ playtimeMinutes: slotNotes.playtimeMinutes })
+      .from(slotNotes)
+      .where(and(eq(slotNotes.userId, userId), eq(slotNotes.gameId, r.gameId)))
+      .orderBy(desc(slotNotes.createdAt))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    const lastRecordedPlaytime = Math.max(
+      r.playtimeAtReview,
+      lastGameNote?.playtimeMinutes ?? 0
+    );
+    const delta = (r.currentPlaytime ?? 0) - lastRecordedPlaytime;
+
+    if (delta >= STILL_PLAYING_THRESHOLD) {
+      gameUpdateItems.push({
+        kind: "game_update" as const,
+        gameId: r.gameId,
+        steamAppId: r.steamAppId,
+        title: r.title,
+        headerImage: r.headerImage,
+        currentPlaytime: r.currentPlaytime ?? 0,
+        delta,
+        playtimeAtReview: lastRecordedPlaytime,
+        existingVerdict: r.existingVerdict,
+        existingRating: r.existingRating,
+        existingNote: r.existingNote,
+        existingTier: r.existingTier,
+      });
+    }
+  }
 
   // --- slot_update: reviewed slots with delta >= threshold (skip if gameReview exists) ---
   const reviewedSlots = await db
@@ -709,13 +794,23 @@ export async function createRetrospectiveReview(
       playtimeMinutes: data.playtimeMinutes ?? 0,
       createdAt: new Date(),
     });
+
+    if (data.note && data.note.length >= 10) {
+      await db.insert(slotNotes).values({
+        userId,
+        gameId,
+        text: data.note,
+        playtimeMinutes: data.playtimeMinutes ?? 0,
+        createdAt: new Date(),
+      });
+    }
   }
 
   return { ok: true };
 }
 
 export async function getRetroReviews(userId: number) {
-  return db
+  const reviews = await db
     .select({
       gameId: games.id,
       gameTitle: games.title,
@@ -724,10 +819,44 @@ export async function getRetroReviews(userId: number) {
       tier: gameReviews.tier,
       rating: gameReviews.rating,
       note: gameReviews.note,
+      verdict: gameReviews.verdict,
+      playtimeMinutes: gameReviews.playtimeMinutes,
+      createdAt: gameReviews.createdAt,
     })
     .from(gameReviews)
     .innerJoin(games, eq(gameReviews.gameId, games.id))
     .where(eq(gameReviews.userId, userId));
+
+  if (reviews.length === 0) return [];
+
+  const allNotes = await db
+    .select({
+      gameId: slotNotes.gameId,
+      id: slotNotes.id,
+      text: slotNotes.text,
+      playtimeMinutes: slotNotes.playtimeMinutes,
+      createdAt: slotNotes.createdAt,
+    })
+    .from(slotNotes)
+    .where(eq(slotNotes.userId, userId))
+    .orderBy(slotNotes.createdAt);
+
+  const notesByGame = new Map<number, { id: number; text: string; playtimeMinutes: number; createdAt: Date }[]>();
+  for (const n of allNotes) {
+    if (n.gameId == null) continue;
+    if (!notesByGame.has(n.gameId)) notesByGame.set(n.gameId, []);
+    notesByGame.get(n.gameId)!.push({
+      id: n.id,
+      text: n.text,
+      playtimeMinutes: n.playtimeMinutes,
+      createdAt: n.createdAt,
+    });
+  }
+
+  return reviews.map((r) => ({
+    ...r,
+    notes: notesByGame.get(r.gameId) ?? [],
+  }));
 }
 
 export async function getStats(userId: number) {

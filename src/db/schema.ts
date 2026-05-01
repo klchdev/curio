@@ -75,9 +75,9 @@ export const slotReviews = pgTable("slot_reviews", {
 
 export const slotNotes = pgTable("slot_notes", {
   id: serial("id").primaryKey(),
-  slotId: integer("slot_id")
-    .notNull()
-    .references(() => slots.id),
+  slotId: integer("slot_id").references(() => slots.id),
+  userId: integer("user_id").references(() => users.id),
+  gameId: integer("game_id").references(() => games.id),
   text: text("text").notNull(),
   playtimeMinutes: integer("playtime_minutes").notNull(),
   createdAt: timestamp("created_at")
