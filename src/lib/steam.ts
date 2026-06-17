@@ -81,6 +81,43 @@ export async function getOwnedGames(steamId: string): Promise<SteamGame[]> {
   return data.response.games || [];
 }
 
+// Parse a Steam appid from a raw id or a store URL
+// e.g. "https://store.steampowered.com/app/2861690/Game_Demo/" -> 2861690
+export function parseAppId(input: string): number | null {
+  const trimmed = input.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const m = trimmed.match(/\/app\/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+export interface StoreAppDetails {
+  appid: number;
+  name: string;
+  headerImage: string | null;
+  type: string | null;
+}
+
+// Fetch title + header image from the public Steam store API.
+// Works for demo appids (they have their own store page).
+export async function getStoreAppDetails(
+  appId: number
+): Promise<StoreAppDetails | null> {
+  const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&l=russian`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const entry = data?.[String(appId)];
+  if (!entry?.success || !entry.data) return null;
+  return {
+    appid: appId,
+    name: entry.data.name as string,
+    headerImage:
+      (entry.data.header_image as string) ??
+      `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    type: (entry.data.type as string) ?? null,
+  };
+}
+
 export async function getRecentPlaytime(
   steamId: string,
   appId: number

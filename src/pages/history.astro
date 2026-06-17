@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { getHistory, getRetroReviews } from "../lib/queries";
 import AddNoteButton from "../components/AddNoteButton";
+import AddGameNoteButton from "../components/AddGameNoteButton";
 import RetroGrid from "../components/RetroGrid.tsx";
 
 const user = await getSessionUser(Astro);
@@ -216,7 +217,7 @@ function formatPlaytime(minutes: number) {
                     </span>
                   )}
                 </div>
-                {isReviewed && entry.verdict && entry.rating && (
+                {isReviewed && entry.verdict && entry.rating && entry.source === "slot" && entry.slotId != null && (
                   <AddNoteButton
                     client:idle
                     slotId={entry.slotId}
@@ -225,6 +226,18 @@ function formatPlaytime(minutes: number) {
                     lastRecordedPlaytime={notes.length > 0 ? notes[notes.length - 1].playtimeMinutes : (entry.playtimeMinutes ?? 0)}
                     currentVerdict={entry.verdict}
                     currentRating={entry.rating}
+                  />
+                )}
+                {isReviewed && entry.source === "retro" && entry.gameId != null && (
+                  <AddGameNoteButton
+                    client:idle
+                    gameId={entry.gameId}
+                    gameTitle={entry.gameTitle}
+                    currentPlaytime={entry.playtimeMinutes ?? 0}
+                    lastRecordedPlaytime={notes.length > 0 ? notes[notes.length - 1].playtimeMinutes : (entry.playtimeMinutes ?? 0)}
+                    currentVerdict={entry.verdict ?? null}
+                    currentRating={entry.rating ?? null}
+                    currentTier={entry.tier ?? null}
                   />
                 )}
               </div>

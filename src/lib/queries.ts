@@ -79,7 +79,8 @@ export async function getUnplayedGames(userId: number) {
     .where(
       and(
         eq(userGames.userId, userId),
-        lte(userGames.playtimeMinutes, MAX_PLAYTIME_MINUTES)
+        lte(userGames.playtimeMinutes, MAX_PLAYTIME_MINUTES),
+        eq(games.isDemo, false)
       )
     );
 
@@ -391,7 +392,7 @@ export async function getGamesNeedingReview(userId: number): Promise<NeedsReview
       userGames,
       and(eq(userGames.userId, userId), eq(userGames.gameId, games.id))
     )
-    .where(eq(gameReviews.userId, userId));
+    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false)));
 
   const gameReviewedIds = new Set(gameReviewRows.map((r) => r.gameId));
 
@@ -599,11 +600,14 @@ export async function getHistory(userId: number) {
   const reviewed = await db
     .select({
       type: sql<string>`'reviewed'`.as("type"),
+      source: sql<string>`'slot'`.as("source"),
       slotId: slots.id,
+      gameId: games.id,
       gameTitle: games.title,
       gameImage: games.headerImage,
       verdict: slotReviews.verdict,
       rating: slotReviews.rating,
+      tier: slotReviews.tier,
       note: slotReviews.note,
       playtimeMinutes: slotReviews.playtimeMinutes,
       reasonType: sql<string | null>`null`.as("reason_type_alias"),
@@ -618,11 +622,14 @@ export async function getHistory(userId: number) {
   const skipped = await db
     .select({
       type: sql<string>`'skipped'`.as("type"),
+      source: sql<string>`'slot'`.as("source"),
       slotId: slots.id,
+      gameId: games.id,
       gameTitle: games.title,
       gameImage: games.headerImage,
       verdict: sql<string | null>`null`.as("verdict_alias"),
       rating: sql<number | null>`null`.as("rating_alias"),
+      tier: sql<string | null>`null`.as("tier_alias"),
       note: sql<string | null>`null`.as("note_alias"),
       playtimeMinutes: sql<number | null>`null`.as("playtime_alias"),
       reasonType: slotSkips.reasonType,
@@ -634,15 +641,81 @@ export async function getHistory(userId: number) {
     .innerJoin(slotSkips, eq(slotSkips.slotId, slots.id))
     .where(and(eq(slots.userId, userId), eq(slots.status, "skipped")));
 
-  const entries = [...reviewed, ...skipped].sort(
+  const slotReviewedGameIds = new Set(
+    reviewed.map((r) => r.gameId).filter((id): id is number => id != null)
+  );
+
+  const retroRows = await db
+    .select({
+      gameId: games.id,
+      gameTitle: games.title,
+      gameImage: games.headerImage,
+      verdict: gameReviews.verdict,
+      rating: gameReviews.rating,
+      tier: gameReviews.tier,
+      note: gameReviews.note,
+      playtimeMinutes: gameReviews.playtimeMinutes,
+      createdAt: gameReviews.createdAt,
+    })
+    .from(gameReviews)
+    .innerJoin(games, eq(gameReviews.gameId, games.id))
+    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false)));
+
+  const allGameNotes = await db
+    .select({
+      gameId: slotNotes.gameId,
+      id: slotNotes.id,
+      text: slotNotes.text,
+      playtimeMinutes: slotNotes.playtimeMinutes,
+      createdAt: slotNotes.createdAt,
+    })
+    .from(slotNotes)
+    .where(eq(slotNotes.userId, userId))
+    .orderBy(slotNotes.createdAt);
+
+  const notesByGame = new Map<number, typeof allGameNotes>();
+  for (const n of allGameNotes) {
+    if (n.gameId == null) continue;
+    if (!notesByGame.has(n.gameId)) notesByGame.set(n.gameId, []);
+    notesByGame.get(n.gameId)!.push(n);
+  }
+
+  const retroEntries = retroRows
+    .filter((r) => !slotReviewedGameIds.has(r.gameId))
+    .map((r) => {
+      const notes = notesByGame.get(r.gameId) ?? [];
+      const [first, ...rest] = notes;
+      return {
+        type: "reviewed" as const,
+        source: "retro" as const,
+        slotId: null as number | null,
+        gameId: r.gameId,
+        gameTitle: r.gameTitle,
+        gameImage: r.gameImage,
+        verdict: r.verdict,
+        rating: r.rating,
+        tier: r.tier,
+        note: first?.text ?? r.note,
+        playtimeMinutes: first?.playtimeMinutes ?? r.playtimeMinutes,
+        reasonType: null,
+        reasonText: null,
+        date: first?.createdAt ?? r.createdAt,
+        _retroNotes: rest,
+      };
+    });
+
+  const entries = [...reviewed, ...skipped, ...retroEntries].sort(
     (a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime()
   );
 
   const result = [];
   for (const entry of entries) {
-    if (entry.type === "reviewed") {
-      const notes = await getSlotNotes(entry.slotId);
+    if (entry.type === "reviewed" && entry.source === "slot") {
+      const notes = await getSlotNotes((entry as any).slotId);
       result.push({ ...entry, notes });
+    } else if (entry.type === "reviewed" && entry.source === "retro") {
+      const { _retroNotes, ...rest } = entry as any;
+      result.push({ ...rest, notes: _retroNotes });
     } else {
       result.push({ ...entry, notes: [] });
     }
@@ -825,7 +898,7 @@ export async function getRetroReviews(userId: number) {
     })
     .from(gameReviews)
     .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .where(eq(gameReviews.userId, userId));
+    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false)));
 
   if (reviews.length === 0) return [];
 
@@ -857,6 +930,131 @@ export async function getRetroReviews(userId: number) {
     ...r,
     notes: notesByGame.get(r.gameId) ?? [],
   }));
+}
+
+// --- Demo reviews (Next Fest etc.) ---------------------------------------
+// Demos are stored as games with isDemo=true and reviewed via gameReviews,
+// but kept out of the backlog roulette / diary / tier-list / stats.
+
+export async function createDemoReview(
+  userId: number,
+  data: {
+    appId: number;
+    title: string;
+    headerImage: string | null;
+    verdict?: "finished" | "dropped" | "playing" | "later" | null;
+    tier?: "S" | "A" | "B" | "C" | "D" | "F" | null;
+    rating?: number | null;
+    note: string;
+  }
+) {
+  // upsert game row flagged as demo
+  await db
+    .insert(games)
+    .values({
+      steamAppId: data.appId,
+      title: data.title,
+      headerImage: data.headerImage,
+      isDemo: true,
+      createdAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: games.steamAppId,
+      set: {
+        title: sql`excluded.title`,
+        headerImage: sql`excluded.header_image`,
+        isDemo: true,
+      },
+    });
+
+  const game = await db
+    .select({ id: games.id })
+    .from(games)
+    .where(eq(games.steamAppId, data.appId))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (!game) return { error: "Failed to create game" };
+
+  // link to user (playtime not tracked for demos)
+  await db
+    .insert(userGames)
+    .values({ userId, gameId: game.id, playtimeMinutes: 0 })
+    .onConflictDoNothing({
+      target: [userGames.userId, userGames.gameId],
+    });
+
+  const existing = await db
+    .select({ id: gameReviews.id })
+    .from(gameReviews)
+    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, game.id)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (existing) {
+    await db
+      .update(gameReviews)
+      .set({
+        verdict: data.verdict ?? null,
+        tier: data.tier ?? null,
+        rating: data.rating ?? null,
+        note: data.note,
+      })
+      .where(eq(gameReviews.id, existing.id));
+  } else {
+    await db.insert(gameReviews).values({
+      userId,
+      gameId: game.id,
+      verdict: data.verdict ?? null,
+      tier: data.tier ?? null,
+      rating: data.rating ?? null,
+      note: data.note,
+      playtimeMinutes: 0,
+      createdAt: new Date(),
+    });
+  }
+
+  return { ok: true, gameId: game.id };
+}
+
+export async function getDemoReviews(userId: number) {
+  return db
+    .select({
+      gameId: games.id,
+      steamAppId: games.steamAppId,
+      title: games.title,
+      headerImage: games.headerImage,
+      verdict: gameReviews.verdict,
+      tier: gameReviews.tier,
+      rating: gameReviews.rating,
+      note: gameReviews.note,
+      createdAt: gameReviews.createdAt,
+    })
+    .from(gameReviews)
+    .innerJoin(games, eq(gameReviews.gameId, games.id))
+    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, true)))
+    .orderBy(desc(gameReviews.createdAt));
+}
+
+export async function deleteDemoReview(userId: number, gameId: number) {
+  const game = await db
+    .select({ id: games.id })
+    .from(games)
+    .where(and(eq(games.id, gameId), eq(games.isDemo, true)))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (!game) return { error: "Demo not found" };
+
+  await db
+    .delete(gameReviews)
+    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)));
+  await db
+    .delete(slotNotes)
+    .where(and(eq(slotNotes.userId, userId), eq(slotNotes.gameId, gameId)));
+  await db
+    .delete(userGames)
+    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)));
+
+  return { ok: true };
 }
 
 export async function getStats(userId: number) {
@@ -912,7 +1110,8 @@ export async function getStats(userId: number) {
   const totalLibrary = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(userGames)
-    .where(eq(userGames.userId, userId))
+    .innerJoin(games, eq(userGames.gameId, games.id))
+    .where(and(eq(userGames.userId, userId), eq(games.isDemo, false)))
     .then((rows) => rows[0]))?.count ?? 0;
 
   const poolSize = (await getUnplayedGames(userId)).length;

@@ -18,6 +18,7 @@ export const games = pgTable("games", {
   headerImage: text("header_image"),
   hltbMinutes: integer("hltb_minutes"),
   excluded: boolean("excluded").notNull().default(false),
+  isDemo: boolean("is_demo").notNull().default(false),
   createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),

@@ -1,0 +1,28 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+import { getDemoReviews } from "../lib/queries";
+import DemoList from "../components/DemoList.tsx";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const reviewsRaw = await getDemoReviews(user.id);
+const reviews = reviewsRaw.map((r) => ({
+  ...r,
+  createdAt:
+    r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+}));
+---
+
+<Layout title="Демки">
+  <div class="mb-8 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">Демки</h1>
+      <p class="text-sm text-gray-400">Впечатления с Next Fest и других демок</p>
+    </div>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+  </div>
+
+  <DemoList client:load reviews={reviews} />
+</Layout>
