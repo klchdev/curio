@@ -90,6 +90,7 @@ export async function loadMockData(astro: AstroGlobal) {
     tierCounts,
     diary,
     demos: demos.slice(0, 8),
+    reviewCount: run?.reviewsUsed ?? stats.totalGames,
     poolSize: pool.length,
     // Кадры для барабана рулетки
     poolPreview: pool
