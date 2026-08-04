@@ -13,7 +13,7 @@ const demoState = param === "empty" || param === "gate" ? param : "ready";
 
 const {
   picks, abandoned, slots, queue, diary, demos,
-  tierCounts, poolSize, poolPreview, reviewCount, stats,
+  tierCounts, shelf, poolSize, poolPreview, reviewCount, stats,
 } = data;
 ---
 
@@ -51,6 +51,7 @@ const {
     diary={diary}
     demos={demos}
     tierCounts={tierCounts}
+    shelf={shelf}
     poolSize={poolSize}
     poolPreview={poolPreview}
     reviewCount={reviewCount}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Reveal from "./Reveal";
 import RichText from "./RichText";
+import TierBoard from "./TierBoard";
 
 interface Pick {
   gameId: number;
@@ -59,6 +60,7 @@ interface Props {
   diary: DiaryEntry[];
   demos: Demo[];
   tierCounts: Record<string, number>;
+  shelf: { gameId: number; title: string; image: string | null; tier: string | null }[];
   poolSize: number;
   poolPreview: { title: string; image: string | null }[];
   reviewCount: number;
@@ -605,9 +607,7 @@ function NowZone({
 
 /* ================= ЗОНА: ИТОГИ ================= */
 
-function RecapZone({ diary, tierCounts, demos, stats }: Props) {
-  const order = ["S", "A", "B", "C", "D", "F"];
-  const total = Object.values(tierCounts).reduce((a, b) => a + b, 0) || 1;
+function RecapZone({ diary, shelf, demos, stats }: Props) {
 
   return (
     <div className="space-y-12">
@@ -627,32 +627,9 @@ function RecapZone({ diary, tierCounts, demos, stats }: Props) {
         ))}
       </section>
 
-      <section>
-        <Reveal delay={200}>
-          <h2 className="mb-4 text-2xl font-bold">Тир-лист</h2>
-        </Reveal>
-        <div className="space-y-1.5">
-          {order.map((tier, i) => {
-            const count = tierCounts[tier] ?? 0;
-            return (
-              <Reveal key={tier} delay={220 + 50 * i} from="left">
-                <div className="flex items-center gap-3">
-                  <span className={`w-6 text-xl font-black ${TIER[tier]?.text ?? "text-rose-400"}`}>
-                    {tier}
-                  </span>
-                  <div className="h-6 flex-1 overflow-hidden rounded-md bg-gray-900/60">
-                    <div
-                      className={`h-full rounded-md ${TIER[tier]?.bar ?? "bg-rose-800"} opacity-70 transition-[width] duration-1000`}
-                      style={{ width: `${(count / total) * 100}%` }}
-                    />
-                  </div>
-                  <span className="w-8 text-right text-sm text-gray-500">{count}</span>
-                </div>
-              </Reveal>
-            );
-          })}
-        </div>
-      </section>
+      <Reveal delay={200}>
+        <TierBoard games={shelf} />
+      </Reveal>
 
       {diary.length > 0 && (
         <section>
@@ -665,8 +642,8 @@ function RecapZone({ diary, tierCounts, demos, stats }: Props) {
           <ol className="relative border-l border-gray-800 pl-6">
             {diary.map((entry, i) => (
               <Reveal key={entry.id} delay={440 + 60 * i} from="left">
-                <li className="mb-5">
-                  <span className="absolute -left-[5px] mt-2 h-2.5 w-2.5 rounded-full bg-gray-600" />
+                <li className="relative mb-5">
+                  <span className="absolute top-2 -left-[30px] h-2.5 w-2.5 rounded-full bg-gray-600" />
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span className="font-medium">{entry.title}</span>
                     <span className="text-xs text-gray-600">{formatPlaytime(entry.playtimeMinutes)}</span>
