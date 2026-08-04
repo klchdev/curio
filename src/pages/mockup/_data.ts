@@ -76,8 +76,6 @@ export const TIER_STYLE: Record<string, { chip: string; ring: string; hint: stri
 };
 
 export const VARIANTS = [
-  { slug: "feed", name: "Лента советчика", hint: "одна колонка, читается как журнал" },
-  { slug: "command", name: "Командный центр", hint: "две колонки, всё на виду" },
-  { slug: "deck", name: "Колода", hint: "один совет во весь экран" },
-  { slug: "shelf", name: "Полка", hint: "библиотека обложками" },
+  { slug: "stage", name: "Сцена", hint: "герой на весь экран, тир задаёт цвет, периферия одной строкой" },
+  { slug: "editorial", name: "Журнал", hint: "типографика вместо украшений, арт вторичен" },
 ];

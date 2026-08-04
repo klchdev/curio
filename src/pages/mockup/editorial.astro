@@ -1,0 +1,23 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import VariantSwitcher from "../../components/mockup/VariantSwitcher.astro";
+import Editorial from "../../components/mockup/Editorial";
+import { loadMockData } from "./_data";
+
+const data = await loadMockData(Astro);
+if (!data) return Astro.redirect("/");
+
+const { picks, slots, queue, stats } = data;
+---
+
+<Layout title="Макет: журнал">
+  <VariantSwitcher current="editorial" />
+
+  <Editorial
+    client:load
+    picks={picks}
+    slotCount={slots.length}
+    queueCount={queue.length}
+    libraryCount={stats.totalLibrary}
+  />
+</Layout>
