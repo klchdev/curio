@@ -1,0 +1,29 @@
+import type { APIRoute } from "astro";
+import { createRetrospectiveReview } from "../../lib/queries";
+
+const VALID = ["finished", "dropped", "playing", "later"] as const;
+
+export const POST: APIRoute = async ({ request, session }) => {
+  const userId = await session?.get<number>("userId");
+  if (!userId) return new Response("Unauthorized", { status: 401 });
+
+  const { gameId, verdict, playtimeMinutes } = await request.json();
+
+  if (!Number.isInteger(gameId) || !VALID.includes(verdict)) {
+    return new Response(JSON.stringify({ error: "Bad request" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const result = await createRetrospectiveReview(userId, gameId, {
+    verdict,
+    playtimeMinutes: Number.isInteger(playtimeMinutes) ? playtimeMinutes : undefined,
+  });
+
+  const status = "error" in result ? 400 : 200;
+  return new Response(JSON.stringify(result), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+};

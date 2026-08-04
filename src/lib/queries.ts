@@ -1207,8 +1207,9 @@ const CANDIDATE_MAX_MINUTES = 20;
 const CANDIDATE_LIMIT = 700;
 /** Брошенное: поиграл ощутимо, но забросил без отзыва — материал для разбора, а не для советов. */
 const ABANDONED_MIN_MINUTES = 20;
-const ABANDONED_MAX_MINUTES = 600;
 const ABANDONED_LIMIT = 60;
+/** Сколько игр показываем на разбор за раз — иначе список неподъёмный. */
+const TRIAGE_LIMIT = 24;
 
 export interface ReviewCorpusItem {
   title: string;
@@ -1313,10 +1314,11 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
     }));
 }
 
-/** Игры, которые он ощутимо поиграл и бросил, не написав отзыв. */
+/**
+ * Брошенное — только по ЯВНОМУ вердикту игрока. Раньше сюда попадало всё
+ * сыгранное без отзыва, из-за чего пройденные игры разбирались как брошенные.
+ */
 export async function getAbandonedGames(userId: number): Promise<CandidateGame[]> {
-  const reviewedIds = await getReviewedGameIds(userId);
-
   const rows = await db
     .select({
       gameId: games.id,
@@ -1325,29 +1327,86 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
       minutes: userGames.playtimeMinutes,
       lastPlayedAt: userGames.lastPlayedAt,
     })
+    .from(gameReviews)
+    .innerJoin(games, eq(gameReviews.gameId, games.id))
+    .innerJoin(
+      userGames,
+      and(eq(userGames.gameId, games.id), eq(userGames.userId, userId))
+    )
+    .where(
+      and(
+        eq(gameReviews.userId, userId),
+        eq(gameReviews.verdict, "dropped"),
+        eq(games.isDemo, false),
+        eq(games.excluded, false)
+      )
+    )
+    .orderBy(desc(userGames.playtimeMinutes))
+    .limit(ABANDONED_LIMIT);
+
+  return rows.map((row) => ({
+    gameId: row.gameId,
+    steamAppId: row.steamAppId,
+    title: row.title,
+    hours: Math.round((row.minutes / 60) * 10) / 10,
+    lastPlayedAt: row.lastPlayedAt,
+  }));
+}
+
+/**
+ * Сыграно ощутимо, но вердикта нет — прошёл или бросил, неизвестно.
+ * Пока не разобрано, такие игры не идут ни в советы, ни в разбор брошенного.
+ */
+export async function getUntriagedGames(userId: number, limit = TRIAGE_LIMIT) {
+  const slotReviewed = await db
+    .select({ gameId: slots.gameId })
+    .from(slots)
+    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+    .where(eq(slots.userId, userId));
+
+  const slotReviewedIds = new Set(slotReviewed.map((r) => r.gameId));
+
+  const rows = await db
+    .select({
+      gameId: games.id,
+      steamAppId: games.steamAppId,
+      title: games.title,
+      headerImage: games.headerImage,
+      minutes: userGames.playtimeMinutes,
+      verdict: gameReviews.verdict,
+    })
     .from(userGames)
     .innerJoin(games, eq(userGames.gameId, games.id))
+    .leftJoin(
+      gameReviews,
+      and(eq(gameReviews.gameId, games.id), eq(gameReviews.userId, userId))
+    )
     .where(
       and(
         eq(userGames.userId, userId),
         eq(games.isDemo, false),
         eq(games.excluded, false),
         gt(userGames.playtimeMinutes, ABANDONED_MIN_MINUTES),
-        lt(userGames.playtimeMinutes, ABANDONED_MAX_MINUTES)
+        // отзыва нет вовсе: если он написан, вкус уже виден из корпуса
+        sql`${gameReviews.id} is null`
       )
     )
-    .orderBy(desc(userGames.playtimeMinutes))
-    .limit(ABANDONED_LIMIT);
+    .orderBy(desc(userGames.playtimeMinutes));
 
   return rows
-    .filter((row) => !reviewedIds.has(row.gameId))
+    .filter((row) => !slotReviewedIds.has(row.gameId))
+    .slice(0, limit)
     .map((row) => ({
       gameId: row.gameId,
       steamAppId: row.steamAppId,
       title: row.title,
+      headerImage: row.headerImage,
       hours: Math.round((row.minutes / 60) * 10) / 10,
-      lastPlayedAt: row.lastPlayedAt,
     }));
+}
+
+export async function countUntriagedGames(userId: number): Promise<number> {
+  return (await getUntriagedGames(userId, Number.MAX_SAFE_INTEGER)).length;
 }
 
 async function getReviewedGameIds(userId: number): Promise<Set<number>> {

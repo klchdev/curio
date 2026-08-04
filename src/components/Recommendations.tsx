@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import RetroReviewModal from "./RetroReviewModal";
 
 type TierValue = "S" | "A" | "B" | "C" | "D";
 
@@ -159,6 +160,9 @@ export default function Recommendations({
   const [active, setActive] = useState<ActiveRun | null>(activeRun);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState<
+    { gameId: number; title: string; headerImage: string | null; hours: number } | null
+  >(null);
   const activeId = active?.id ?? null;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -322,6 +326,12 @@ export default function Recommendations({
                             {item.reason}
                           </p>
                         </div>
+                        <button
+                          onClick={() => setReviewing(item)}
+                          className="ml-auto shrink-0 self-start rounded-lg border border-gray-700 px-3 py-1.5 text-sm whitespace-nowrap transition hover:bg-gray-800"
+                        >
+                          Написать отзыв
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -380,6 +390,12 @@ export default function Recommendations({
                         </div>
                         <p className="mt-1 text-sm leading-relaxed text-gray-400">{item.text}</p>
                       </div>
+                      <button
+                        onClick={() => setReviewing(item)}
+                        className="ml-auto shrink-0 self-start rounded-lg border border-gray-700 px-3 py-1.5 text-sm whitespace-nowrap transition hover:bg-gray-800"
+                      >
+                        Написать отзыв
+                      </button>
                     </li>
                   );
                 })}
@@ -387,6 +403,20 @@ export default function Recommendations({
             </section>
           )}
         </>
+      )}
+
+      {reviewing && (
+        <RetroReviewModal
+          gameId={reviewing.gameId}
+          gameTitle={reviewing.title}
+          gameImage={reviewing.headerImage}
+          currentPlaytime={Math.round(reviewing.hours * 60)}
+          onClose={() => setReviewing(null)}
+          onSaved={() => {
+            setReviewing(null);
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );

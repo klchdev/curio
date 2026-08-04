@@ -1,8 +1,15 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getLatestRecommendations, getReviewCorpus, getActiveRun } from "../lib/queries";
+import {
+  getLatestRecommendations,
+  getReviewCorpus,
+  getActiveRun,
+  getUntriagedGames,
+  countUntriagedGames,
+} from "../lib/queries";
 import Recommendations from "../components/Recommendations";
+import TriageList from "../components/TriageList";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
@@ -10,6 +17,8 @@ if (!user) return Astro.redirect("/");
 const run = await getLatestRecommendations(user.id);
 const active = await getActiveRun(user.id);
 const reviewCount = (await getReviewCorpus(user.id)).length;
+const untriaged = await getUntriagedGames(user.id);
+const untriagedTotal = await countUntriagedGames(user.id);
 
 const iso = (value: Date | string) =>
   value instanceof Date ? value.toISOString() : String(value);
@@ -23,6 +32,10 @@ const activeRunData = active ? { ...active, createdAt: iso(active.createdAt) } :
     <h1 class="text-2xl font-bold">Что играть дальше</h1>
     <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
   </div>
+
+  {untriaged.length > 0 && (
+    <TriageList client:load games={untriaged} total={untriagedTotal} />
+  )}
 
   <Recommendations
     client:load
