@@ -7,8 +7,10 @@ import {
   slotNotes,
   slotSkips,
   gameReviews,
+  recommendationRuns,
+  recommendations,
 } from "../db/schema";
-import { eq, and, sql, ne, lte, desc, gt } from "drizzle-orm";
+import { eq, and, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
 
 const MAX_PLAYTIME_MINUTES = 15;
 const MAX_ACTIVE_SLOTS = 3;
@@ -1195,5 +1197,209 @@ export async function getStats(userId: number) {
     playingCount,
     laterCount,
     avgRating,
+  };
+}
+
+// --- AI-рекомендации ---
+
+const CANDIDATE_MAX_MINUTES = 300;
+const CANDIDATE_LIMIT = 700;
+
+export interface ReviewCorpusItem {
+  title: string;
+  tier: string | null;
+  rating: number | null;
+  verdict: string | null;
+  hours: number;
+  isDemo: boolean;
+  note: string | null;
+}
+
+export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[]> {
+  const retro = await db
+    .select({
+      gameId: gameReviews.gameId,
+      title: games.title,
+      tier: gameReviews.tier,
+      rating: gameReviews.rating,
+      verdict: gameReviews.verdict,
+      minutes: gameReviews.playtimeMinutes,
+      isDemo: games.isDemo,
+      note: gameReviews.note,
+    })
+    .from(gameReviews)
+    .innerJoin(games, eq(gameReviews.gameId, games.id))
+    .where(eq(gameReviews.userId, userId));
+
+  const fromSlots = await db
+    .select({
+      gameId: slots.gameId,
+      title: games.title,
+      tier: slotReviews.tier,
+      rating: slotReviews.rating,
+      verdict: slotReviews.verdict,
+      minutes: slotReviews.playtimeMinutes,
+      isDemo: games.isDemo,
+      note: slotReviews.note,
+    })
+    .from(slots)
+    .innerJoin(games, eq(slots.gameId, games.id))
+    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
+
+  const byGame = new Map<number, ReviewCorpusItem>();
+  for (const row of [...fromSlots, ...retro]) {
+    // retro идёт вторым — у него приоритет, там актуальный тир и заметка
+    byGame.set(row.gameId, {
+      title: row.title,
+      tier: row.tier,
+      rating: row.rating,
+      verdict: row.verdict,
+      hours: Math.round((row.minutes / 60) * 10) / 10,
+      isDemo: row.isDemo,
+      note: row.note,
+    });
+  }
+
+  return [...byGame.values()];
+}
+
+export interface CandidateGame {
+  gameId: number;
+  steamAppId: number;
+  title: string;
+  hours: number;
+  lastPlayedAt: Date | null;
+}
+
+/** Нетронутое и едва начатое: то, что имеет смысл советовать. */
+export async function getRecommendationCandidates(userId: number): Promise<CandidateGame[]> {
+  const reviewedIds = await getReviewedGameIds(userId);
+
+  const rows = await db
+    .select({
+      gameId: games.id,
+      steamAppId: games.steamAppId,
+      title: games.title,
+      minutes: userGames.playtimeMinutes,
+      lastPlayedAt: userGames.lastPlayedAt,
+    })
+    .from(userGames)
+    .innerJoin(games, eq(userGames.gameId, games.id))
+    .where(
+      and(
+        eq(userGames.userId, userId),
+        eq(games.isDemo, false),
+        eq(games.excluded, false),
+        lt(userGames.playtimeMinutes, CANDIDATE_MAX_MINUTES)
+      )
+    )
+    .orderBy(desc(userGames.playtimeMinutes))
+    .limit(CANDIDATE_LIMIT);
+
+  return rows
+    .filter((row) => !reviewedIds.has(row.gameId))
+    .map((row) => ({
+      gameId: row.gameId,
+      steamAppId: row.steamAppId,
+      title: row.title,
+      hours: Math.round((row.minutes / 60) * 10) / 10,
+      lastPlayedAt: row.lastPlayedAt,
+    }));
+}
+
+async function getReviewedGameIds(userId: number): Promise<Set<number>> {
+  const viaSlot = await db
+    .select({ gameId: slots.gameId })
+    .from(slots)
+    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+    .where(eq(slots.userId, userId));
+
+  const viaRetro = await db
+    .select({ gameId: gameReviews.gameId })
+    .from(gameReviews)
+    .where(eq(gameReviews.userId, userId));
+
+  return new Set([...viaSlot, ...viaRetro].map((r) => r.gameId));
+}
+
+export async function saveRecommendationRun(
+  userId: number,
+  data: {
+    model: string;
+    profile: string;
+    reviewsUsed: number;
+    candidatesUsed: number;
+    items: { gameId: number; tier: "S" | "A" | "B" | "C" | "D"; reason: string }[];
+  }
+) {
+  const run = await db
+    .insert(recommendationRuns)
+    .values({
+      userId,
+      model: data.model,
+      profile: data.profile,
+      reviewsUsed: data.reviewsUsed,
+      candidatesUsed: data.candidatesUsed,
+    })
+    .returning({ id: recommendationRuns.id })
+    .then((rows) => rows[0]);
+
+  if (data.items.length > 0) {
+    await db.insert(recommendations).values(
+      data.items.map((item, index) => ({
+        runId: run.id,
+        gameId: item.gameId,
+        tier: item.tier,
+        rank: index,
+        reason: item.reason,
+      }))
+    );
+  }
+
+  return run.id;
+}
+
+export async function getLatestRecommendations(userId: number) {
+  const run = await db
+    .select()
+    .from(recommendationRuns)
+    .where(eq(recommendationRuns.userId, userId))
+    .orderBy(desc(recommendationRuns.createdAt))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!run) return null;
+
+  const items = await db
+    .select({
+      gameId: recommendations.gameId,
+      steamAppId: games.steamAppId,
+      title: games.title,
+      headerImage: games.headerImage,
+      tier: recommendations.tier,
+      reason: recommendations.reason,
+      hours: userGames.playtimeMinutes,
+    })
+    .from(recommendations)
+    .innerJoin(games, eq(recommendations.gameId, games.id))
+    .leftJoin(
+      userGames,
+      and(eq(userGames.gameId, recommendations.gameId), eq(userGames.userId, userId))
+    )
+    .where(eq(recommendations.runId, run.id))
+    .orderBy(recommendations.rank);
+
+  return {
+    id: run.id,
+    model: run.model,
+    profile: run.profile,
+    reviewsUsed: run.reviewsUsed,
+    candidatesUsed: run.candidatesUsed,
+    createdAt: run.createdAt,
+    items: items.map((item) => ({
+      ...item,
+      hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
+    })),
   };
 }

@@ -104,6 +104,33 @@ export const gameReviews = pgTable("game_reviews", {
     .$defaultFn(() => new Date()),
 });
 
+export const recommendationRuns = pgTable("recommendation_runs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  model: text("model").notNull(),
+  profile: text("profile").notNull(),
+  reviewsUsed: integer("reviews_used").notNull().default(0),
+  candidatesUsed: integer("candidates_used").notNull().default(0),
+  createdAt: timestamp("created_at")
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const recommendations = pgTable("recommendations", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id")
+    .notNull()
+    .references(() => recommendationRuns.id),
+  gameId: integer("game_id")
+    .notNull()
+    .references(() => games.id),
+  tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }).notNull(),
+  rank: integer("rank").notNull().default(0),
+  reason: text("reason").notNull(),
+});
+
 export const slotSkips = pgTable("slot_skips", {
   id: serial("id").primaryKey(),
   slotId: integer("slot_id")

@@ -19,6 +19,7 @@ export default defineConfig({
       STEAM_API_KEY: envField.string({ context: "server", access: "secret" }),
       SESSION_SECRET: envField.string({ context: "server", access: "secret" }),
       DATABASE_URL: envField.string({ context: "server", access: "secret" }),
+      GEMINI_API_KEY: envField.string({ context: "server", access: "secret" }),
     },
   },
 
