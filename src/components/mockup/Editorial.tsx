@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Reveal from "./Reveal";
+import RichText from "./RichText";
 
 interface Pick {
   gameId: number;
@@ -89,8 +90,8 @@ export default function Editorial({ picks, slotCount, queueCount, libraryCount }
               <span className="font-serif text-7xl leading-none text-gray-700 select-none">
                 {pick.tier}
               </span>
-              <p className="max-w-prose font-serif text-xl leading-relaxed text-gray-300">
-                {pick.reason}
+              <p className="max-w-prose font-serif text-xl leading-relaxed text-gray-400">
+                <RichText text={pick.reason} />
               </p>
             </div>
           </Reveal>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Reveal from "./Reveal";
+import RichText from "./RichText";
 
 interface Pick {
   gameId: number;
@@ -48,20 +49,27 @@ export default function Stage({ picks, slotCount, queueCount, libraryCount }: Pr
 
   return (
     <div className="relative">
-      {/* Фон: тот же арт, размытый до атмосферы. Меняется вместе с героем. */}
-      <div className="pointer-events-none absolute inset-x-0 -top-32 h-[80vh] overflow-hidden">
+      {/*
+        Атмосфера: тот же арт, размытый до свечения. Держим fixed на весь
+        экран, иначе контейнер страницы обрезает его в прямоугольник с
+        видимыми краями. Радиальная маска гасит края до фона.
+      */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         {pick.headerImage && (
           <img
             key={`bg-${pick.gameId}`}
             src={pick.headerImage}
             alt=""
-            className="h-full w-full scale-125 object-cover opacity-20 blur-3xl transition-opacity duration-1000"
+            className="h-full w-full scale-150 object-cover opacity-25 blur-[100px] transition-opacity duration-1000"
+            style={{
+              maskImage: "radial-gradient(70% 55% at 50% 28%, #000 0%, transparent 78%)",
+              WebkitMaskImage: "radial-gradient(70% 55% at 50% 28%, #000 0%, transparent 78%)",
+            }}
           />
         )}
         <div
-          className={`absolute top-1/4 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full ${tone.glow} opacity-20 blur-[120px] transition-colors duration-700`}
+          className={`absolute top-[22%] left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full ${tone.glow} opacity-[0.13] blur-[140px] transition-colors duration-700`}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-950/60 to-gray-950" />
       </div>
 
       {/* Периферия: одна тонкая строка вместо четырёх секций */}
@@ -115,7 +123,9 @@ export default function Stage({ picks, slotCount, queueCount, libraryCount }: Pr
           </Reveal>
 
           <Reveal delay={240} from="left">
-            <p className="max-w-lg text-lg leading-relaxed text-gray-300">{pick.reason}</p>
+            <p className="max-w-lg text-lg leading-relaxed text-gray-400">
+              <RichText text={pick.reason} />
+            </p>
           </Reveal>
 
           <Reveal delay={340} from="up">
