@@ -151,9 +151,12 @@ export default function Stage(props: Props) {
             index={Math.min(index, Math.max(0, visiblePicks.length - 1))}
             setIndex={setIndex}
             contracts={contracts}
-            onTakeContract={(gameId) => {
-              setContracts((prev) => [...prev, gameId]);
-              setIndex((i) => (i + 1) % Math.max(1, visiblePicks.length));
+            onTakeContract={(gameId, options) => {
+              setContracts((prev) => (prev.includes(gameId) ? prev : [...prev, gameId]));
+              // после жребия остаёмся на выпавшей игре, после ручного выбора листаем дальше
+              if (options?.advance !== false) {
+                setIndex((i) => (i + 1) % Math.max(1, visiblePicks.length));
+              }
             }}
             onDismiss={(gameId) => setDismissed((prev) => [...prev, gameId])}
             poolPreview={poolPreview}
@@ -240,10 +243,10 @@ function ChooseZone({
   index: number;
   setIndex: (fn: (i: number) => number) => void;
   contracts: number[];
-  onTakeContract: (gameId: number) => void;
+  onTakeContract: (gameId: number, options?: { advance?: boolean }) => void;
   onDismiss: (gameId: number) => void;
 }) {
-  const [rolling, setRolling] = useState(false);
+  const [dice, setDice] = useState<"idle" | "confirm" | "rolling" | "landed">("idle");
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
@@ -254,18 +257,27 @@ function ChooseZone({
   if (!pick) return <EmptyCard reviewCount={reviewCount} />;
   const tone = TIER[pick.tier] ?? TIER.B;
 
-  /** Жребий между советами ИИ — рулетка теперь бросает не по всей библиотеке, а по подборке. */
+  const usedContracts = slots.length + contracts.length;
+  const contractsFull = usedContracts >= 3;
+
+  /**
+   * Жребий бросается между советами ИИ, а не по всей библиотеке, и сразу
+   * создаёт контракт — иначе это просто перетасовка без последствий.
+   */
   function rollDice() {
-    if (rolling || picks.length < 2) return;
-    setRolling(true);
+    if (dice === "rolling" || picks.length < 2) return;
+    setDice("rolling");
     let ticks = 0;
+    let landedIndex = 0;
     timer.current = setInterval(() => {
-      setIndex(() => Math.floor(Math.random() * picks.length));
+      landedIndex = Math.floor(Math.random() * picks.length);
+      setIndex(() => landedIndex);
       ticks += 1;
       if (ticks > 18 && timer.current) {
         clearInterval(timer.current);
         timer.current = null;
-        setRolling(false);
+        onTakeContract(picks[landedIndex]!.gameId, { advance: false });
+        setDice("landed");
       }
     }, 85);
   }
@@ -273,18 +285,91 @@ function ChooseZone({
   return (
     <>
       <Reveal>
-        <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 className="text-sm tracking-[0.2em] text-gray-500 uppercase">Что играть дальше</h1>
-          <button
-            onClick={rollDice}
-            disabled={rolling}
-            className="rounded-full border border-gray-700 px-3 py-1 text-xs text-gray-400 transition hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-50"
-          >
-            {rolling ? "крутится…" : "🎰 не могу решить — брось жребий"}
-          </button>
-          <span className="ml-auto text-xs text-gray-700">
+          <span className="text-xs text-gray-700">
             {index + 1} / {picks.length} · листай стрелками
           </span>
+          <button className="ml-auto rounded-full border border-gray-800 px-3 py-1 text-xs text-gray-500 transition hover:border-gray-600 hover:text-white">
+            Пересобрать советы
+          </button>
+        </div>
+      </Reveal>
+
+      {/* Жребий: у него есть последствия, поэтому предупреждаем до броска */}
+      <Reveal delay={40}>
+        <div className="mb-8">
+          {dice === "idle" && (
+            <button
+              onClick={() => setDice("confirm")}
+              disabled={contractsFull}
+              className="rounded-full border border-gray-700 px-4 py-1.5 text-xs text-gray-400 transition hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+              title={contractsFull ? "Все три контракта заняты" : undefined}
+            >
+              🎰 Не могу решить — брось жребий
+            </button>
+          )}
+
+          {contractsFull && dice === "idle" && (
+            <span className="ml-3 text-xs text-gray-600">
+              все три контракта заняты — закрой один, чтобы бросать
+            </span>
+          )}
+
+          {dice === "confirm" && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-900/70 bg-amber-950/20 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-amber-200">
+                  Жребий сразу создаст контракт
+                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-gray-400">
+                  Выпавшую игру нельзя будет просто пролистать: 20 минут и первое впечатление,
+                  иначе придётся пропускать — а пропуск без причины идёт на стену стыда.
+                  Останется {3 - usedContracts} свободных контракта.
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  onClick={rollDice}
+                  className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 transition hover:bg-amber-400"
+                >
+                  Бросаю
+                </button>
+                <button
+                  onClick={() => setDice("idle")}
+                  className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 transition hover:bg-gray-800"
+                >
+                  Передумал
+                </button>
+              </div>
+            </div>
+          )}
+
+          {dice === "rolling" && (
+            <div className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+              <span className="animate-spin text-lg">🎰</span>
+              <span className="text-sm text-gray-400">Жребий брошен, выбираю…</span>
+            </div>
+          )}
+
+          {dice === "landed" && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-800/70 bg-emerald-950/25 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-emerald-200">
+                  Контракт создан: {pick.title}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  Жребий выбрал за тебя. 20 минут и первое впечатление — и слот освободится.
+                </p>
+              </div>
+              <button
+                onClick={() => setDice("idle")}
+                className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-gray-800"
+              >
+                Понял
+              </button>
+            </div>
+          )}
         </div>
       </Reveal>
 

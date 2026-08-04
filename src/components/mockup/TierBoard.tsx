@@ -20,6 +20,40 @@ const ROW_STYLE: Record<string, { chip: string; glow: string; hint: string }> = 
   unranked: { chip: "bg-gray-700 text-gray-200", glow: "shadow-gray-700/20", hint: "Без тира" },
 };
 
+/** Обложка с запасным вариантом: её может не быть в базе или она может не догрузиться. */
+function Cover({ title, image }: { title: string; image: string | null }) {
+  const [broken, setBroken] = useState(false);
+
+  if (!image || broken) {
+    const initials = title
+      .replace(/[^\p{L}\p{N} ]/gu, "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]!.toUpperCase())
+      .join("");
+
+    return (
+      <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-gradient-to-br from-gray-700 to-gray-900 px-1">
+        <span className="text-[11px] leading-none font-bold text-gray-300">{initials || "?"}</span>
+        <span className="w-full truncate text-center text-[8px] leading-none text-gray-500">
+          {title}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={image}
+      alt=""
+      draggable={false}
+      onError={() => setBroken(true)}
+      className="h-full w-full object-cover"
+    />
+  );
+}
+
 export default function TierBoard({ games }: { games: Game[] }) {
   const initial = useMemo(() => {
     const board: Record<Row, Game[]> = {
@@ -119,13 +153,7 @@ export default function TierBoard({ games }: { games: Game[] }) {
                       dragged?.game.gameId === game.gameId ? "scale-90 opacity-30" : "hover:-translate-y-1 hover:scale-105"
                     } ${landed === game.gameId ? `shadow-lg ring-2 ring-white/70 ${style.glow}` : ""}`}
                   >
-                    {game.image ? (
-                      <img src={game.image} alt="" className="h-full w-full object-cover" draggable={false} />
-                    ) : (
-                      <span className="flex h-full items-center justify-center bg-gray-800 px-1 text-[9px] text-gray-400">
-                        {game.title}
-                      </span>
-                    )}
+                    <Cover title={game.title} image={game.image} />
                     <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gray-950/85 px-1 py-0.5 text-[9px] opacity-0 transition group-hover:opacity-100">
                       {game.title}
                     </span>
