@@ -1,0 +1,137 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import VariantSwitcher from "../../components/mockup/VariantSwitcher.astro";
+import { loadMockData, TIER_STYLE } from "./_data";
+
+const data = await loadMockData(Astro);
+if (!data) return Astro.redirect("/");
+
+const { run, picks, byTier, abandoned, slots, queue, stats } = data;
+const TIER_ORDER = ["S", "A", "B", "C", "D"];
+const profileLines = (run?.profile ?? "")
+  .split("\n")
+  .map((l) => l.trim().replace(/^[-*•]\s*/, "").replace(/\*\*/g, ""))
+  .filter(Boolean);
+---
+
+<Layout title="Макет: командный центр">
+  <VariantSwitcher current="command" />
+
+  <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_320px]">
+    <!-- Левая колонка: советы -->
+    <main>
+      <header class="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold">Что играть дальше</h1>
+          <p class="text-sm text-gray-500">
+            {run ? `${picks.length} игр по ${run.reviewsUsed} отзывам` : "Прогона ещё нет"}
+          </p>
+        </div>
+        <button class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium transition hover:bg-emerald-500">
+          Пересобрать
+        </button>
+      </header>
+
+      {TIER_ORDER.map((tier) => {
+        const items = byTier(tier);
+        if (items.length === 0) return null;
+        return (
+          <section class="mb-4">
+            <div class="mb-2 flex items-center gap-2">
+              <span class={`flex h-6 w-6 items-center justify-center rounded text-xs font-bold ${TIER_STYLE[tier].chip}`}>
+                {tier}
+              </span>
+              <span class="text-sm text-gray-500">{TIER_STYLE[tier].hint}</span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              {items.map((pick) => (
+                <article class="flex gap-3 rounded-xl border border-gray-800 bg-gray-900/40 p-3 transition hover:border-gray-700">
+                  {pick.headerImage && (
+                    <img src={pick.headerImage} alt="" class="h-16 w-28 shrink-0 rounded object-cover" />
+                  )}
+                  <div class="min-w-0">
+                    <p class="truncate font-medium">{pick.title}</p>
+                    <p class="mt-0.5 line-clamp-3 text-xs leading-relaxed text-gray-500">
+                      {pick.reason}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      {abandoned.length > 0 && (
+        <section class="mt-6">
+          <h2 class="mb-2 text-sm font-semibold text-amber-300">Спор о брошенном</h2>
+          <div class="grid gap-2 sm:grid-cols-2">
+            {abandoned.map((item) => (
+              <article class={`rounded-xl border p-3 ${item.stance === "disagree" ? "border-amber-900/70 bg-amber-950/20" : "border-gray-800 bg-gray-900/30"}`}>
+                <p class="font-medium">{item.title}</p>
+                <p class="mt-1 text-xs leading-relaxed text-gray-400">{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+    </main>
+
+    <!-- Правая колонка: рабочая панель -->
+    <aside class="space-y-4 lg:sticky lg:top-20 lg:self-start">
+      <section class="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+        <h2 class="mb-3 flex items-center justify-between text-sm font-semibold">
+          Слоты <span class="text-gray-500">{slots.length}/3</span>
+        </h2>
+        <ul class="space-y-2">
+          {slots.map((slot) => (
+            <li class="flex items-center gap-2">
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span>
+              <span class="min-w-0 truncate text-sm">{slot.title}</span>
+              <span class="ml-auto shrink-0 text-xs text-gray-600">{slot.played}м</span>
+            </li>
+          ))}
+        </ul>
+        <button class="mt-3 w-full rounded-lg border border-gray-700 py-1.5 text-sm transition hover:bg-gray-800">
+          Крутить рулетку
+        </button>
+      </section>
+
+      <section class="rounded-xl border border-amber-900/60 bg-amber-950/10 p-4">
+        <h2 class="mb-3 flex items-center justify-between text-sm font-semibold">
+          Разобрать <span class="text-gray-500">{queue.length}</span>
+        </h2>
+        <ul class="space-y-3">
+          {queue.slice(0, 4).map((game) => (
+            <li>
+              <p class="truncate text-sm font-medium">{game.title}</p>
+              <p class="mb-1.5 text-xs text-gray-600">{game.hours}ч наиграно</p>
+              <div class="flex gap-1.5">
+                <button class="flex-1 rounded border border-emerald-800 py-1 text-xs text-emerald-300">Прошёл</button>
+                <button class="flex-1 rounded border border-red-900 py-1 text-xs text-red-300">Бросил</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section class="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+        <h2 class="mb-2 text-sm font-semibold">Профиль вкуса</h2>
+        <p class="line-clamp-4 text-xs leading-relaxed text-gray-500">
+          {profileLines[0] ?? "Пока пусто"}
+        </p>
+      </section>
+
+      <section class="grid grid-cols-2 gap-2 text-center">
+        <div class="rounded-xl border border-gray-800 bg-gray-900/40 p-3">
+          <p class="text-xl font-bold">{stats.totalGames}</p>
+          <p class="text-xs text-gray-500">отзывов</p>
+        </div>
+        <div class="rounded-xl border border-gray-800 bg-gray-900/40 p-3">
+          <p class="text-xl font-bold">{stats.totalLibrary}</p>
+          <p class="text-xs text-gray-500">игр</p>
+        </div>
+      </section>
+    </aside>
+  </div>
+</Layout>

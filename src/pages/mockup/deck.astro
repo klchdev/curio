@@ -1,0 +1,22 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import VariantSwitcher from "../../components/mockup/VariantSwitcher.astro";
+import Deck from "../../components/mockup/Deck";
+import { loadMockData } from "./_data";
+
+const data = await loadMockData(Astro);
+if (!data) return Astro.redirect("/");
+
+const { picks, queue, slots } = data;
+---
+
+<Layout title="Макет: колода">
+  <VariantSwitcher current="deck" />
+
+  <div class="mb-6 text-center">
+    <h1 class="text-2xl font-bold">Что играть дальше</h1>
+    <p class="text-sm text-gray-500">Один совет за раз — решай и листай</p>
+  </div>
+
+  <Deck client:load cards={picks} queueCount={queue.length} slotCount={slots.length} />
+</Layout>
