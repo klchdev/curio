@@ -1,8 +1,9 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { getRunStatus } from "../../lib/queries";
 
-export const GET: APIRoute = async ({ session, url }) => {
-  const userId = await session?.get<number>("userId");
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const runId = Number(url.searchParams.get("runId"));

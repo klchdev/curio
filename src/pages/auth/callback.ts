@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { verifyAssertion, getSteamProfile } from "../../lib/steam";
+import { setAuthCookie } from "../../lib/auth";
 import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
@@ -11,7 +12,7 @@ function getOrigin(request: Request, url: URL): string {
   return url.origin;
 }
 
-export const GET: APIRoute = async ({ url, request, session, redirect }) => {
+export const GET: APIRoute = async ({ url, request, cookies, redirect }) => {
   const origin = getOrigin(request, url);
   const returnUrl = new URL("/auth/callback", origin).toString();
 
@@ -64,7 +65,7 @@ export const GET: APIRoute = async ({ url, request, session, redirect }) => {
       userId = existing.id;
     }
 
-    await session?.set("userId", userId);
+    setAuthCookie(cookies, userId, request, url);
 
     return redirect("/dashboard");
   } catch (e) {

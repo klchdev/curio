@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { addGameNote, updateGameReview } from "../../lib/queries";
 import { getRecentPlaytime } from "../../lib/steam";
 import { db } from "../../db";
@@ -8,8 +9,8 @@ import { eq, and } from "drizzle-orm";
 const VALID_TIERS = ["S", "A", "B", "C", "D", "F"] as const;
 const VALID_VERDICTS = ["finished", "dropped", "playing", "later"] as const;
 
-export const POST: APIRoute = async ({ request, session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ request, cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();

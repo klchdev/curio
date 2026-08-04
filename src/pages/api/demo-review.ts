@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { createDemoReview, deleteDemoReview } from "../../lib/queries";
 import { parseAppId, getStoreAppDetails } from "../../lib/steam";
 
@@ -13,8 +14,8 @@ function json(body: unknown, status = 200) {
   });
 }
 
-export const POST: APIRoute = async ({ request, session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ request, cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();
@@ -57,8 +58,8 @@ export const POST: APIRoute = async ({ request, session }) => {
   return json({ ok: true });
 };
 
-export const DELETE: APIRoute = async ({ request, session }) => {
-  const userId = await session?.get<number>("userId");
+export const DELETE: APIRoute = async ({ request, cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();

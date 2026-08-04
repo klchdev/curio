@@ -1,4 +1,5 @@
 import type { AstroGlobal } from "astro";
+import { getUserId } from "./auth";
 import { db } from "../db";
 import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
@@ -13,7 +14,7 @@ export interface SessionUser {
 export async function getSessionUser(
   astro: AstroGlobal
 ): Promise<SessionUser | null> {
-  const userId = await astro.session?.get<number>("userId");
+  const userId = getUserId(astro.cookies);
   if (!userId) return null;
 
   const user = await db

@@ -1,10 +1,11 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { createRetrospectiveReview } from "../../lib/queries";
 
 const VALID = ["finished", "dropped", "playing", "later"] as const;
 
-export const POST: APIRoute = async ({ request, session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ request, cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const { gameId, verdict, playtimeMinutes } = await request.json();

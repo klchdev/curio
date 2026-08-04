@@ -1,11 +1,12 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { getRecentPlaytime } from "../../lib/steam";
 import { db } from "../../db";
 import { users, slots, games, userGames } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 
-export const POST: APIRoute = async ({ request, session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ request, cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const { slotId } = await request.json();

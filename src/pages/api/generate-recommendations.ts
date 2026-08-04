@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import {
   getReviewCorpus,
   getRecommendationCandidates,
@@ -78,8 +79,8 @@ async function runInBackground(runId: number, userId: number) {
   }
 }
 
-export const POST: APIRoute = async ({ session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   if (await hasActiveRun(userId)) {

@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { getOwnedGames } from "../../lib/steam";
 import { db } from "../../db";
 import { users, games, userGames } from "../../db/schema";
@@ -13,8 +14,8 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-export const POST: APIRoute = async ({ session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const user = await db

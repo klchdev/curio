@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { getUserId } from "../../lib/auth";
 import { skipSlot, getFreeSkips } from "../../lib/queries";
 
 const LEGITIMATE_REASONS = [
@@ -7,8 +8,8 @@ const LEGITIMATE_REASONS = [
   "Уже не в библиотеке",
 ];
 
-export const POST: APIRoute = async ({ request, session }) => {
-  const userId = await session?.get<number>("userId");
+export const POST: APIRoute = async ({ request, cookies }) => {
+  const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();
