@@ -3,7 +3,7 @@ import type { CandidateGame, ReviewCorpusItem } from "./queries";
 
 export const RECOMMENDATION_MODEL = "gemini-3.6-flash";
 
-const MAX_PICKS = 40;
+export const MAX_PICKS = 40;
 const TIERS = ["S", "A", "B", "C", "D"] as const;
 type Tier = (typeof TIERS)[number];
 
@@ -16,14 +16,23 @@ const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по
 2. Отдельно найди антипрофиль — механики и жанры, которые он последовательно отвергает, и его собственные формулировки об этом.
 3. Затем раздай тиры кандидатам.
 
-Правила для рекомендаций:
-- Советуй ТОЛЬКО игры из переданного списка кандидатов, строго по их steamAppId. Ничего не выдумывай.
-- Часы у кандидата — сигнал. 0 часов и без даты запуска = нетронуто, лучший материал для S/A. Несколько часов и недавняя дата = игрок уже попробовал и отложил; это ближе к C/D, даже если по жанру подходит.
-- Игру, которую он попробовал и бросил недавно, не поднимай выше C: он уже проголосовал руками.
+Ты выдаёшь два разных списка.
+
+## picks — что запустить
+Берутся только из списка КАНДИДАТОВ: это нетронутое или запущенное на пару минут, вкус по ним ещё не сформирован.
+- Советуй ТОЛЬКО игры из списка кандидатов, строго по их steamAppId. Ничего не выдумывай.
 - Тир D — «не трать время»: то, что противоречит его антипрофилю. Такие тоже включай, 3-8 штук, с объяснением.
 - В reason обязательно ссылайся на его конкретные отзывы по названиям игр («Expeditions: Rome у тебя A/5 и пройдена»). Без общих слов вроде «отличная игра» и «тебе понравится».
 - reason — 1-2 предложения, по делу.
 - Всего ${MAX_PICKS} игр максимум, S — не больше 8.
+
+## abandoned — разбор брошенного
+Берутся только из списка БРОШЕННОГО: это игры, где он наиграл ощутимо, но забросил и отзыв не написал. Их НЕЛЬЗЯ добавлять в picks.
+Для каждой выбери позицию:
+- stance="agree" — брошено по делу. Объясни, ЧЕМ ИМЕННО игра противоречит его вкусу, опираясь на его отзывы. Не пересказывай очевидное, назови конкретную механику или свойство.
+- stance="disagree" — ты считаешь, что он неправ и стоит вернуться. Спорь прямо и с аргументом: покажи, что именно он не успел увидеть за наигранное время, и почему это попадает в его вкус. Можно с иронией, но по делу.
+Не подстраивайся: если есть основания спорить — спорь. Ставь disagree там, где реально видишь ошибку, а не для баланса.
+Разбери 6-12 игр, text — 1-3 предложения.
 
 profile — 4-7 пунктов маркдауна о том, какой это игрок. Только неочевидное, выведенное из сопоставления отзывов. Обращайся на «ты». Каждый пункт подкрепляй конкретными играми из его отзывов.
 
@@ -49,9 +58,26 @@ const RESPONSE_SCHEMA = {
         propertyOrdering: ["steamAppId", "tier", "reason"],
       },
     },
+    abandoned: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          steamAppId: { type: Type.INTEGER, description: "steamAppId строго из списка брошенного" },
+          stance: {
+            type: Type.STRING,
+            enum: ["agree", "disagree"],
+            description: "agree — брошено по делу, disagree — стоит вернуться",
+          },
+          text: { type: Type.STRING, description: "1-3 предложения с аргументом" },
+        },
+        required: ["steamAppId", "stance", "text"],
+        propertyOrdering: ["steamAppId", "stance", "text"],
+      },
+    },
   },
-  required: ["profile", "picks"],
-  propertyOrdering: ["profile", "picks"],
+  required: ["profile", "picks", "abandoned"],
+  propertyOrdering: ["profile", "picks", "abandoned"],
 };
 
 function formatReviews(reviews: ReviewCorpusItem[]): string {
@@ -86,10 +112,17 @@ export interface GeneratedRecommendations {
   picks: { steamAppId: number; tier: Tier; reason: string }[];
 }
 
+/** Сколько игр модель уже выдала — считаем по накопленному куску JSON. */
+function countReadyPicks(text: string): number {
+  return (text.match(/"steamAppId"/g) ?? []).length;
+}
+
 export async function generateRecommendations(
   reviews: ReviewCorpusItem[],
   candidates: CandidateGame[],
-  apiKey: string
+  abandonedGames: CandidateGame[],
+  apiKey: string,
+  onProgress?: (picksReady: number) => void
 ): Promise<GeneratedRecommendations> {
   const ai = new GoogleGenAI({ apiKey });
 
@@ -97,14 +130,18 @@ export async function generateRecommendations(
     `# Отзывы игрока (${reviews.length})`,
     formatReviews(reviews),
     "",
-    `# Кандидаты из библиотеки (${candidates.length})`,
+    `# Кандидаты — нетронутое, отсюда берутся picks (${candidates.length})`,
     "Формат: steamAppId<TAB>название<TAB>наиграно<TAB>последний запуск",
     formatCandidates(candidates),
     "",
-    "Разбери вкус и раздай тиры кандидатам.",
+    `# Брошенное — отсюда берётся abandoned (${abandonedGames.length})`,
+    "Поиграл и забросил без отзыва. В picks не добавлять.",
+    formatCandidates(abandonedGames),
+    "",
+    "Разбери вкус, раздай тиры кандидатам и вынеси вердикт по брошенному.",
   ].join("\n");
 
-  const response = await ai.models.generateContent({
+  const stream = await ai.models.generateContentStream({
     model: RECOMMENDATION_MODEL,
     contents: prompt,
     config: {
@@ -114,7 +151,17 @@ export async function generateRecommendations(
     },
   });
 
-  const raw = response.text;
+  let raw = "";
+  let lastReported = 0;
+  for await (const chunk of stream) {
+    raw += chunk.text ?? "";
+    const ready = countReadyPicks(raw);
+    if (onProgress && ready > lastReported) {
+      lastReported = ready;
+      onProgress(ready);
+    }
+  }
+
   if (!raw) throw new Error("Gemini вернул пустой ответ");
 
   let parsed: GeneratedRecommendations;
@@ -137,5 +184,14 @@ export async function generateRecommendations(
 
   if (picks.length === 0) throw new Error("Gemini не вернул ни одной валидной игры");
 
-  return { profile: parsed.profile ?? "", picks };
+  const allowedAbandoned = new Set(abandonedGames.map((g) => g.steamAppId));
+  const seenAbandoned = new Set<number>();
+  const abandoned = (parsed.abandoned ?? []).filter((item) => {
+    if (!allowedAbandoned.has(item.steamAppId) || seenAbandoned.has(item.steamAppId)) return false;
+    if (item.stance !== "agree" && item.stance !== "disagree") return false;
+    seenAbandoned.add(item.steamAppId);
+    return true;
+  });
+
+  return { profile: parsed.profile ?? "", picks, abandoned };
 }

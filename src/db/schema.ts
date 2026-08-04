@@ -110,12 +110,21 @@ export const recommendationRuns = pgTable("recommendation_runs", {
     .notNull()
     .references(() => users.id),
   model: text("model").notNull(),
-  profile: text("profile").notNull(),
+  status: text("status", { enum: ["pending", "done", "error"] })
+    .notNull()
+    .default("pending"),
+  error: text("error"),
+  stage: text("stage", { enum: ["collecting", "thinking", "saving"] })
+    .notNull()
+    .default("collecting"),
+  picksReady: integer("picks_ready").notNull().default(0),
+  profile: text("profile").notNull().default(""),
   reviewsUsed: integer("reviews_used").notNull().default(0),
   candidatesUsed: integer("candidates_used").notNull().default(0),
   createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
+  finishedAt: timestamp("finished_at"),
 });
 
 export const recommendations = pgTable("recommendations", {
@@ -126,7 +135,13 @@ export const recommendations = pgTable("recommendations", {
   gameId: integer("game_id")
     .notNull()
     .references(() => games.id),
-  tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }).notNull(),
+  // pick — совет из нетронутого; abandoned — разбор брошенного
+  kind: text("kind", { enum: ["pick", "abandoned"] })
+    .notNull()
+    .default("pick"),
+  tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
+  // для kind=abandoned: согласен с игроком или спорит
+  stance: text("stance", { enum: ["agree", "disagree"] }),
   rank: integer("rank").notNull().default(0),
   reason: text("reason").notNull(),
 });

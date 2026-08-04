@@ -1202,8 +1202,13 @@ export async function getStats(userId: number) {
 
 // --- AI-рекомендации ---
 
-const CANDIDATE_MAX_MINUTES = 300;
+/** Советуем только нетронутое: 20 минут — это «открыл и закрыл», вкус не сформирован. */
+const CANDIDATE_MAX_MINUTES = 20;
 const CANDIDATE_LIMIT = 700;
+/** Брошенное: поиграл ощутимо, но забросил без отзыва — материал для разбора, а не для советов. */
+const ABANDONED_MIN_MINUTES = 20;
+const ABANDONED_MAX_MINUTES = 600;
+const ABANDONED_LIMIT = 60;
 
 export interface ReviewCorpusItem {
   title: string;
@@ -1308,6 +1313,43 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
     }));
 }
 
+/** Игры, которые он ощутимо поиграл и бросил, не написав отзыв. */
+export async function getAbandonedGames(userId: number): Promise<CandidateGame[]> {
+  const reviewedIds = await getReviewedGameIds(userId);
+
+  const rows = await db
+    .select({
+      gameId: games.id,
+      steamAppId: games.steamAppId,
+      title: games.title,
+      minutes: userGames.playtimeMinutes,
+      lastPlayedAt: userGames.lastPlayedAt,
+    })
+    .from(userGames)
+    .innerJoin(games, eq(userGames.gameId, games.id))
+    .where(
+      and(
+        eq(userGames.userId, userId),
+        eq(games.isDemo, false),
+        eq(games.excluded, false),
+        gt(userGames.playtimeMinutes, ABANDONED_MIN_MINUTES),
+        lt(userGames.playtimeMinutes, ABANDONED_MAX_MINUTES)
+      )
+    )
+    .orderBy(desc(userGames.playtimeMinutes))
+    .limit(ABANDONED_LIMIT);
+
+  return rows
+    .filter((row) => !reviewedIds.has(row.gameId))
+    .map((row) => ({
+      gameId: row.gameId,
+      steamAppId: row.steamAppId,
+      title: row.title,
+      hours: Math.round((row.minutes / 60) * 10) / 10,
+      lastPlayedAt: row.lastPlayedAt,
+    }));
+}
+
 async function getReviewedGameIds(userId: number): Promise<Set<number>> {
   const viaSlot = await db
     .select({ gameId: slots.gameId })
@@ -1323,48 +1365,132 @@ async function getReviewedGameIds(userId: number): Promise<Set<number>> {
   return new Set([...viaSlot, ...viaRetro].map((r) => r.gameId));
 }
 
-export async function saveRecommendationRun(
-  userId: number,
+/** Прогон, зависший дольше этого, считаем сорванным (процесс мог перезапуститься). */
+export const RUN_STALE_MS = 5 * 60 * 1000;
+
+export type RunStage = "collecting" | "thinking" | "saving";
+
+export async function createRecommendationRun(userId: number, model: string) {
+  const run = await db
+    .insert(recommendationRuns)
+    .values({ userId, model, status: "pending", stage: "collecting" })
+    .returning({ id: recommendationRuns.id })
+    .then((rows) => rows[0]);
+
+  return run.id;
+}
+
+export async function updateRunProgress(
+  runId: number,
+  data: { stage?: RunStage; picksReady?: number }
+) {
+  await db.update(recommendationRuns).set(data).where(eq(recommendationRuns.id, runId));
+}
+
+export async function completeRecommendationRun(
+  runId: number,
   data: {
-    model: string;
     profile: string;
     reviewsUsed: number;
     candidatesUsed: number;
     items: { gameId: number; tier: "S" | "A" | "B" | "C" | "D"; reason: string }[];
+    abandoned: { gameId: number; stance: "agree" | "disagree"; text: string }[];
   }
 ) {
-  const run = await db
-    .insert(recommendationRuns)
-    .values({
-      userId,
-      model: data.model,
+  const rows = [
+    ...data.items.map((item, index) => ({
+      runId,
+      gameId: item.gameId,
+      kind: "pick" as const,
+      tier: item.tier,
+      stance: null,
+      rank: index,
+      reason: item.reason,
+    })),
+    ...data.abandoned.map((item, index) => ({
+      runId,
+      gameId: item.gameId,
+      kind: "abandoned" as const,
+      tier: null,
+      stance: item.stance,
+      rank: index,
+      reason: item.text,
+    })),
+  ];
+
+  if (rows.length > 0) {
+    await db.insert(recommendations).values(rows);
+  }
+
+  await db
+    .update(recommendationRuns)
+    .set({
+      status: "done",
+      stage: "saving",
+      picksReady: data.items.length,
       profile: data.profile,
       reviewsUsed: data.reviewsUsed,
       candidatesUsed: data.candidatesUsed,
+      finishedAt: new Date(),
     })
-    .returning({ id: recommendationRuns.id })
+    .where(eq(recommendationRuns.id, runId));
+}
+
+export async function failRecommendationRun(runId: number, message: string) {
+  await db
+    .update(recommendationRuns)
+    .set({ status: "error", error: message.slice(0, 500), finishedAt: new Date() })
+    .where(eq(recommendationRuns.id, runId));
+}
+
+/** true, если у пользователя уже крутится незавершённый прогон. */
+export async function hasActiveRun(userId: number): Promise<boolean> {
+  const run = await db
+    .select({ createdAt: recommendationRuns.createdAt })
+    .from(recommendationRuns)
+    .where(
+      and(eq(recommendationRuns.userId, userId), eq(recommendationRuns.status, "pending"))
+    )
+    .orderBy(desc(recommendationRuns.createdAt))
+    .limit(1)
     .then((rows) => rows[0]);
 
-  if (data.items.length > 0) {
-    await db.insert(recommendations).values(
-      data.items.map((item, index) => ({
-        runId: run.id,
-        gameId: item.gameId,
-        tier: item.tier,
-        rank: index,
-        reason: item.reason,
-      }))
-    );
-  }
+  if (!run) return false;
+  return Date.now() - new Date(run.createdAt).getTime() < RUN_STALE_MS;
+}
 
-  return run.id;
+export async function getRunStatus(userId: number, runId: number) {
+  const run = await db
+    .select({
+      id: recommendationRuns.id,
+      status: recommendationRuns.status,
+      stage: recommendationRuns.stage,
+      picksReady: recommendationRuns.picksReady,
+      error: recommendationRuns.error,
+      createdAt: recommendationRuns.createdAt,
+    })
+    .from(recommendationRuns)
+    .where(and(eq(recommendationRuns.id, runId), eq(recommendationRuns.userId, userId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!run) return null;
+
+  const stale =
+    run.status === "pending" && Date.now() - new Date(run.createdAt).getTime() > RUN_STALE_MS;
+
+  return {
+    ...run,
+    status: stale ? ("error" as const) : run.status,
+    error: stale ? "Генерация прервалась — попробуй ещё раз" : run.error,
+  };
 }
 
 export async function getLatestRecommendations(userId: number) {
   const run = await db
     .select()
     .from(recommendationRuns)
-    .where(eq(recommendationRuns.userId, userId))
+    .where(and(eq(recommendationRuns.userId, userId), eq(recommendationRuns.status, "done")))
     .orderBy(desc(recommendationRuns.createdAt))
     .limit(1)
     .then((rows) => rows[0]);
@@ -1377,7 +1503,9 @@ export async function getLatestRecommendations(userId: number) {
       steamAppId: games.steamAppId,
       title: games.title,
       headerImage: games.headerImage,
+      kind: recommendations.kind,
       tier: recommendations.tier,
+      stance: recommendations.stance,
       reason: recommendations.reason,
       hours: userGames.playtimeMinutes,
     })
@@ -1397,9 +1525,50 @@ export async function getLatestRecommendations(userId: number) {
     reviewsUsed: run.reviewsUsed,
     candidatesUsed: run.candidatesUsed,
     createdAt: run.createdAt,
-    items: items.map((item) => ({
-      ...item,
-      hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
-    })),
+    items: items
+      .filter((item) => item.kind === "pick" && item.tier)
+      .map((item) => ({
+        gameId: item.gameId,
+        steamAppId: item.steamAppId,
+        title: item.title,
+        headerImage: item.headerImage,
+        tier: item.tier!,
+        reason: item.reason,
+        hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
+      })),
+    abandoned: items
+      .filter((item) => item.kind === "abandoned" && item.stance)
+      .map((item) => ({
+        gameId: item.gameId,
+        steamAppId: item.steamAppId,
+        title: item.title,
+        headerImage: item.headerImage,
+        stance: item.stance!,
+        text: item.reason,
+        hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
+      })),
   };
+}
+
+/** Незавершённый прогон — чтобы страница подхватила прогресс после перезагрузки. */
+export async function getActiveRun(userId: number) {
+  const run = await db
+    .select({
+      id: recommendationRuns.id,
+      stage: recommendationRuns.stage,
+      picksReady: recommendationRuns.picksReady,
+      createdAt: recommendationRuns.createdAt,
+    })
+    .from(recommendationRuns)
+    .where(
+      and(eq(recommendationRuns.userId, userId), eq(recommendationRuns.status, "pending"))
+    )
+    .orderBy(desc(recommendationRuns.createdAt))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!run) return null;
+  if (Date.now() - new Date(run.createdAt).getTime() > RUN_STALE_MS) return null;
+
+  return run;
 }

@@ -29,9 +29,9 @@ export default function SyncButton() {
   };
 
   const label = {
-    idle: "Синхронизировать библиотеку",
+    idle: "Синхронизировать",
     syncing: "Синхронизация...",
-    done: `Синхронизировано (${count} игр)`,
+    done: `Готово: ${count} игр`,
     error: "Ошибка!",
   }[state];
 
@@ -39,7 +39,7 @@ export default function SyncButton() {
     <button
       onClick={sync}
       disabled={state === "syncing"}
-      className="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:bg-gray-800 disabled:opacity-50"
+      className="whitespace-nowrap rounded-lg border border-gray-700 px-3 py-2 text-sm transition hover:bg-gray-800 disabled:opacity-50"
     >
       {label}
     </button>

@@ -1,24 +1,21 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getLatestRecommendations, getReviewCorpus } from "../lib/queries";
+import { getLatestRecommendations, getReviewCorpus, getActiveRun } from "../lib/queries";
 import Recommendations from "../components/Recommendations";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
 const run = await getLatestRecommendations(user.id);
+const active = await getActiveRun(user.id);
 const reviewCount = (await getReviewCorpus(user.id)).length;
 
-const runData = run
-  ? {
-      ...run,
-      createdAt:
-        run.createdAt instanceof Date
-          ? run.createdAt.toISOString()
-          : String(run.createdAt),
-    }
-  : null;
+const iso = (value: Date | string) =>
+  value instanceof Date ? value.toISOString() : String(value);
+
+const runData = run ? { ...run, createdAt: iso(run.createdAt) } : null;
+const activeRunData = active ? { ...active, createdAt: iso(active.createdAt) } : null;
 ---
 
 <Layout title="Рекомендации">
@@ -30,6 +27,7 @@ const runData = run
   <Recommendations
     client:load
     run={runData}
+    activeRun={activeRunData}
     canGenerate={reviewCount >= 5}
     reviewCount={reviewCount}
   />

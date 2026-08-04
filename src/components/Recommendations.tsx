@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type TierValue = "S" | "A" | "B" | "C" | "D";
 
@@ -12,6 +12,16 @@ interface Item {
   hours: number;
 }
 
+interface AbandonedItem {
+  gameId: number;
+  steamAppId: number;
+  title: string;
+  headerImage: string | null;
+  stance: "agree" | "disagree";
+  text: string;
+  hours: number;
+}
+
 interface Run {
   id: number;
   model: string;
@@ -20,12 +30,79 @@ interface Run {
   candidatesUsed: number;
   createdAt: string;
   items: Item[];
+  abandoned: AbandonedItem[];
+}
+
+interface ActiveRun {
+  id: number;
+  stage: Stage;
+  picksReady: number;
+  createdAt: string;
 }
 
 interface Props {
   run: Run | null;
+  activeRun: ActiveRun | null;
   canGenerate: boolean;
   reviewCount: number;
+}
+
+type Stage = "collecting" | "thinking" | "saving";
+
+const MAX_PICKS = 40;
+const POLL_INTERVAL_MS = 2000;
+
+const STAGE_LABEL: Record<Stage, string> = {
+  collecting: "Собираю твои отзывы и библиотеку",
+  thinking: "Разбираю вкус и раскладываю игры по тирам",
+  saving: "Сохраняю результат",
+};
+
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds} с`;
+  return `${Math.floor(seconds / 60)} мин ${seconds % 60} с`;
+}
+
+function Progress({ stage, picksReady, startedAt }: { stage: Stage; picksReady: number; startedAt: string }) {
+  const [elapsed, setElapsed] = useState(() =>
+    Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed(Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000)));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const ratio = stage === "saving" ? 1 : Math.min(picksReady / MAX_PICKS, 0.98);
+  const determinate = picksReady > 0 || stage === "saving";
+
+  return (
+    <div className="mb-8 rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-sm font-medium">{STAGE_LABEL[stage]}</span>
+        <span className="text-sm text-gray-500">{formatElapsed(elapsed)}</span>
+      </div>
+
+      <div className="h-2 overflow-hidden rounded-full bg-gray-800">
+        {determinate ? (
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-[width] duration-700 ease-out"
+            style={{ width: `${Math.round(ratio * 100)}%` }}
+          />
+        ) : (
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-600/70" />
+        )}
+      </div>
+
+      <p className="mt-3 text-sm text-gray-400">
+        {picksReady > 0
+          ? `Разобрано игр: ${picksReady}`
+          : "Модель читает отзывы целиком — первые игры появятся через полминуты."}
+      </p>
+    </div>
+  );
 }
 
 const TIERS: { value: TierValue; labelBg: string; labelText: string; hint: string }[] = [
@@ -73,26 +150,74 @@ function ProfileText({ text }: { text: string }) {
   );
 }
 
-export default function Recommendations({ run, canGenerate, reviewCount }: Props) {
-  const [loading, setLoading] = useState(false);
+export default function Recommendations({
+  run,
+  activeRun,
+  canGenerate,
+  reviewCount,
+}: Props) {
+  const [active, setActive] = useState<ActiveRun | null>(activeRun);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeId = active?.id ?? null;
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (activeId === null) return;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/recommendation-status?runId=${activeId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "done") {
+          window.location.reload();
+          return;
+        }
+        if (data.status === "error") {
+          setError(data.error ?? "Генерация не удалась");
+          setActive(null);
+          return;
+        }
+        setActive((prev) =>
+          prev ? { ...prev, stage: data.stage, picksReady: data.picksReady } : prev
+        );
+      } catch {
+        // сеть моргнула — просто ждём следующего опроса
+      }
+    }
+
+    poll();
+    pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [activeId]);
+
+  const busy = starting || active !== null;
 
   async function handleGenerate() {
-    setLoading(true);
     setError(null);
+    setStarting(true);
 
     try {
       const res = await fetch("/api/generate-recommendations", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Не удалось получить рекомендации");
+        setError(data.error ?? "Не удалось запустить генерацию");
         return;
       }
-      window.location.reload();
+      setActive({
+        id: data.runId,
+        stage: "collecting",
+        picksReady: 0,
+        createdAt: new Date().toISOString(),
+      });
     } catch {
       setError("Сеть не отвечает");
     } finally {
-      setLoading(false);
+      setStarting(false);
     }
   }
 
@@ -111,17 +236,19 @@ export default function Recommendations({ run, canGenerate, reviewCount }: Props
         </div>
         <button
           onClick={handleGenerate}
-          disabled={loading || !canGenerate}
+          disabled={busy || !canGenerate}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Думает…" : run ? "Пересобрать" : "Собрать рекомендации"}
+          {busy ? "Идёт разбор…" : run ? "Пересобрать" : "Собрать рекомендации"}
         </button>
       </div>
 
-      {loading && (
-        <p className="mb-6 rounded-lg border border-gray-800 bg-gray-900/50 px-4 py-3 text-sm text-gray-400">
-          Читает твои отзывы и раскладывает библиотеку по тирам. Это занимает до минуты.
-        </p>
+      {active && (
+        <Progress
+          stage={active.stage}
+          picksReady={active.picksReady}
+          startedAt={active.createdAt}
+        />
       )}
 
       {error && (
@@ -130,7 +257,7 @@ export default function Recommendations({ run, canGenerate, reviewCount }: Props
         </p>
       )}
 
-      {!run && !loading && (
+      {!run && !busy && (
         <p className="text-gray-500">
           {canGenerate
             ? "Рекомендаций ещё нет. Нажми кнопку — разберём твой вкус по отзывам."
@@ -202,6 +329,63 @@ export default function Recommendations({ run, canGenerate, reviewCount }: Props
               );
             })}
           </div>
+
+          {run.abandoned.length > 0 && (
+            <section className="mt-10">
+              <h2 className="mb-1 text-lg font-semibold">Разбор брошенного</h2>
+              <p className="mb-4 text-sm text-gray-500">
+                Игры, которые ты поиграл и забросил без отзыва. Где-то модель согласна, где-то
+                спорит.
+              </p>
+
+              <ul className="space-y-3">
+                {run.abandoned.map((item) => {
+                  const arguing = item.stance === "disagree";
+                  return (
+                    <li
+                      key={item.gameId}
+                      className={`flex gap-4 rounded-xl border p-4 ${
+                        arguing
+                          ? "border-amber-900/70 bg-amber-950/20"
+                          : "border-gray-800 bg-gray-900/30"
+                      }`}
+                    >
+                      {item.headerImage && (
+                        <img
+                          src={item.headerImage}
+                          alt=""
+                          className="h-14 w-32 shrink-0 rounded object-cover"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-baseline gap-x-3">
+                          <a
+                            href={`https://store.steampowered.com/app/${item.steamAppId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium transition hover:text-emerald-400"
+                          >
+                            {item.title}
+                          </a>
+                          <span className="text-xs text-gray-500">{item.hours}ч и заброшено</span>
+                          <span
+                            className={`rounded px-2 py-0.5 text-xs ${
+                              arguing
+                                ? "bg-amber-900/60 text-amber-200"
+                                : "bg-gray-800 text-gray-400"
+                            }`}
+                          >
+                            {arguing ? "Дай второй шанс" : "Бросил по делу"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm leading-relaxed text-gray-400">{item.text}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
         </>
       )}
     </div>
