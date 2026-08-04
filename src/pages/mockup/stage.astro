@@ -7,7 +7,8 @@ import { loadMockData } from "./_data";
 const data = await loadMockData(Astro);
 if (!data) return Astro.redirect("/");
 
-const { picks, slots, queue, stats } = data;
+const { picks, abandoned, slots, queue, diary, demos, tierCounts, poolSize, poolPreview, stats } =
+  data;
 ---
 
 <Layout title="Макет: сцена">
@@ -16,8 +17,14 @@ const { picks, slots, queue, stats } = data;
   <Stage
     client:load
     picks={picks}
-    slotCount={slots.length}
-    queueCount={queue.length}
-    libraryCount={stats.totalLibrary}
+    abandoned={abandoned}
+    slots={slots}
+    queue={queue}
+    diary={diary}
+    demos={demos}
+    tierCounts={tierCounts}
+    poolSize={poolSize}
+    poolPreview={poolPreview}
+    stats={stats}
   />
 </Layout>

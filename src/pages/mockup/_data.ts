@@ -7,6 +7,9 @@ import {
   getTierList,
   getRetroReviews,
   getStats,
+  getDemoReviews,
+  getHistory,
+  getUnplayedGames,
 } from "../../lib/queries";
 
 /**
@@ -18,14 +21,18 @@ export async function loadMockData(astro: AstroGlobal) {
   const user = await getSessionUser(astro);
   if (!user) return null;
 
-  const [run, slots, queue, tierSlots, tierRetro, stats] = await Promise.all([
-    getLatestRecommendations(user.id),
-    getActiveSlots(user.id),
-    getUntriagedGames(user.id),
-    getTierList(user.id),
-    getRetroReviews(user.id),
-    getStats(user.id),
-  ]);
+  const [run, slots, queue, tierSlots, tierRetro, stats, demos, history, pool] =
+    await Promise.all([
+      getLatestRecommendations(user.id),
+      getActiveSlots(user.id),
+      getUntriagedGames(user.id),
+      getTierList(user.id),
+      getRetroReviews(user.id),
+      getStats(user.id),
+      getDemoReviews(user.id),
+      getHistory(user.id),
+      getUnplayedGames(user.id),
+    ]);
 
   const picks = run?.items ?? [];
   const byTier = (tier: string) => picks.filter((p) => p.tier === tier);
@@ -46,6 +53,26 @@ export async function loadMockData(astro: AstroGlobal) {
     })),
   ];
 
+  // Распределение по тирам — для мини-графика в ряду режимов
+  const tierCounts: Record<string, number> = {};
+  for (const game of shelf) {
+    if (game.tier) tierCounts[game.tier] = (tierCounts[game.tier] ?? 0) + 1;
+  }
+
+  const diary = history
+    .filter((entry: any) => entry.note)
+    .slice(0, 6)
+    .map((entry: any) => ({
+      id: `${entry.source}-${entry.gameId ?? entry.slotId}`,
+      title: entry.gameTitle,
+      image: entry.gameImage,
+      note: entry.note as string,
+      playtimeMinutes: entry.playtimeMinutes ?? 0,
+      verdict: entry.verdict as string | null,
+      tier: entry.tier as string | null,
+      date: entry.date,
+    }));
+
   return {
     user,
     run,
@@ -60,6 +87,15 @@ export async function loadMockData(astro: AstroGlobal) {
     })),
     queue,
     shelf,
+    tierCounts,
+    diary,
+    demos: demos.slice(0, 8),
+    poolSize: pool.length,
+    // Кадры для барабана рулетки
+    poolPreview: pool
+      .filter((game) => game.headerImage)
+      .slice(0, 14)
+      .map((game) => ({ title: game.title, image: game.headerImage })),
     stats,
   };
 }
