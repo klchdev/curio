@@ -518,7 +518,7 @@ export async function createDemoReview(
     appId: number;
     title: string;
     headerImage: string | null;
-    verdict?: "finished" | "dropped" | "playing" | "later" | null;
+    verdict?: "finished" | "endless" | "playing" | "dropped" | "later" | null;
     tier?: "S" | "A" | "B" | "C" | "D" | "F" | null;
     rating?: number | null;
     note: string;
@@ -696,6 +696,7 @@ export async function getStats(userId: number) {
     activeCount: activeRow[0]?.n ?? 0,
     skippedCount: skippedRow[0]?.n ?? 0,
     finishedCount: byVerdict("finished"),
+    endlessCount: byVerdict("endless"),
     droppedCount: byVerdict("dropped"),
     playingCount: byVerdict("playing"),
     laterCount: byVerdict("later"),

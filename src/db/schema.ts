@@ -103,7 +103,7 @@ export const gameRecords = pgTable(
     gameId: integer("game_id")
       .notNull()
       .references(() => games.id),
-    verdict: text("verdict", { enum: ["finished", "dropped", "playing", "later"] }),
+    verdict: text("verdict", { enum: ["finished", "endless", "playing", "dropped", "later"] }),
     tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
     rating: integer("rating"),
     /** Откуда пришла запись — невидимая деталь хранения, не фильтр в интерфейсе. */

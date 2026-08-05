@@ -627,7 +627,7 @@ function ChooseZone({
       )}
 
       <Reveal delay={460} className="mt-12">
-        <div className="-mx-6 flex snap-x gap-3 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-6 flex snap-x gap-3 overflow-x-auto px-6 pb-2 filmstrip">
           {picks.map((item, i) => (
             <button
               key={item.gameId}
@@ -1140,6 +1140,14 @@ function NowZone({
                       {s.now.finished}
                     </button>
                     <button
+                      onClick={() => verdict(game.gameId, "endless", game.playtimeMinutes)}
+                      disabled={busy !== null}
+                      title={s.now.endlessHint}
+                      className="rounded-lg border border-violet-900 px-2.5 py-1 text-xs text-violet-300 transition hover:bg-violet-950/50 disabled:opacity-40"
+                    >
+                      {s.now.endless}
+                    </button>
+                    <button
                       onClick={() => verdict(game.gameId, "dropped", game.playtimeMinutes)}
                       disabled={busy !== null}
                       className="rounded-lg border border-red-900 px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-950/50 disabled:opacity-40"
@@ -1384,7 +1392,7 @@ function RecapZone({
               </a>
             </div>
           </Reveal>
-          <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2 filmstrip">
             {demos.map((demo, i) => (
               <Reveal key={demo.gameId} delay={580 + 30 * i} from="scale">
                 <article className="w-52 shrink-0 overflow-hidden rounded-xl border border-gray-800 bg-gray-900/40">

@@ -74,33 +74,67 @@ export function isValidTier(value: unknown): value is Tier {
 
 /* ---------- Вердикты ---------- */
 
-export const VERDICT_VALUES = ["finished", "dropped", "playing", "later"] as const;
+/*
+ * `endless` — игра, которая не кончается: Dota, PUBG, песочницы. «Прошёл» к
+ * ним неприменим, а «продолжаю» врёт, потому что описывает временное
+ * состояние, а не то, что человек возвращается сюда годами.
+ */
+export const VERDICT_VALUES = ["finished", "endless", "playing", "dropped", "later"] as const;
 export type Verdict = (typeof VERDICT_VALUES)[number];
 
 export const VERDICT_STYLE: Record<Verdict, { icon: string; color: string }> = {
   finished: { icon: "✅", color: "emerald" },
+  endless: { icon: "♾️", color: "violet" },
   playing: { icon: "🎮", color: "indigo" },
   dropped: { icon: "❌", color: "red" },
   later: { icon: "⏸️", color: "amber" },
 };
 
 const VERDICT_LABEL: Record<Locale, Record<Verdict, string>> = {
-  ru: { finished: "Прошёл", playing: "Продолжаю", dropped: "Бросил", later: "Вернусь позже" },
-  en: { finished: "Finished", playing: "Playing", dropped: "Dropped", later: "Later" },
+  ru: {
+    finished: "Прошёл",
+    endless: "В ротации",
+    playing: "Продолжаю",
+    dropped: "Бросил",
+    later: "Вернусь позже",
+  },
+  en: {
+    finished: "Finished",
+    endless: "In rotation",
+    playing: "Playing",
+    dropped: "Dropped",
+    later: "Later",
+  },
 };
 
 /** У демок те же вердикты значат другое: играть ещё нечего, релиза нет. */
 const DEMO_VERDICT_LABEL: Record<Locale, Record<Verdict, string>> = {
-  ru: { finished: "Прошёл", playing: "Жду релиз", dropped: "Не зашло", later: "Под вопросом" },
-  en: { finished: "Finished", playing: "Awaiting release", dropped: "Not for me", later: "Maybe" },
+  ru: {
+    finished: "Прошёл",
+    endless: "В ротации",
+    playing: "Жду релиз",
+    dropped: "Не зашло",
+    later: "Под вопросом",
+  },
+  en: {
+    finished: "Finished",
+    endless: "In rotation",
+    playing: "Awaiting release",
+    dropped: "Not for me",
+    later: "Maybe",
+  },
 };
 
 /** Порядок для выбора в интерфейсе: сначала частые исходы. */
-const VERDICT_ORDER: Verdict[] = ["finished", "playing", "dropped", "later"];
+const VERDICT_ORDER: Verdict[] = ["finished", "endless", "playing", "dropped", "later"];
+
+/** У демки нет «ротации»: играть там пока нечего, релиза нет. */
+const DEMO_VERDICT_ORDER: Verdict[] = ["finished", "playing", "dropped", "later"];
 
 export function verdicts(locale: Locale = DEFAULT_LOCALE, options?: { demo?: boolean }) {
   const labels = options?.demo ? DEMO_VERDICT_LABEL[locale] : VERDICT_LABEL[locale];
-  return VERDICT_ORDER.map((value) => ({
+  const order = options?.demo ? DEMO_VERDICT_ORDER : VERDICT_ORDER;
+  return order.map((value) => ({
     value,
     label: labels[value],
     ...VERDICT_STYLE[value],

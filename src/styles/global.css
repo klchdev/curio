@@ -1,1 +1,30 @@
 @import "tailwindcss";
+
+
+/*
+ * Горизонтальные плёнки (советы, демки). Полоса прокрутки была полностью
+ * скрыта, и ряд не выглядел прокручиваемым: обрезанная у края обложка
+ * читалась как конец списка. Маску сюда ставить нельзя — она накрывает и
+ * саму полосу, поэтому просто делаем её тонкой и постоянно видимой.
+ */
+.filmstrip {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-700) transparent;
+}
+
+.filmstrip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.filmstrip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.filmstrip::-webkit-scrollbar-thumb {
+  background: var(--color-gray-700);
+  border-radius: 999px;
+}
+
+.filmstrip:hover::-webkit-scrollbar-thumb {
+  background: var(--color-gray-600);
+}

@@ -88,10 +88,14 @@ const formatTime = (minutes: number) => formatPlaytime(minutes, locale);
   {stats.totalGames > 0 && (
     <section class="mb-8">
       <h2 class="mb-4 text-lg font-semibold">{s.pages.verdicts}</h2>
-      <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div class="grid grid-cols-2 gap-4 md:grid-cols-5">
         <div class="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-5 text-center">
           <div class="text-3xl font-bold text-emerald-400">{stats.finishedCount}</div>
           <div class="mt-1 text-sm text-emerald-400/70">{verdictLabel("finished", locale)}</div>
+        </div>
+        <div class="rounded-xl border border-violet-900/50 bg-violet-950/20 p-5 text-center">
+          <div class="text-3xl font-bold text-violet-400">{stats.endlessCount}</div>
+          <div class="mt-1 text-sm text-violet-400/70">{verdictLabel("endless", locale)}</div>
         </div>
         <div class="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-5 text-center">
           <div class="text-3xl font-bold text-indigo-400">{stats.playingCount}</div>

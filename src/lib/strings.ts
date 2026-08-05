@@ -192,6 +192,8 @@ const RU = {
     queueCount: (total: number) => `${total} игр сыграно, но вердикта нет`,
     hasReview: "отзыв есть — нужен вердикт",
     finished: "Прошёл",
+    endless: "В ротации",
+    endlessHint: "Игра без конца — Dota, PUBG, песочницы: «прошёл» к ним неприменимо",
     dropped: "Бросил",
     review: "Отзыв",
 
@@ -214,6 +216,7 @@ const RU = {
     statLibrary: "игр в библиотеке",
     statStreak: "дней подряд",
     statShame: "на стене стыда",
+    statEndless: "в ротации",
     importSteam: "Забрать отзывы из Steam",
     importing: "Читаю профиль…",
     imported: (n: number) => `Перенесено ${n} ${plural(n, "отзыв", "отзыва", "отзывов")}`,
@@ -459,6 +462,8 @@ const EN: Dict = {
     queueCount: (total: number) => `${total} games played with no verdict`,
     hasReview: "review written — needs a verdict",
     finished: "Finished",
+    endless: "In rotation",
+    endlessHint: "A game with no ending — Dota, PUBG, sandboxes: \"finished\" makes no sense",
     dropped: "Dropped",
     review: "Review",
 
@@ -481,6 +486,7 @@ const EN: Dict = {
     statLibrary: "games in library",
     statStreak: "day streak",
     statShame: "on the wall of shame",
+    statEndless: "in rotation",
     importSteam: "Import reviews from Steam",
     importing: "Reading your profile…",
     imported: (n: number) => `Imported ${n} ${n === 1 ? "review" : "reviews"}`,
