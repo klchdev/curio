@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return new Response(JSON.stringify({ error: "Game not found" }), { status: 404 });
   }
 
-  const currentPlaytime = await getRecentPlaytime(user.steamId, game.steamAppId);
+  const currentPlaytime = await getRecentPlaytime(user.steamId, game.steamAppId, { fresh: true });
 
   await db.update(userGames)
     .set({ playtimeMinutes: currentPlaytime })

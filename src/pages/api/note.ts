@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
 import { getUserId } from "../../lib/auth";
-import { addNote } from "../../lib/queries";
-import { getRecentPlaytime } from "../../lib/steam";
+import { addNote, getStoredPlaytime } from "../../lib/queries";
 import { db } from "../../db";
 import { users, slots, games, userGames } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
@@ -48,11 +47,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  const currentPlaytime = await getRecentPlaytime(user.steamId, game.steamAppId);
+  const currentPlaytime = await getStoredPlaytime(userId, game.id);
 
-  await db.update(userGames)
-    .set({ playtimeMinutes: currentPlaytime })
-    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, game.id)));
 
   const result = await addNote(slotId, userId, text, currentPlaytime);
 

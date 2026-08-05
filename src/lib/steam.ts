@@ -70,7 +70,24 @@ export interface SteamGame {
   rtime_last_played?: number;
 }
 
-export async function getOwnedGames(steamId: string): Promise<SteamGame[]> {
+/**
+ * Ответ Steam на библиотеку в тысячу игр весит сотни килобайт, а запрашивают
+ * её пачками подряд (закрыть контракт, обновить время, записать заметку).
+ * Короткий кэш убирает повторные скачивания, не влияя на свежесть: за минуту
+ * наигранное время всё равно не меняется.
+ */
+const OWNED_GAMES_TTL_MS = 60_000;
+const ownedGamesCache = new Map<string, { at: number; games: SteamGame[] }>();
+
+export async function getOwnedGames(
+  steamId: string,
+  options?: { fresh?: boolean }
+): Promise<SteamGame[]> {
+  const cached = ownedGamesCache.get(steamId);
+  if (!options?.fresh && cached && Date.now() - cached.at < OWNED_GAMES_TTL_MS) {
+    return cached.games;
+  }
+
   const key = STEAM_API_KEY;
   const url = `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/?key=${key}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1&format=json`;
   const res = await fetch(url);
@@ -78,7 +95,9 @@ export async function getOwnedGames(steamId: string): Promise<SteamGame[]> {
     throw new Error(`Steam API error: ${res.status} ${res.statusText}`);
   }
   const data = await res.json();
-  return data.response.games || [];
+  const games: SteamGame[] = data.response.games || [];
+  ownedGamesCache.set(steamId, { at: Date.now(), games });
+  return games;
 }
 
 // Parse a Steam appid from a raw id or a store URL
@@ -118,11 +137,18 @@ export async function getStoreAppDetails(
   };
 }
 
+/**
+ * Наигранное время из Steam. Нужно только там, где решение зависит от факта:
+ * закрытие контракта требует настоящих 20 минут, а кнопка обновления на то и
+ * кнопка. Для записи в дневник хватает сохранённого значения из user_games —
+ * иначе каждая заметка тянула всю библиотеку.
+ */
 export async function getRecentPlaytime(
   steamId: string,
-  appId: number
+  appId: number,
+  options?: { fresh?: boolean }
 ): Promise<number> {
-  const games = await getOwnedGames(steamId);
+  const games = await getOwnedGames(steamId, options);
   const game = games.find((g) => g.appid === appId);
   return game?.playtime_forever ?? 0;
 }

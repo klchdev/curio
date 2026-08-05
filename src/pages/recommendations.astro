@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import {
   getLatestRecommendations,
-  getReviewCorpus,
+  getReviewCorpusSize,
   getActiveRun,
   getAttentionQueue,
 } from "../lib/queries";
@@ -15,7 +15,7 @@ if (!user) return Astro.redirect("/");
 
 const run = await getLatestRecommendations(user.id);
 const active = await getActiveRun(user.id);
-const reviewCount = (await getReviewCorpus(user.id)).length;
+const reviewCount = await getReviewCorpusSize(user.id);
 const attention = await getAttentionQueue(user.id);
 const untriaged = attention.items.filter((item) => item.reason === "triage");
 const untriagedTotal = attention.triageTotal;

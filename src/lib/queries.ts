@@ -255,6 +255,22 @@ export async function addNote(
   return { ok: true };
 }
 
+/**
+ * Сохранённое наигранное время. Записи в дневник им и обходятся: тянуть ради
+ * одного числа всю библиотеку из Steam незачем, а актуализируют её синк,
+ * кнопка обновления и закрытие контракта.
+ */
+export async function getStoredPlaytime(userId: number, gameId: number): Promise<number> {
+  const row = await db
+    .select({ playtimeMinutes: userGames.playtimeMinutes })
+    .from(userGames)
+    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  return row?.playtimeMinutes ?? 0;
+}
+
 export async function getSlotNotes(slotId: number) {
   return db
     .select({
@@ -1252,6 +1268,26 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
   }
 
   return [...byGame.values()];
+}
+
+/**
+ * Только размер корпуса. Раньше ради счётчика на странице и проверки порога
+ * материализовался весь корпус с заметками — трижды за один прогон.
+ */
+export async function getReviewCorpusSize(userId: number): Promise<number> {
+  const rows = await db
+    .select({ gameId: gameReviews.gameId })
+    .from(gameReviews)
+    .where(eq(gameReviews.userId, userId))
+    .union(
+      db
+        .select({ gameId: slots.gameId })
+        .from(slots)
+        .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+        .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
+    );
+
+  return rows.length;
 }
 
 export interface CandidateGame {

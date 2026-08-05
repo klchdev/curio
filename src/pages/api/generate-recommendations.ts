@@ -3,6 +3,7 @@ import { getUserId } from "../../lib/auth";
 import {
   getReviewCorpus,
   getRecommendationCandidates,
+  getReviewCorpusSize,
   getAbandonedGames,
   createRecommendationRun,
   updateRunProgress,
@@ -88,7 +89,7 @@ export const POST: APIRoute = async ({ cookies }) => {
   }
 
   const [reviewCount, candidateCount] = await Promise.all([
-    getReviewCorpus(userId).then((r) => r.length),
+    getReviewCorpusSize(userId),
     getRecommendationCandidates(userId).then((c) => c.length),
   ]);
 
