@@ -123,7 +123,7 @@ const RU = {
     takenGo: "Открыть «Сейчас»",
     next: "Дальше",
     contractNote: `Контракт — обязательство сыграть минимум ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и записать первое впечатление. Одновременно их может быть ${THRESHOLDS.MAX_ACTIVE_SLOTS}.`,
-    profileSummary: "Что видно по твоим отзывам",
+    profileSummary: "Что Кьюрио понял про тебя",
     groundingDescription: "сужу по описанию из магазина",
     groundingGuess: "игру не знаю — догадка по жанру",
 
@@ -141,12 +141,12 @@ const RU = {
     gateTitle: (left: number) =>
       `Ещё ${left} ${plural(left, "отзыв", "отзыва", "отзывов")} — и я смогу советовать`,
     gateText:
-      "Советы строятся на твоих словах, а не на жанрах. Пока отзывов мало, модели не за что зацепиться.",
+      "Советы строятся на твоих словах, а не на жанрах. Пока отзывов мало, Кьюрио не за что зацепиться.",
 
     emptyTitle: (reviews: number) =>
       `Разберём твой вкус по ${reviews} ${plural(reviews, "отзыву", "отзывам", "отзывам")}`,
     emptyText:
-      "Модель прочитает всё, что ты написал, найдёт закономерности, которые ты сам не проговаривал, и разложит непройденное по тирам — с объяснением, почему именно тебе.",
+      "Кьюрио прочитает всё, что ты написал, найдёт закономерности, которые ты сам не проговаривал, и разложит непройденное по тирам — с объяснением, почему именно тебе.",
     emptyCta: "Собрать рекомендации",
     emptyBusy: "Запускаю…",
     emptyHint: "Занимает около минуты · можно уйти со страницы",
@@ -161,17 +161,17 @@ const RU = {
   deep: {
     button: "Разобрать подробно",
     askAny: "Спросить про свою игру",
-    askAnyHint: "Любая игра из библиотеки — модель разберёт её по твоим отзывам",
+    askAnyHint: "Любая игра из библиотеки — Кьюрио разберёт её по твоим отзывам",
     askPlaceholder: "Начни вводить название…",
     askNothing: "Ничего не нашлось",
     askNeverPlayed: "не запускал",
     writeReview: "Написать отзыв",
     addToReview: "Дополнить отзыв",
     loading: "Читаю отзывы игроков…",
-    stageFetch: "Собираю отзывы игроков в Steam",
-    stageRead: "Читаю их вместе с твоими отзывами",
+    stageFetch: "Кьюрио собирает отзывы игроков в Steam",
+    stageRead: "Кьюрио читает их вместе с твоими отзывами",
     stageConclude: "Формулирую вывод",
-    hint: "Модель прочитает отзывы в Steam и сверит их с твоим вкусом",
+    hint: "Кьюрио прочитает отзывы в Steam и сверит их с твоим вкусом",
     summary: "Что это на самом деле",
     forYou: "Почему тебе",
     against: "Что может оттолкнуть",
@@ -215,7 +215,7 @@ const RU = {
     review: "Отзыв",
 
     dispute: "Спор о брошенном",
-    disputeHint: "модель не всегда с тобой согласна",
+    disputeHint: "Кьюрио не всегда с тобой согласен",
     secondChance: "Дам второй шанс",
     imRight: "Нет, я прав",
     toDiary: "Записать в дневник",
@@ -412,7 +412,7 @@ const EN: Dict = {
     takenGo: "Open \"Now\"",
     next: "Next",
     contractNote: `A contract is a commitment: at least ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} minutes and a written first impression. You can hold ${THRESHOLDS.MAX_ACTIVE_SLOTS} at a time.`,
-    profileSummary: "What your reviews say about you",
+    profileSummary: "What Curio figured out about you",
     groundingDescription: "judging by the store description",
     groundingGuess: "don't know this game — guessing from the genre",
 
@@ -429,12 +429,12 @@ const EN: Dict = {
 
     gateTitle: (left: number) => `${left} more ${left === 1 ? "review" : "reviews"} and I can advise`,
     gateText:
-      "Picks are built from your own words, not from genres. With this few reviews there's nothing for the model to hold on to.",
+      "Picks are built from your own words, not from genres. With this few reviews there's nothing for Curio to hold on to.",
 
     emptyTitle: (reviews: number) =>
       `Let's read your taste from ${reviews} ${reviews === 1 ? "review" : "reviews"}`,
     emptyText:
-      "The model reads everything you've written, finds patterns you never spelled out, and sorts the unplayed part of your library into tiers — explaining why each one is for you.",
+      "Curio reads everything you've written, finds patterns you never spelled out, and sorts the unplayed part of your library into tiers — explaining why each one is for you.",
     emptyCta: "Generate picks",
     emptyBusy: "Starting…",
     emptyHint: "Takes about a minute · you can leave the page",
@@ -449,17 +449,17 @@ const EN: Dict = {
   deep: {
     button: "Dig deeper",
     askAny: "Ask about any game",
-    askAnyHint: "Any game in your library — the model reads it against your reviews",
+    askAnyHint: "Any game in your library — Curio reads it against your reviews",
     askPlaceholder: "Start typing a title…",
     askNothing: "Nothing found",
     askNeverPlayed: "never launched",
     writeReview: "Write a review",
     addToReview: "Add to the review",
     loading: "Reading player reviews…",
-    stageFetch: "Collecting player reviews from Steam",
-    stageRead: "Reading them against your own reviews",
+    stageFetch: "Curio is collecting player reviews from Steam",
+    stageRead: "Curio reads them against your own reviews",
     stageConclude: "Putting the verdict together",
-    hint: "The model reads Steam reviews and checks them against your taste",
+    hint: "Curio reads Steam reviews and checks them against your taste",
     summary: "What it actually is",
     forYou: "Why it's for you",
     against: "What may put you off",
@@ -503,7 +503,7 @@ const EN: Dict = {
     review: "Review",
 
     dispute: "Argument about the dropped",
-    disputeHint: "the model doesn't always agree with you",
+    disputeHint: "Curio doesn't always agree with you",
     secondChance: "I'll give it another shot",
     imRight: "No, I was right",
     toDiary: "Save to diary",

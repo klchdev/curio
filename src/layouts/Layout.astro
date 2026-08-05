@@ -10,8 +10,8 @@ const { title } = Astro.props;
 const locale = localeFrom(Astro.cookies, Astro.request);
 
 const description = {
-  ru: "BacklogRoulette — контракт с собой на прохождение Steam бэклога",
-  en: "BacklogRoulette — a contract with yourself to get through your Steam backlog",
+  ru: "Curio — что играть дальше из своей библиотеки, по твоим же отзывам",
+  en: "Curio — what to play next from your own library, judged by your own reviews",
 }[locale];
 
 // Возвращаемся туда же, где стоим: смена языка не должна сбрасывать на главную
@@ -25,12 +25,22 @@ const back = Astro.url.pathname + Astro.url.search;
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title} | BacklogRoulette</title>
+    <meta name="theme-color" content="#030712" />
+    <title>{title} | Curio</title>
   </head>
   <body class="min-h-screen bg-gray-950 text-gray-100">
     <nav class="border-b border-gray-800 px-6 py-4">
       <div class="mx-auto flex max-w-5xl items-center justify-between">
-        <a href="/" class="text-xl font-bold text-white">🎰 BacklogRoulette</a>
+        <a href="/" class="group flex items-center gap-2.5 text-xl font-bold text-white">
+          <svg viewBox="0 0 32 32" class="h-7 w-7 text-gray-500 transition group-hover:text-gray-300" fill="none">
+            <rect x="3.5" y="3.5" width="25" height="25" rx="6" stroke="currentColor" stroke-width="2" />
+            <rect x="9" y="9" width="6" height="6" rx="1.5" class="fill-emerald-400" />
+            <rect x="17" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.35" />
+            <rect x="9" y="17" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.35" />
+            <rect x="17" y="17" width="6" height="6" rx="1.5" fill="currentColor" opacity="0.35" />
+          </svg>
+          <span class="tracking-tight">Curio</span>
+        </a>
         <div class="flex items-center gap-1 text-xs">
           {
             LOCALES.map((code) => (

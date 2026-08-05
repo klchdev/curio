@@ -16,6 +16,7 @@ import {
 import { DEFAULT_LOCALE, type Locale } from "../../lib/i18n";
 import { t, type Dict } from "../../lib/strings";
 import SkipModal from "../SkipModal";
+import CurioMark from "../CurioMark";
 
 export interface Pick {
   grounding?: "known" | "from-description" | "guess" | null;
@@ -741,9 +742,12 @@ function ChooseZone({
             <h2 className="mb-5 text-4xl leading-tight font-bold text-balance">{pick.title}</h2>
           </Reveal>
           <Reveal delay={240} from="left">
-            <p className="max-w-lg text-lg leading-relaxed text-gray-400">
-              <RichText text={pick.reason} />
-            </p>
+            <div className="flex max-w-lg gap-3">
+              <CurioMark className="mt-1.5 h-5 w-5 shrink-0 text-gray-700" />
+              <p className="text-lg leading-relaxed text-gray-400">
+                <RichText text={pick.reason} />
+              </p>
+            </div>
             {/* Тихая пометка, а не баннер: важно знать, но не пугать */}
             {pick.deepTier && pick.deepTier !== pick.tier && (
               <p className="mt-3 text-xs text-sky-400/80">
@@ -824,7 +828,8 @@ function ChooseZone({
       {runProfile && (
         <Reveal delay={560} className="mt-10">
           <details className="rounded-xl border border-gray-800 bg-gray-900/30 p-5">
-            <summary className="cursor-pointer text-sm font-medium text-gray-300">
+            <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-300">
+              <CurioMark className="h-4 w-4 text-gray-600" />
               {s.choose.profileSummary}
             </summary>
             <div className="mt-3 space-y-3">
@@ -1066,6 +1071,7 @@ function DeepDivePanel({
     <Reveal className="mt-8" from="up">
       <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">
+          <CurioMark className="h-5 w-5 text-gray-700" />
           <span className={`rounded-full border px-3 py-1 text-sm font-medium ${FIT_STYLE[value.fit]}`}>
             {fitLabel}
           </span>
@@ -1563,9 +1569,12 @@ function NowZone({
                       <p className="font-medium">{item.title}</p>
                       <span className="text-xs text-gray-600">{s.choose.hoursShort(item.hours)}</span>
                     </div>
-                    <p className="mt-1 text-sm leading-relaxed text-gray-400">
-                      <RichText text={item.text} />
-                    </p>
+                    <div className="mt-1 flex gap-2.5">
+                      <CurioMark className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                      <p className="text-sm leading-relaxed text-gray-400">
+                        <RichText text={item.text} />
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {item.stance === "disagree" ? (
