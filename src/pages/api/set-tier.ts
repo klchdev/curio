@@ -9,7 +9,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   const body = await request.json();
-  const { slotId, tier } = body;
+  const { gameId, tier } = body;
 
   if (tier !== null && !isValidTier(tier)) {
     return new Response(JSON.stringify({ error: "Invalid tier" }), {
@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  const result = await setTier(slotId, userId, tier);
+  const result = await setTier(userId, gameId, tier);
 
   if ("error" in result) {
     return new Response(JSON.stringify(result), {

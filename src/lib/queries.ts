@@ -3,10 +3,9 @@ import {
   games,
   userGames,
   slots,
-  slotReviews,
-  slotNotes,
   slotSkips,
-  gameReviews,
+  gameRecords,
+  gameEntries,
   recommendationRuns,
   recommendations,
 } from "../db/schema";
@@ -143,125 +142,6 @@ export async function spinRoulette(userId: number) {
   return { slot, game: picked, decoys };
 }
 
-export async function reviewSlot(
-  slotId: number,
-  userId: number,
-  verdict: string,
-  rating: number,
-  note: string,
-  currentPlaytime: number
-) {
-  const slot = await db
-    .select({
-      id: slots.id,
-      status: slots.status,
-      gameId: slots.gameId,
-      playtimeOnStart: slots.playtimeOnStart,
-    })
-    .from(slots)
-    .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!slot || slot.status !== "active") return { error: "Invalid slot" };
-
-  const delta = currentPlaytime - slot.playtimeOnStart;
-  if (delta < MIN_PLAYTIME_TO_REVIEW) {
-    return {
-      error: `Нужно наиграть минимум ${MIN_PLAYTIME_TO_REVIEW} минут (сейчас ${delta})`,
-    };
-  }
-  if (!isValidVerdict(verdict)) return { error: "Некорректный вердикт" };
-  if (rating < 1 || rating > 5) return { error: "Оценка от 1 до 5" };
-  if (note.length < 50) return { error: "Заметка минимум 50 символов" };
-
-  await db.update(slots)
-    .set({ status: "reviewed" })
-    .where(eq(slots.id, slotId));
-
-  await db.insert(slotReviews)
-    .values({
-      slotId,
-      verdict: verdict as Verdict,
-      rating,
-      note,
-      playtimeMinutes: delta,
-      completedAt: new Date(),
-    });
-
-  return { ok: true };
-}
-
-export async function updateReview(
-  slotId: number,
-  userId: number,
-  verdict: string,
-  rating: number,
-  currentPlaytime: number
-) {
-  const slot = await db
-    .select({
-      id: slots.id,
-      status: slots.status,
-      playtimeOnStart: slots.playtimeOnStart,
-    })
-    .from(slots)
-    .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
-
-  if (!isValidVerdict(verdict)) return { error: "Некорректный вердикт" };
-  if (rating < 1 || rating > 5) return { error: "Оценка от 1 до 5" };
-
-  const delta = currentPlaytime - slot.playtimeOnStart;
-
-  await db.update(slotReviews)
-    .set({
-      verdict: verdict as Verdict,
-      rating,
-      playtimeMinutes: delta,
-      completedAt: new Date(),
-    })
-    .where(eq(slotReviews.slotId, slotId));
-
-  return { ok: true };
-}
-
-export async function addNote(
-  slotId: number,
-  userId: number,
-  text: string,
-  currentPlaytime: number
-) {
-  const slot = await db
-    .select({
-      id: slots.id,
-      status: slots.status,
-      playtimeOnStart: slots.playtimeOnStart,
-    })
-    .from(slots)
-    .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
-  if (text.length < 10) return { error: "Заметка минимум 10 символов" };
-
-  const delta = currentPlaytime - slot.playtimeOnStart;
-
-  await db.insert(slotNotes)
-    .values({
-      slotId,
-      text,
-      playtimeMinutes: delta,
-      createdAt: new Date(),
-    });
-
-  return { ok: true };
-}
-
 /**
  * Сохранённое наигранное время. Записи в дневник им и обходятся: тянуть ради
  * одного числа всю библиотеку из Steam незачем, а актуализируют её синк,
@@ -276,77 +156,6 @@ export async function getStoredPlaytime(userId: number, gameId: number): Promise
     .then((rows) => rows[0]);
 
   return row?.playtimeMinutes ?? 0;
-}
-
-export async function getSlotNotes(slotId: number) {
-  return db
-    .select({
-      id: slotNotes.id,
-      text: slotNotes.text,
-      playtimeMinutes: slotNotes.playtimeMinutes,
-      createdAt: slotNotes.createdAt,
-    })
-    .from(slotNotes)
-    .where(eq(slotNotes.slotId, slotId))
-    .orderBy(slotNotes.createdAt);
-}
-
-export async function addGameNote(
-  userId: number,
-  gameId: number,
-  text: string,
-  currentPlaytime: number
-) {
-  const review = await db
-    .select({ id: gameReviews.id })
-    .from(gameReviews)
-    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!review) return { error: "Review not found" };
-  if (text.length < 10) return { error: "Заметка минимум 10 символов" };
-
-  await db.insert(slotNotes).values({
-    userId,
-    gameId,
-    text,
-    playtimeMinutes: currentPlaytime,
-    createdAt: new Date(),
-  });
-
-  return { ok: true };
-}
-
-export async function updateGameReview(
-  userId: number,
-  gameId: number,
-  data: {
-    verdict?: "finished" | "dropped" | "playing" | "later" | null;
-    rating?: number | null;
-    tier?: "S" | "A" | "B" | "C" | "D" | "F" | null;
-    playtimeMinutes?: number;
-  }
-) {
-  const existing = await db
-    .select({ id: gameReviews.id })
-    .from(gameReviews)
-    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!existing) return { error: "Review not found" };
-
-  const patch: Record<string, unknown> = {};
-  if (data.verdict !== undefined) patch.verdict = data.verdict;
-  if (data.rating !== undefined) patch.rating = data.rating;
-  if (data.tier !== undefined) patch.tier = data.tier;
-  if (data.playtimeMinutes !== undefined) patch.playtimeMinutes = data.playtimeMinutes;
-
-  if (Object.keys(patch).length === 0) return { ok: true };
-
-  await db.update(gameReviews).set(patch).where(eq(gameReviews.id, existing.id));
-  return { ok: true };
 }
 
 /**
@@ -391,45 +200,28 @@ export async function getAttentionQueue(
 ): Promise<{ items: AttentionItem[]; triageTotal: number }> {
   const triageLimit = options?.triageLimit ?? TRIAGE_PAGE_SIZE;
 
-  const [reviewRows, reviewedSlots, activeSlots, playedGames] = await Promise.all([
+  const [records, activeSlots, playedGames] = await Promise.all([
     db
       .select({
-        gameId: games.id,
+        gameId: gameRecords.gameId,
         steamAppId: games.steamAppId,
         title: games.title,
         headerImage: games.headerImage,
+        slotId: gameRecords.slotId,
+        origin: gameRecords.origin,
+        verdict: gameRecords.verdict,
+        rating: gameRecords.rating,
+        tier: gameRecords.tier,
+        lastRecorded: gameRecords.playtimeAtLastEntry,
         currentPlaytime: userGames.playtimeMinutes,
-        playtimeAtReview: gameReviews.playtimeMinutes,
-        verdict: gameReviews.verdict,
-        rating: gameReviews.rating,
-        note: gameReviews.note,
-        tier: gameReviews.tier,
       })
-      .from(gameReviews)
-      .innerJoin(games, eq(gameReviews.gameId, games.id))
-      .leftJoin(userGames, and(eq(userGames.userId, userId), eq(userGames.gameId, games.id)))
-      .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false))),
-
-    db
-      .select({
-        slotId: slots.id,
-        gameId: games.id,
-        steamAppId: games.steamAppId,
-        title: games.title,
-        headerImage: games.headerImage,
-        playtimeOnStart: slots.playtimeOnStart,
-        currentPlaytime: userGames.playtimeMinutes,
-        reviewPlaytime: slotReviews.playtimeMinutes,
-        verdict: slotReviews.verdict,
-        rating: slotReviews.rating,
-        note: slotReviews.note,
-        tier: slotReviews.tier,
-      })
-      .from(slots)
-      .innerJoin(games, eq(slots.gameId, games.id))
-      .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-      .leftJoin(userGames, and(eq(userGames.userId, userId), eq(userGames.gameId, slots.gameId)))
-      .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed"))),
+      .from(gameRecords)
+      .innerJoin(games, eq(games.id, gameRecords.gameId))
+      .leftJoin(
+        userGames,
+        and(eq(userGames.userId, userId), eq(userGames.gameId, gameRecords.gameId))
+      )
+      .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, false))),
 
     db
       .select({ gameId: slots.gameId })
@@ -457,93 +249,35 @@ export async function getAttentionQueue(
       .orderBy(desc(userGames.playtimeMinutes)),
   ]);
 
-  /*
-   * Заметки забираем одним запросом. Раньше здесь было по запросу на каждый
-   * отзыв — и всё это на каждый рендер дашборда.
-   */
-  const slotIds = reviewedSlots.map((r) => r.slotId);
-  const notes =
-    slotIds.length > 0 || true
-      ? await db
-          .select({
-            slotId: slotNotes.slotId,
-            gameId: slotNotes.gameId,
-            playtimeMinutes: slotNotes.playtimeMinutes,
-          })
-          .from(slotNotes)
-          .where(
-            slotIds.length > 0
-              ? or(eq(slotNotes.userId, userId), inArray(slotNotes.slotId, slotIds))
-              : eq(slotNotes.userId, userId)
-          )
-      : [];
+  const reviewedGameIds = new Set(records.map((r) => r.gameId));
 
-  const lastByGame = new Map<number, number>();
-  const lastBySlot = new Map<number, number>();
-  for (const note of notes) {
-    if (note.gameId != null) {
-      lastByGame.set(note.gameId, Math.max(lastByGame.get(note.gameId) ?? 0, note.playtimeMinutes));
-    }
-    if (note.slotId != null) {
-      lastBySlot.set(note.slotId, Math.max(lastBySlot.get(note.slotId) ?? 0, note.playtimeMinutes));
-    }
-  }
+  type UpdateItem = Extract<AttentionItem, { reason: "update" }>;
 
-  const reviewedGameIds = new Set<number>();
-  const updates: AttentionItem[] = [];
+  const updates: UpdateItem[] = records
+    .map((row): UpdateItem | null => {
+      const current = row.currentPlaytime ?? 0;
+      const delta = current - row.lastRecorded;
+      if (delta < STILL_PLAYING_DELTA) return null;
 
-  for (const row of reviewRows) {
-    reviewedGameIds.add(row.gameId);
-    const lastRecorded = Math.max(row.playtimeAtReview, lastByGame.get(row.gameId) ?? 0);
-    const delta = (row.currentPlaytime ?? 0) - lastRecorded;
-    if (delta < STILL_PLAYING_DELTA) continue;
-
-    updates.push({
-      reason: "update",
-      source: "game",
-      slotId: null,
-      gameId: row.gameId,
-      steamAppId: row.steamAppId,
-      title: row.title,
-      headerImage: row.headerImage,
-      currentPlaytime: row.currentPlaytime ?? 0,
-      lastRecordedPlaytime: lastRecorded,
-      delta,
-      existingVerdict: row.verdict,
-      existingRating: row.rating,
-      existingNote: row.note,
-      existingTier: row.tier,
-    });
-  }
-
-  for (const row of reviewedSlots) {
-    const alreadyCounted = reviewedGameIds.has(row.gameId);
-    reviewedGameIds.add(row.gameId);
-    if (alreadyCounted) continue;
-
-    // Для слотов время считается от начала контракта, а не от нуля.
-    const totalPlayed = (row.currentPlaytime ?? 0) - row.playtimeOnStart;
-    const lastRecorded = Math.max(row.reviewPlaytime ?? 0, lastBySlot.get(row.slotId) ?? 0);
-    const delta = totalPlayed - lastRecorded;
-    if (delta < STILL_PLAYING_DELTA) continue;
-
-    updates.push({
-      reason: "update",
-      source: "slot",
-      slotId: row.slotId,
-      gameId: row.gameId,
-      steamAppId: row.steamAppId,
-      title: row.title,
-      headerImage: row.headerImage,
-      currentPlaytime: totalPlayed,
-      lastRecordedPlaytime: lastRecorded,
-      delta,
-      existingVerdict: row.verdict,
-      existingRating: row.rating,
-      existingNote: row.note,
-      existingTier: row.tier,
-    });
-  }
+      return {
+        reason: "update" as const,
+        source: row.origin === "roulette" ? ("slot" as const) : ("game" as const),
+        slotId: row.slotId,
+        gameId: row.gameId,
+        steamAppId: row.steamAppId,
+        title: row.title,
+        headerImage: row.headerImage,
+        currentPlaytime: current,
+        lastRecordedPlaytime: row.lastRecorded,
+        delta,
+        existingVerdict: row.verdict,
+        existingRating: row.rating,
+        existingNote: null,
+        existingTier: row.tier,
+      };
+    })
+    .filter((item): item is UpdateItem => item !== null)
+    .sort((a, b) => b.delta - a.delta);
 
   const activeGameIds = new Set(activeSlots.map((r) => r.gameId));
   const triage = playedGames
@@ -560,8 +294,6 @@ export async function getAttentionQueue(
       })
     );
 
-  updates.sort((a, b) => (b.reason === "update" ? b.delta : 0) - (a.reason === "update" ? a.delta : 0));
-
   return {
     items: [...updates, ...triage.slice(0, triageLimit)],
     triageTotal: triage.length,
@@ -572,7 +304,6 @@ export async function getFreeSkips(userId: number) {
   const reviewedCount = (await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(slots)
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
     .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
     .then((rows) => rows[0]))?.count ?? 0;
 
@@ -624,332 +355,96 @@ export async function skipSlot(
   return { ok: true };
 }
 
+/**
+ * Дневник: лента записей об играх плюс пропуски контрактов. Раньше здесь
+ * склеивались три источника с разными формами строк и ручной дедупликацией.
+ */
 export async function getHistory(userId: number) {
-  const reviewed = await db
-    .select({
-      type: sql<string>`'reviewed'`.as("type"),
-      source: sql<string>`'slot'`.as("source"),
-      slotId: slots.id,
-      gameId: games.id,
-      gameTitle: games.title,
-      gameImage: games.headerImage,
-      verdict: slotReviews.verdict,
-      rating: slotReviews.rating,
-      tier: slotReviews.tier,
-      note: slotReviews.note,
-      playtimeMinutes: slotReviews.playtimeMinutes,
-      reasonType: sql<string | null>`null`.as("reason_type_alias"),
-      reasonText: sql<string | null>`null`.as("reason_text_alias"),
-      date: slotReviews.completedAt,
-    })
-    .from(slots)
-    .innerJoin(games, eq(slots.gameId, games.id))
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
+  const [entries, skips] = await Promise.all([
+    db
+      .select({
+        entryId: gameEntries.id,
+        gameId: gameRecords.gameId,
+        steamAppId: games.steamAppId,
+        gameTitle: games.title,
+        gameImage: games.headerImage,
+        kind: gameEntries.kind,
+        note: gameEntries.text,
+        playtimeMinutes: gameEntries.playtimeTotalMinutes,
+        deltaMinutes: gameEntries.playtimeDeltaMinutes,
+        verdict: gameEntries.verdictAt,
+        rating: gameEntries.ratingAt,
+        tier: gameEntries.tierAt,
+        date: gameEntries.createdAt,
+        currentVerdict: gameRecords.verdict,
+        currentRating: gameRecords.rating,
+        currentTier: gameRecords.tier,
+      })
+      .from(gameEntries)
+      .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))
+      .innerJoin(games, eq(games.id, gameRecords.gameId))
+      .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, false)))
+      .orderBy(desc(gameEntries.createdAt)),
 
-  const skipped = await db
-    .select({
-      type: sql<string>`'skipped'`.as("type"),
-      source: sql<string>`'slot'`.as("source"),
-      slotId: slots.id,
-      gameId: games.id,
-      gameTitle: games.title,
-      gameImage: games.headerImage,
-      verdict: sql<string | null>`null`.as("verdict_alias"),
-      rating: sql<number | null>`null`.as("rating_alias"),
-      tier: sql<string | null>`null`.as("tier_alias"),
-      note: sql<string | null>`null`.as("note_alias"),
-      playtimeMinutes: sql<number | null>`null`.as("playtime_alias"),
-      reasonType: slotSkips.reasonType,
-      reasonText: slotSkips.reasonText,
-      date: slotSkips.skippedAt,
-    })
-    .from(slots)
-    .innerJoin(games, eq(slots.gameId, games.id))
-    .innerJoin(slotSkips, eq(slotSkips.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "skipped")));
+    db
+      .select({
+        slotId: slots.id,
+        gameId: games.id,
+        gameTitle: games.title,
+        gameImage: games.headerImage,
+        reasonType: slotSkips.reasonType,
+        reasonText: slotSkips.reasonText,
+        date: slotSkips.skippedAt,
+      })
+      .from(slotSkips)
+      .innerJoin(slots, eq(slots.id, slotSkips.slotId))
+      .innerJoin(games, eq(games.id, slots.gameId))
+      .where(eq(slots.userId, userId)),
+  ]);
 
-  const slotReviewedGameIds = new Set(
-    reviewed.map((r) => r.gameId).filter((id): id is number => id != null)
-  );
+  const timeline = [
+    ...entries.map((entry) => ({ type: "reviewed" as const, ...entry })),
+    ...skips.map((skip) => ({ type: "skipped" as const, ...skip })),
+  ];
 
-  const retroRows = await db
-    .select({
-      gameId: games.id,
-      gameTitle: games.title,
-      gameImage: games.headerImage,
-      verdict: gameReviews.verdict,
-      rating: gameReviews.rating,
-      tier: gameReviews.tier,
-      note: gameReviews.note,
-      playtimeMinutes: gameReviews.playtimeMinutes,
-      createdAt: gameReviews.createdAt,
-    })
-    .from(gameReviews)
-    .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false)));
-
-  const allGameNotes = await db
-    .select({
-      gameId: slotNotes.gameId,
-      id: slotNotes.id,
-      text: slotNotes.text,
-      playtimeMinutes: slotNotes.playtimeMinutes,
-      createdAt: slotNotes.createdAt,
-    })
-    .from(slotNotes)
-    .where(eq(slotNotes.userId, userId))
-    .orderBy(slotNotes.createdAt);
-
-  const notesByGame = new Map<number, typeof allGameNotes>();
-  for (const n of allGameNotes) {
-    if (n.gameId == null) continue;
-    if (!notesByGame.has(n.gameId)) notesByGame.set(n.gameId, []);
-    notesByGame.get(n.gameId)!.push(n);
-  }
-
-  const retroEntries = retroRows
-    .filter((r) => !slotReviewedGameIds.has(r.gameId))
-    .map((r) => {
-      const notes = notesByGame.get(r.gameId) ?? [];
-      const [first, ...rest] = notes;
-      return {
-        type: "reviewed" as const,
-        source: "retro" as const,
-        slotId: null as number | null,
-        gameId: r.gameId,
-        gameTitle: r.gameTitle,
-        gameImage: r.gameImage,
-        verdict: r.verdict,
-        rating: r.rating,
-        tier: r.tier,
-        note: first?.text ?? r.note,
-        playtimeMinutes: first?.playtimeMinutes ?? r.playtimeMinutes,
-        reasonType: null,
-        reasonText: null,
-        date: first?.createdAt ?? r.createdAt,
-        _retroNotes: rest,
-      };
-    });
-
-  const entries = [...reviewed, ...skipped, ...retroEntries].sort(
-    (a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime()
-  );
-
-  const result = [];
-  for (const entry of entries) {
-    if (entry.type === "reviewed" && entry.source === "slot") {
-      const notes = await getSlotNotes((entry as any).slotId);
-      result.push({ ...entry, notes });
-    } else if (entry.type === "reviewed" && entry.source === "retro") {
-      const { _retroNotes, ...rest } = entry as any;
-      result.push({ ...rest, notes: _retroNotes });
-    } else {
-      result.push({ ...entry, notes: [] });
-    }
-  }
-  return result;
+  timeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return timeline;
 }
 
 export async function getTierList(userId: number) {
   return db
     .select({
-      slotId: slots.id,
+      gameId: gameRecords.gameId,
       gameTitle: games.title,
       gameImage: games.headerImage,
       steamAppId: games.steamAppId,
-      tier: slotReviews.tier,
-      verdict: slotReviews.verdict,
-      rating: slotReviews.rating,
+      tier: gameRecords.tier,
+      verdict: gameRecords.verdict,
+      rating: gameRecords.rating,
     })
-    .from(slots)
-    .innerJoin(games, eq(slots.gameId, games.id))
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
+    .from(gameRecords)
+    .innerJoin(games, eq(games.id, gameRecords.gameId))
+    .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, false)));
 }
 
+/** Тир живёт в одной таблице, поэтому путь тоже один. */
 export async function setTier(
-  slotId: number,
-  userId: number,
-  tier: "S" | "A" | "B" | "C" | "D" | "F" | null
-) {
-  const slot = await db
-    .select({ id: slots.id, status: slots.status })
-    .from(slots)
-    .where(and(eq(slots.id, slotId), eq(slots.userId, userId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
-
-  await db.update(slotReviews)
-    .set({ tier })
-    .where(eq(slotReviews.slotId, slotId));
-
-  return { ok: true };
-}
-
-export async function setRetroTier(
-  gameId: number,
-  userId: number,
-  tier: "S" | "A" | "B" | "C" | "D" | "F" | null
-) {
-  const existing = await db
-    .select({ id: gameReviews.id })
-    .from(gameReviews)
-    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!existing) return { error: "Review not found" };
-
-  await db.update(gameReviews).set({ tier }).where(eq(gameReviews.id, existing.id));
-  return { ok: true };
-}
-
-export async function createRetrospectiveReview(
   userId: number,
   gameId: number,
-  data: {
-    verdict?: "finished" | "dropped" | "playing" | "later" | null;
-    tier?: "S" | "A" | "B" | "C" | "D" | "F" | null;
-    rating?: number | null;
-    note?: string | null;
-    playtimeMinutes?: number;
-  }
-) {
-  const ug = await db
-    .select({ gameId: userGames.gameId })
-    .from(userGames)
-    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!ug) return { error: "Game not found" };
-
+  tier: Tier | null
+): Promise<SaveResult> {
   const existing = await db
-    .select({
-      id: gameReviews.id,
-      note: gameReviews.note,
-      playtimeMinutes: gameReviews.playtimeMinutes,
-    })
-    .from(gameReviews)
-    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
+    .select({ id: gameRecords.id })
+    .from(gameRecords)
+    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)))
     .limit(1)
     .then((rows) => rows[0]);
 
-  if (existing) {
-    /*
-     * Патч, а не полная замена. Раньше здесь стояло `data.tier ?? null`, и
-     * быстрый вердикт из триажа (он передаёт только verdict) обнулял игре
-     * тир, оценку и заметку. Явный null по-прежнему очищает поле —
-     * различаем «не передали» и «передали пустое».
-     */
-    const patch: Partial<typeof gameReviews.$inferInsert> = {};
-    if (data.verdict !== undefined) patch.verdict = data.verdict;
-    if (data.tier !== undefined) patch.tier = data.tier;
-    if (data.rating !== undefined) patch.rating = data.rating;
-    if (data.note !== undefined) patch.note = data.note;
-    if (data.playtimeMinutes !== undefined) patch.playtimeMinutes = data.playtimeMinutes;
+  if (!existing) return { error: "Запись об игре не найдена" };
 
-    if (Object.keys(patch).length > 0) {
-      await db.update(gameReviews).set(patch).where(eq(gameReviews.id, existing.id));
-    }
-
-    /*
-     * Дневник строится из slot_notes, а ветка update раньше туда не писала —
-     * поэтому дописанный отзыв пропадал из ленты. Пишем новую запись, только
-     * если текст действительно изменился.
-     */
-    const note = data.note;
-    if (note && note.length >= 10 && note !== existing.note) {
-      await db.insert(slotNotes).values({
-        userId,
-        gameId,
-        text: note,
-        playtimeMinutes: data.playtimeMinutes ?? existing.playtimeMinutes,
-        createdAt: new Date(),
-      });
-    }
-  } else {
-    await db.insert(gameReviews).values({
-      userId,
-      gameId,
-      verdict: data.verdict ?? null,
-      tier: data.tier ?? null,
-      rating: data.rating ?? null,
-      note: data.note ?? null,
-      playtimeMinutes: data.playtimeMinutes ?? 0,
-      createdAt: new Date(),
-    });
-
-    if (data.note && data.note.length >= 10) {
-      await db.insert(slotNotes).values({
-        userId,
-        gameId,
-        text: data.note,
-        playtimeMinutes: data.playtimeMinutes ?? 0,
-        createdAt: new Date(),
-      });
-    }
-  }
-
+  await db.update(gameRecords).set({ tier }).where(eq(gameRecords.id, existing.id));
   return { ok: true };
 }
-
-export async function getRetroReviews(userId: number) {
-  const reviews = await db
-    .select({
-      gameId: games.id,
-      gameTitle: games.title,
-      gameImage: games.headerImage,
-      steamAppId: games.steamAppId,
-      tier: gameReviews.tier,
-      rating: gameReviews.rating,
-      note: gameReviews.note,
-      verdict: gameReviews.verdict,
-      playtimeMinutes: gameReviews.playtimeMinutes,
-      createdAt: gameReviews.createdAt,
-    })
-    .from(gameReviews)
-    .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false)));
-
-  if (reviews.length === 0) return [];
-
-  const allNotes = await db
-    .select({
-      gameId: slotNotes.gameId,
-      id: slotNotes.id,
-      text: slotNotes.text,
-      playtimeMinutes: slotNotes.playtimeMinutes,
-      createdAt: slotNotes.createdAt,
-    })
-    .from(slotNotes)
-    .where(eq(slotNotes.userId, userId))
-    .orderBy(slotNotes.createdAt);
-
-  const notesByGame = new Map<number, { id: number; text: string; playtimeMinutes: number; createdAt: Date }[]>();
-  for (const n of allNotes) {
-    if (n.gameId == null) continue;
-    if (!notesByGame.has(n.gameId)) notesByGame.set(n.gameId, []);
-    notesByGame.get(n.gameId)!.push({
-      id: n.id,
-      text: n.text,
-      playtimeMinutes: n.playtimeMinutes,
-      createdAt: n.createdAt,
-    });
-  }
-
-  return reviews.map((r) => ({
-    ...r,
-    notes: notesByGame.get(r.gameId) ?? [],
-  }));
-}
-
-// --- Demo reviews (Next Fest etc.) ---------------------------------------
-// Demos are stored as games with isDemo=true and reviewed via gameReviews,
-// but kept out of the backlog roulette / diary / tier-list / stats.
 
 export async function createDemoReview(
   userId: number,
@@ -998,73 +493,59 @@ export async function createDemoReview(
       target: [userGames.userId, userGames.gameId],
     });
 
-  const existing = await db
-    .select({ id: gameReviews.id })
-    .from(gameReviews)
-    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, game.id)))
-    .limit(1)
-    .then((rows) => rows[0]);
+  const recordId = await upsertRecord(userId, game.id, {
+    verdict: data.verdict,
+    tier: data.tier,
+    rating: data.rating,
+    origin: "demo",
+    playtimeMinutes: 0,
+  });
 
-  if (existing) {
-    await db
-      .update(gameReviews)
-      .set({
-        verdict: data.verdict ?? null,
-        tier: data.tier ?? null,
-        rating: data.rating ?? null,
-        note: data.note,
-      })
-      .where(eq(gameReviews.id, existing.id));
-  } else {
-    await db.insert(gameReviews).values({
-      userId,
-      gameId: game.id,
-      verdict: data.verdict ?? null,
-      tier: data.tier ?? null,
-      rating: data.rating ?? null,
-      note: data.note,
+  if (data.note && data.note.trim().length > 0) {
+    await addEntry(recordId, {
+      kind: "first",
+      text: data.note.trim(),
       playtimeMinutes: 0,
-      createdAt: new Date(),
+      verdict: data.verdict,
+      rating: data.rating,
+      tier: data.tier,
     });
   }
 
-  return { ok: true, gameId: game.id };
+  return { ok: true };
 }
 
+/**
+ * Статистика по единой модели. Раньше считались только слотовые отзывы,
+ * поэтому профиль показывал 14 игр вместо 139 и «наиграно» означало не
+ * общее время, а время после спинов.
+ */
 export async function getDemoReviews(userId: number) {
   return db
     .select({
-      gameId: games.id,
+      gameId: gameRecords.gameId,
       steamAppId: games.steamAppId,
       title: games.title,
       headerImage: games.headerImage,
-      verdict: gameReviews.verdict,
-      tier: gameReviews.tier,
-      rating: gameReviews.rating,
-      note: gameReviews.note,
-      createdAt: gameReviews.createdAt,
+      verdict: gameRecords.verdict,
+      tier: gameRecords.tier,
+      rating: gameRecords.rating,
+      createdAt: gameRecords.createdAt,
+      note: gameEntries.text,
     })
-    .from(gameReviews)
-    .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, true)))
-    .orderBy(desc(gameReviews.createdAt));
+    .from(gameRecords)
+    .innerJoin(games, eq(games.id, gameRecords.gameId))
+    .leftJoin(gameEntries, eq(gameEntries.recordId, gameRecords.id))
+    .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, true)))
+    .orderBy(desc(gameRecords.createdAt));
 }
 
+/** Запись уносит свою ленту каскадом, отдельная чистка заметок не нужна. */
 export async function deleteDemoReview(userId: number, gameId: number) {
-  const game = await db
-    .select({ id: games.id })
-    .from(games)
-    .where(and(eq(games.id, gameId), eq(games.isDemo, true)))
-    .limit(1)
-    .then((rows) => rows[0]);
-  if (!game) return { error: "Demo not found" };
+  await db
+    .delete(gameRecords)
+    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)));
 
-  await db
-    .delete(gameReviews)
-    .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)));
-  await db
-    .delete(slotNotes)
-    .where(and(eq(slotNotes.userId, userId), eq(slotNotes.gameId, gameId)));
   await db
     .delete(userGames)
     .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)));
@@ -1073,126 +554,64 @@ export async function deleteDemoReview(userId: number, gameId: number) {
 }
 
 export async function getStats(userId: number) {
-  const reviewedSlots = await db
-    .select({
-      playtime: slotReviews.playtimeMinutes,
-      completedAt: slotReviews.completedAt,
-    })
-    .from(slots)
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
+  const [records, shameSkips, libraryRow, activeRow, skippedRow] = await Promise.all([
+    db
+      .select({
+        verdict: gameRecords.verdict,
+        rating: gameRecords.rating,
+        playtime: gameRecords.playtimeAtLastEntry,
+        createdAt: gameRecords.createdAt,
+      })
+      .from(gameRecords)
+      .innerJoin(games, eq(games.id, gameRecords.gameId))
+      .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, false))),
 
-  const shameSkips = await db
-    .select({
-      gameTitle: games.title,
-      skippedAt: slotSkips.skippedAt,
-    })
-    .from(slots)
-    .innerJoin(games, eq(slots.gameId, games.id))
-    .innerJoin(slotSkips, eq(slotSkips.slotId, slots.id))
-    .where(
-      and(
-        eq(slots.userId, userId),
-        eq(slots.status, "skipped"),
-        eq(slotSkips.reasonType, "shame")
-      )
-    );
+    db
+      .select({ gameTitle: games.title, skippedAt: slotSkips.skippedAt })
+      .from(slotSkips)
+      .innerJoin(slots, eq(slots.id, slotSkips.slotId))
+      .innerJoin(games, eq(games.id, slots.gameId))
+      .where(and(eq(slots.userId, userId), eq(slotSkips.reasonType, "shame"))),
 
-  const totalGames = reviewedSlots.length;
-  const totalMinutes = reviewedSlots.reduce(
-    (sum, s) => sum + (s.playtime ?? 0),
-    0
-  );
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userGames)
+      .where(eq(userGames.userId, userId)),
+
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(slots)
+      .where(and(eq(slots.userId, userId), eq(slots.status, "active"))),
+
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(slots)
+      .where(and(eq(slots.userId, userId), eq(slots.status, "skipped"))),
+  ]);
+
+  const totalGames = records.length;
+  const totalMinutes = records.reduce((sum, r) => sum + r.playtime, 0);
   const avgMinutes = totalGames > 0 ? Math.round(totalMinutes / totalGames) : 0;
 
+  const rated = records.filter((r) => r.rating != null);
+  const avgRating =
+    rated.length > 0
+      ? Math.round((rated.reduce((sum, r) => sum + (r.rating ?? 0), 0) / rated.length) * 10) / 10
+      : 0;
+
+  const byVerdict = (verdict: string) => records.filter((r) => r.verdict === verdict).length;
+
+  // Серия: сколько дней подряд появляются новые записи, без провалов
+  const days = [...new Set(records.map((r) => new Date(r.createdAt).toDateString()))]
+    .map((d) => new Date(d).getTime())
+    .sort((a, b) => b - a);
+
   let streak = 0;
-  if (shameSkips.length === 0 && totalGames > 0) {
-    const firstCompleted = reviewedSlots
-      .map((s) => new Date(s.completedAt!).getTime())
-      .sort((a, b) => a - b)[0];
-    streak = Math.floor(
-      (Date.now() - firstCompleted) / (7 * 24 * 60 * 60 * 1000)
-    );
-  } else if (shameSkips.length > 0) {
-    const lastShame = shameSkips
-      .map((s) => new Date(s.skippedAt!).getTime())
-      .sort((a, b) => b - a)[0];
-    streak = Math.floor(
-      (Date.now() - lastShame) / (7 * 24 * 60 * 60 * 1000)
-    );
+  const DAY = 24 * 60 * 60 * 1000;
+  for (let i = 0; i < days.length; i += 1) {
+    if (i === 0 || days[i - 1]! - days[i]! <= DAY * 1.5) streak += 1;
+    else break;
   }
-
-  const totalLibrary = (await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(userGames)
-    .innerJoin(games, eq(userGames.gameId, games.id))
-    .where(and(eq(userGames.userId, userId), eq(games.isDemo, false)))
-    .then((rows) => rows[0]))?.count ?? 0;
-
-  const poolSize = (await getUnplayedGames(userId)).length;
-
-  const excludedCount = (await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(games)
-    .where(eq(games.excluded, true))
-    .then((rows) => rows[0]))?.count ?? 0;
-
-  const activeCount = (await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(slots)
-    .where(and(eq(slots.userId, userId), eq(slots.status, "active")))
-    .then((rows) => rows[0]))?.count ?? 0;
-
-  const skippedCount = (await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(slots)
-    .where(and(eq(slots.userId, userId), eq(slots.status, "skipped")))
-    .then((rows) => rows[0]))?.count ?? 0;
-
-  const finishedCount = reviewedSlots.length > 0
-    ? (await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(slotReviews)
-        .innerJoin(slots, eq(slotReviews.slotId, slots.id))
-        .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "finished")))
-        .then((rows) => rows[0]))?.count ?? 0
-    : 0;
-
-  const droppedCount = reviewedSlots.length > 0
-    ? (await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(slotReviews)
-        .innerJoin(slots, eq(slotReviews.slotId, slots.id))
-        .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "dropped")))
-        .then((rows) => rows[0]))?.count ?? 0
-    : 0;
-
-  const playingCount = reviewedSlots.length > 0
-    ? (await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(slotReviews)
-        .innerJoin(slots, eq(slotReviews.slotId, slots.id))
-        .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "playing")))
-        .then((rows) => rows[0]))?.count ?? 0
-    : 0;
-
-  const laterCount = reviewedSlots.length > 0
-    ? (await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(slotReviews)
-        .innerJoin(slots, eq(slotReviews.slotId, slots.id))
-        .where(and(eq(slots.userId, userId), eq(slotReviews.verdict, "later")))
-        .then((rows) => rows[0]))?.count ?? 0
-    : 0;
-
-  const avgRating = reviewedSlots.length > 0
-    ? (await db
-        .select({ avg: sql<number>`ROUND(AVG(${slotReviews.rating})::numeric, 1)` })
-        .from(slotReviews)
-        .innerJoin(slots, eq(slotReviews.slotId, slots.id))
-        .where(eq(slots.userId, userId))
-        .then((rows) => rows[0]))?.avg ?? 0
-    : 0;
 
   return {
     totalGames,
@@ -1200,20 +619,18 @@ export async function getStats(userId: number) {
     avgMinutes,
     streak,
     wallOfShame: shameSkips.map((s) => s.gameTitle),
-    totalLibrary,
-    poolSize,
-    excludedCount,
-    activeCount,
-    skippedCount,
-    finishedCount,
-    droppedCount,
-    playingCount,
-    laterCount,
+    totalLibrary: libraryRow[0]?.n ?? 0,
+    poolSize: (await getUnplayedGames(userId)).length,
+    excludedCount: 0,
+    activeCount: activeRow[0]?.n ?? 0,
+    skippedCount: skippedRow[0]?.n ?? 0,
+    finishedCount: byVerdict("finished"),
+    droppedCount: byVerdict("dropped"),
+    playingCount: byVerdict("playing"),
+    laterCount: byVerdict("later"),
     avgRating,
   };
 }
-
-// --- AI-рекомендации ---
 
 const CANDIDATE_LIMIT = 700;
 const ABANDONED_LIMIT = 60;
@@ -1229,72 +646,71 @@ export interface ReviewCorpusItem {
 }
 
 export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[]> {
-  const retro = await db
+  const records = await db
     .select({
-      gameId: gameReviews.gameId,
+      recordId: gameRecords.id,
       title: games.title,
-      tier: gameReviews.tier,
-      rating: gameReviews.rating,
-      verdict: gameReviews.verdict,
-      minutes: gameReviews.playtimeMinutes,
+      tier: gameRecords.tier,
+      rating: gameRecords.rating,
+      verdict: gameRecords.verdict,
+      minutes: gameRecords.playtimeAtLastEntry,
       isDemo: games.isDemo,
-      note: gameReviews.note,
     })
-    .from(gameReviews)
-    .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .where(eq(gameReviews.userId, userId));
+    .from(gameRecords)
+    .innerJoin(games, eq(games.id, gameRecords.gameId))
+    .where(eq(gameRecords.userId, userId));
 
-  const fromSlots = await db
+  const entries = await db
     .select({
-      gameId: slots.gameId,
-      title: games.title,
-      tier: slotReviews.tier,
-      rating: slotReviews.rating,
-      verdict: slotReviews.verdict,
-      minutes: slotReviews.playtimeMinutes,
-      isDemo: games.isDemo,
-      note: slotReviews.note,
+      recordId: gameEntries.recordId,
+      text: gameEntries.text,
+      playtimeMinutes: gameEntries.playtimeTotalMinutes,
+      createdAt: gameEntries.createdAt,
     })
-    .from(slots)
-    .innerJoin(games, eq(slots.gameId, games.id))
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
+    .from(gameEntries)
+    .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))
+    .where(eq(gameRecords.userId, userId))
+    .orderBy(gameEntries.createdAt);
 
-  const byGame = new Map<number, ReviewCorpusItem>();
-  for (const row of [...fromSlots, ...retro]) {
-    // retro идёт вторым — у него приоритет, там актуальный тир и заметка
-    byGame.set(row.gameId, {
-      title: row.title,
-      tier: row.tier,
-      rating: row.rating,
-      verdict: row.verdict,
-      hours: Math.round((row.minutes / 60) * 10) / 10,
-      isDemo: row.isDemo,
-      note: row.note,
-    });
+  const byRecord = new Map<number, typeof entries>();
+  for (const entry of entries) {
+    if (!byRecord.has(entry.recordId)) byRecord.set(entry.recordId, []);
+    byRecord.get(entry.recordId)!.push(entry);
   }
 
-  return [...byGame.values()];
+  return records.map((record) => {
+    const timeline = byRecord.get(record.recordId) ?? [];
+    /*
+     * Модель видит всю ленту, а не одну первую заметку — ради этого и
+     * затевалось объединение. Штамп наигранного показывает, на каком часу
+     * мнение менялось.
+     */
+    const note = timeline
+      .map((entry, index) => {
+        const hours = Math.round((entry.playtimeMinutes / 60) * 10) / 10;
+        return timeline.length > 1 ? `[${hours}ч] ${entry.text}` : entry.text;
+      })
+      .join("\n\n");
+
+    return {
+      title: record.title,
+      tier: record.tier,
+      rating: record.rating,
+      verdict: record.verdict,
+      hours: Math.round((record.minutes / 60) * 10) / 10,
+      isDemo: record.isDemo,
+      note: note || null,
+    };
+  });
 }
 
-/**
- * Только размер корпуса. Раньше ради счётчика на странице и проверки порога
- * материализовался весь корпус с заметками — трижды за один прогон.
- */
 export async function getReviewCorpusSize(userId: number): Promise<number> {
-  const rows = await db
-    .select({ gameId: gameReviews.gameId })
-    .from(gameReviews)
-    .where(eq(gameReviews.userId, userId))
-    .union(
-      db
-        .select({ gameId: slots.gameId })
-        .from(slots)
-        .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-        .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")))
-    );
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(gameRecords)
+    .where(eq(gameRecords.userId, userId));
 
-  return rows.length;
+  return row?.n ?? 0;
 }
 
 export interface CandidateGame {
@@ -1354,16 +770,16 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
       minutes: userGames.playtimeMinutes,
       lastPlayedAt: userGames.lastPlayedAt,
     })
-    .from(gameReviews)
-    .innerJoin(games, eq(gameReviews.gameId, games.id))
+    .from(gameRecords)
+    .innerJoin(games, eq(gameRecords.gameId, games.id))
     .innerJoin(
       userGames,
       and(eq(userGames.gameId, games.id), eq(userGames.userId, userId))
     )
     .where(
       and(
-        eq(gameReviews.userId, userId),
-        eq(gameReviews.verdict, "dropped"),
+        eq(gameRecords.userId, userId),
+        eq(gameRecords.verdict, "dropped"),
         eq(games.isDemo, false),
         eq(games.excluded, false)
       )
@@ -1381,18 +797,12 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
 }
 
 async function getReviewedGameIds(userId: number): Promise<Set<number>> {
-  const viaSlot = await db
-    .select({ gameId: slots.gameId })
-    .from(slots)
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(eq(slots.userId, userId));
+  const rows = await db
+    .select({ gameId: gameRecords.gameId })
+    .from(gameRecords)
+    .where(eq(gameRecords.userId, userId));
 
-  const viaRetro = await db
-    .select({ gameId: gameReviews.gameId })
-    .from(gameReviews)
-    .where(eq(gameReviews.userId, userId));
-
-  return new Set([...viaSlot, ...viaRetro].map((r) => r.gameId));
+  return new Set(rows.map((r) => r.gameId));
 }
 
 /** Прогон, зависший дольше этого, считаем сорванным (процесс мог перезапуститься). */
@@ -1634,11 +1044,13 @@ export interface ImpressionInput {
  */
 type SaveResult = { ok: true } | { error: string };
 
-/** Нижележащие функции отдают {ok: boolean}; сужаем к общему результату. */
-function normalize(result: { ok?: boolean } | { error: string }): SaveResult {
-  return "error" in result ? result : { ok: true };
-}
-
+/**
+ * Единственная точка записи мнения об игре — теперь прямо в единую модель.
+ *
+ * Шесть модалок писали в три таблицы по разным правилам. Здесь один путь:
+ * запись обновляется, лента дополняется, а разница между контрактом и
+ * ретроспективой сводится к полю origin.
+ */
 export async function saveImpression(
   userId: number,
   input: ImpressionInput
@@ -1659,80 +1071,206 @@ export async function saveImpression(
     return { error: "Оценка от 1 до 5" };
   }
 
-  switch (input.mode) {
-    case "slot-first": {
-      if (!input.slotId) return { error: "Не указан контракт" };
-      return normalize(
-        await reviewSlot(
-          input.slotId,
-          userId,
-          input.verdict as string,
-          input.rating ?? 3,
-          note,
-          input.currentPlaytime
-        )
-      );
+  // Закрытие контракта: время считается от старта, и оно должно быть настоящим
+  if (input.mode === "slot-first") {
+    if (!input.slotId) return { error: "Не указан контракт" };
+
+    const slot = await db
+      .select({
+        id: slots.id,
+        gameId: slots.gameId,
+        status: slots.status,
+        playtimeOnStart: slots.playtimeOnStart,
+      })
+      .from(slots)
+      .where(and(eq(slots.id, input.slotId), eq(slots.userId, userId)))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!slot || slot.status !== "active") return { error: "Контракт не найден" };
+
+    const played = input.currentPlaytime - slot.playtimeOnStart;
+    if (played < MIN_PLAYTIME_TO_REVIEW) {
+      return {
+        error: `Нужно наиграть минимум ${MIN_PLAYTIME_TO_REVIEW} минут (сейчас ${played})`,
+      };
     }
 
-    case "entry": {
-      // Дополнение слотового контракта: заметка и правка вердикта живут отдельно
-      if (input.slotId) {
-        const changed = (field: keyof NonNullable<ImpressionInput["previous"]>) =>
-          input[field as "verdict" | "rating" | "tier"] !== undefined &&
-          input[field as "verdict" | "rating" | "tier"] !== input.previous?.[field];
+    await db.update(slots).set({ status: "reviewed" }).where(eq(slots.id, slot.id));
 
-        if (note.length >= rule.minNote) {
-          const result = await addNote(input.slotId, userId, note, input.currentPlaytime);
-          if ("error" in result && result.error) return { error: result.error };
-        }
-        if (changed("verdict") || changed("rating")) {
-          const result = await updateReview(
-            input.slotId,
-            userId,
-            (input.verdict ?? input.previous?.verdict) as string,
-            input.rating ?? input.previous?.rating ?? 3,
-            input.currentPlaytime
-          );
-          if ("error" in result && result.error) return { error: result.error };
-        }
-        if (changed("tier")) {
-          const result = await setTier(input.slotId, userId, (input.tier ?? null) as Tier | null);
-          if ("error" in result && result.error) return { error: result.error };
-        }
-        return { ok: true };
-      }
+    const recordId = await upsertRecord(userId, slot.gameId, {
+      verdict: input.verdict ?? "finished",
+      rating: input.rating ?? 3,
+      origin: "roulette",
+      slotId: slot.id,
+      playtimeMinutes: input.currentPlaytime,
+    });
 
-      if (!input.gameId) return { error: "Не указана игра" };
-      if (note.length >= rule.minNote) {
-        const result = await addGameNote(userId, input.gameId, note, input.currentPlaytime);
-        if ("error" in result && result.error) return { error: result.error };
-      }
-      return normalize(
-        await updateGameReview(userId, input.gameId, {
-        verdict: input.verdict,
-        rating: input.rating,
-        tier: input.tier,
-          playtimeMinutes: input.currentPlaytime,
-        })
-      );
-    }
+    await addEntry(recordId, {
+      kind: "first",
+      text: note,
+      playtimeMinutes: input.currentPlaytime,
+      verdict: input.verdict ?? "finished",
+      rating: input.rating ?? 3,
+    });
 
-    case "retro":
-    case "quick": {
-      if (!input.gameId) return { error: "Не указана игра" };
-      return normalize(
-        await createRetrospectiveReview(userId, input.gameId, {
-        verdict: input.verdict,
-        // Быстрый вердикт не трогает остальные поля: undefined значит «не передали»
-        tier: input.mode === "quick" ? undefined : input.tier,
-        rating: input.mode === "quick" ? undefined : input.rating,
-        note: input.mode === "quick" ? undefined : note || null,
-          playtimeMinutes: input.currentPlaytime,
-        })
-      );
-    }
-
-    case "demo":
-      return { error: "Демки добавляются через отдельный путь: нужен appid" };
+    return { ok: true };
   }
+
+  const gameId = input.gameId;
+  if (!gameId) return { error: "Не указана игра" };
+
+  const owned = await db
+    .select({ gameId: userGames.gameId })
+    .from(userGames)
+    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (!owned) return { error: "Игра не найдена в библиотеке" };
+
+  const recordId = await upsertRecord(userId, gameId, {
+    verdict: input.verdict,
+    // Быстрый вердикт не трогает остальные поля
+    tier: input.mode === "quick" ? undefined : input.tier,
+    rating: input.mode === "quick" ? undefined : input.rating,
+    origin: input.mode === "quick" ? "triage" : "retro",
+    playtimeMinutes: input.currentPlaytime,
+  });
+
+  if (note.length >= rule.minNote && note.length > 0) {
+    const existing = await db
+      .select({ id: gameEntries.id })
+      .from(gameEntries)
+      .where(eq(gameEntries.recordId, recordId))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    await addEntry(recordId, {
+      kind: existing ? "update" : "first",
+      text: note,
+      playtimeMinutes: input.currentPlaytime,
+      verdict: input.verdict,
+      rating: input.rating,
+      tier: input.tier,
+    });
+  }
+
+  return { ok: true };
+}
+
+/* ================= Ядро единой модели ================= */
+
+interface RecordPatch {
+  verdict?: Verdict | null;
+  tier?: Tier | null;
+  rating?: number | null;
+  origin?: "roulette" | "retro" | "triage" | "demo";
+  slotId?: number | null;
+  playtimeMinutes: number;
+}
+
+/**
+ * Создаёт или обновляет запись об игре. Переданные поля перезаписывают
+ * старые, непереданные остаются как были — то же различие «не трогали» /
+ * «сбросили», что и в форме впечатления.
+ */
+async function upsertRecord(
+  userId: number,
+  gameId: number,
+  patch: RecordPatch
+): Promise<number> {
+  const now = new Date();
+
+  const existing = await db
+    .select({ id: gameRecords.id })
+    .from(gameRecords)
+    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (existing) {
+    const update: Record<string, unknown> = {
+      lastEntryAt: now,
+      playtimeAtLastEntry: sql`greatest(${gameRecords.playtimeAtLastEntry}, ${patch.playtimeMinutes})`,
+    };
+    if (patch.verdict !== undefined) update.verdict = patch.verdict;
+    if (patch.tier !== undefined) update.tier = patch.tier;
+    if (patch.rating !== undefined) update.rating = patch.rating;
+    if (patch.slotId !== undefined) update.slotId = patch.slotId;
+
+    await db.update(gameRecords).set(update).where(eq(gameRecords.id, existing.id));
+    return existing.id;
+  }
+
+  const [created] = await db
+    .insert(gameRecords)
+    .values({
+      userId,
+      gameId,
+      verdict: patch.verdict ?? null,
+      tier: patch.tier ?? null,
+      rating: patch.rating ?? null,
+      origin: patch.origin ?? "retro",
+      slotId: patch.slotId ?? null,
+      playtimeAtLastEntry: patch.playtimeMinutes,
+      firstEntryAt: now,
+      lastEntryAt: now,
+      createdAt: now,
+    })
+    .returning({ id: gameRecords.id });
+
+  return created!.id;
+}
+
+/** Добавляет запись в ленту со снимком мнения на этот момент. */
+async function addEntry(
+  recordId: number,
+  data: {
+    kind: "first" | "update" | "verdict" | "advisor";
+    text: string;
+    playtimeMinutes: number;
+    verdict?: string | null;
+    rating?: number | null;
+    tier?: string | null;
+  }
+): Promise<void> {
+  const previous = await db
+    .select({ total: gameEntries.playtimeTotalMinutes })
+    .from(gameEntries)
+    .where(eq(gameEntries.recordId, recordId))
+    .orderBy(desc(gameEntries.createdAt))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  await db.insert(gameEntries).values({
+    recordId,
+    kind: data.kind,
+    text: data.text,
+    playtimeTotalMinutes: data.playtimeMinutes,
+    playtimeDeltaMinutes: Math.max(0, data.playtimeMinutes - (previous?.total ?? 0)),
+    verdictAt: data.verdict ?? null,
+    ratingAt: data.rating ?? null,
+    tierAt: data.tier ?? null,
+    createdAt: new Date(),
+  });
+}
+
+/** Лента впечатлений об одной игре. */
+export async function getGameTimeline(userId: number, gameId: number) {
+  return db
+    .select({
+      id: gameEntries.id,
+      kind: gameEntries.kind,
+      text: gameEntries.text,
+      playtimeMinutes: gameEntries.playtimeTotalMinutes,
+      deltaMinutes: gameEntries.playtimeDeltaMinutes,
+      verdict: gameEntries.verdictAt,
+      rating: gameEntries.ratingAt,
+      tier: gameEntries.tierAt,
+      createdAt: gameEntries.createdAt,
+    })
+    .from(gameEntries)
+    .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))
+    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)))
+    .orderBy(gameEntries.createdAt);
 }

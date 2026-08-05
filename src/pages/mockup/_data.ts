@@ -5,7 +5,6 @@ import {
   getActiveSlots,
   getAttentionQueue,
   getTierList,
-  getRetroReviews,
   getStats,
   getDemoReviews,
   getHistory,
@@ -21,13 +20,12 @@ export async function loadMockData(astro: AstroGlobal) {
   const user = await getSessionUser(astro);
   if (!user) return null;
 
-  const [run, slots, attention, tierSlots, tierRetro, stats, demos, history, pool] =
+  const [run, slots, attention, tierGames, stats, demos, history, pool] =
     await Promise.all([
       getLatestRecommendations(user.id),
       getActiveSlots(user.id),
       getAttentionQueue(user.id),
       getTierList(user.id),
-      getRetroReviews(user.id),
       getStats(user.id),
       getDemoReviews(user.id),
       getHistory(user.id),
@@ -49,20 +47,13 @@ export async function loadMockData(astro: AstroGlobal) {
       hours: Math.round((item.playtimeMinutes / 60) * 10) / 10,
     }));
 
-  const shelf = [
-    ...tierSlots.map((g) => ({
-      gameId: g.slotId,
-      title: g.gameTitle,
-      image: g.gameImage,
-      tier: g.tier,
-    })),
-    ...tierRetro.map((g) => ({
-      gameId: g.gameId,
-      title: g.gameTitle,
-      image: g.gameImage,
-      tier: g.tier,
-    })),
-  ];
+  // Одна запись на игру — склеивать два источника больше не нужно
+  const shelf = tierGames.map((g) => ({
+    gameId: g.gameId,
+    title: g.gameTitle,
+    image: g.gameImage,
+    tier: g.tier,
+  }));
 
   // Распределение по тирам — для мини-графика в ряду режимов
   const tierCounts: Record<string, number> = {};

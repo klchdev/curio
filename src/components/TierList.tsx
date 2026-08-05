@@ -66,10 +66,9 @@ export default function TierList({ games: initialGames }: Props) {
     // Optimistic update
     setGames((prev) => prev.map((g) => (g.slotId === slotId ? { ...g, tier } : g)));
 
-    const url = game.source === "retro" ? "/api/set-retro-tier" : "/api/set-tier";
-    const body = game.source === "retro"
-      ? { gameId: game.gameId, tier }
-      : { slotId, tier };
+    // Тир живёт в одной таблице — ветвление по источнику больше не нужно
+    const url = "/api/set-tier";
+    const body = { gameId: game.gameId ?? slotId, tier };
 
     const res = await fetch(url, {
       method: "POST",
