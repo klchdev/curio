@@ -64,60 +64,6 @@ export const slots = pgTable("slots", {
     .$defaultFn(() => new Date()),
 }, (t) => [index("slots_user_status_idx").on(t.userId, t.status)]);
 
-export const slotReviews = pgTable("slot_reviews", {
-  id: serial("id").primaryKey(),
-  slotId: integer("slot_id")
-    .notNull()
-    .references(() => slots.id),
-  verdict: text("verdict", { enum: ["finished", "dropped", "playing", "later"] })
-    .notNull()
-    .default("finished"),
-  rating: integer("rating").notNull(),
-  note: text("note").notNull(),
-  playtimeMinutes: integer("playtime_minutes").notNull(),
-  tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
-  completedAt: timestamp("completed_at")
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
-
-export const slotNotes = pgTable("slot_notes", {
-  id: serial("id").primaryKey(),
-  slotId: integer("slot_id").references(() => slots.id),
-  userId: integer("user_id").references(() => users.id),
-  gameId: integer("game_id").references(() => games.id),
-  text: text("text").notNull(),
-  playtimeMinutes: integer("playtime_minutes").notNull(),
-  createdAt: timestamp("created_at")
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
-
-export const gameReviews = pgTable(
-  "game_reviews",
-  {
-    id: serial("id").primaryKey(),
-    userId: integer("user_id")
-      .notNull()
-      .references(() => users.id),
-    gameId: integer("game_id")
-      .notNull()
-      .references(() => games.id),
-    verdict: text("verdict", { enum: ["finished", "dropped", "playing", "later"] }),
-    tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
-    rating: integer("rating"),
-    note: text("note"),
-    playtimeMinutes: integer("playtime_minutes").notNull().default(0),
-    createdAt: timestamp("created_at")
-      .notNull()
-      .$defaultFn(() => new Date()),
-  },
-  // Весь код считает, что запись на пару (пользователь, игра) одна.
-  // Без индекса две параллельные вставки создавали вторую, и читатели
-  // с .limit(1) молча выбирали произвольную.
-  (t) => [uniqueIndex("game_reviews_user_id_game_id_idx").on(t.userId, t.gameId)]
-);
-
 /**
  * Единая модель мнения об игре.
  *
