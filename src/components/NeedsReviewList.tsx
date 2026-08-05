@@ -4,8 +4,8 @@ import RetroReviewModal from "./RetroReviewModal";
 import NoteModal from "./NoteModal";
 import GameNoteModal from "./GameNoteModal";
 
-type UnreviewedItem = {
-  kind: "unreviewed";
+type TriageItem = {
+  reason: "triage";
   gameId: number;
   steamAppId: number;
   title: string;
@@ -14,39 +14,29 @@ type UnreviewedItem = {
   lastPlayedAt: string | null;
 };
 
-type GameUpdateItem = {
-  kind: "game_update";
+type UpdateItem = {
+  reason: "update";
+  source: "game" | "slot";
+  slotId: number | null;
   gameId: number;
   steamAppId: number;
   title: string;
   headerImage: string | null;
   currentPlaytime: number;
+  lastRecordedPlaytime: number;
   delta: number;
-  playtimeAtReview: number;
   existingVerdict: string | null;
   existingRating: number | null;
   existingNote: string | null;
   existingTier: string | null;
 };
 
-type SlotUpdateItem = {
-  kind: "slot_update";
-  slotId: number;
-  gameId: number;
-  steamAppId: number;
-  title: string;
-  headerImage: string | null;
-  totalPlayed: number;
-  lastRecordedPlaytime: number;
-  delta: number;
-  verdict: string;
-  rating: number;
-};
-
-type NeedsReviewItem = UnreviewedItem | GameUpdateItem | SlotUpdateItem;
+type AttentionItem = TriageItem | UpdateItem;
 
 interface Props {
-  items: NeedsReviewItem[];
+  items: AttentionItem[];
+  /** Сколько всего игр без вердикта — в список приходит только первая страница. */
+  triageTotal: number;
 }
 
 
@@ -57,22 +47,17 @@ function isRecent(lastPlayedAt: string | null): boolean {
   return Date.now() - new Date(lastPlayedAt).getTime() < RECENT_MS;
 }
 
-export default function NeedsReviewList({ items: initialItems }: Props) {
+export default function NeedsReviewList({ items: initialItems, triageTotal }: Props) {
   const [items, setItems] = useState(initialItems);
-  const [reviewing, setReviewing] = useState<NeedsReviewItem | null>(null);
+  const [reviewing, setReviewing] = useState<AttentionItem | null>(null);
   const [oldExpanded, setOldExpanded] = useState(false);
 
   if (items.length === 0) return null;
 
-  const updateItems = items.filter(
-    (i) => i.kind === "game_update" || i.kind === "slot_update"
-  );
-  const recentUnreviewed = items.filter(
-    (i) => i.kind === "unreviewed" && isRecent(i.lastPlayedAt)
-  );
-  const oldUnreviewed = items.filter(
-    (i) => i.kind === "unreviewed" && !isRecent((i as UnreviewedItem).lastPlayedAt)
-  ) as UnreviewedItem[];
+  const updateItems = items.filter((i): i is UpdateItem => i.reason === "update");
+  const triageItems = items.filter((i): i is TriageItem => i.reason === "triage");
+  const recentUnreviewed = triageItems.filter((i) => isRecent(i.lastPlayedAt));
+  const oldUnreviewed = triageItems.filter((i) => !isRecent(i.lastPlayedAt));
 
   const listItems = [...updateItems, ...recentUnreviewed];
   const shownOld = oldExpanded ? oldUnreviewed : oldUnreviewed.slice(0, 8);
@@ -82,18 +67,18 @@ export default function NeedsReviewList({ items: initialItems }: Props) {
 
   const modal = reviewing && (
     <>
-      {reviewing.kind === "slot_update" && (
+      {reviewing.reason === "update" && reviewing.source === "slot" && (
         <NoteModal
-          slotId={reviewing.slotId}
+          slotId={reviewing.slotId!}
           gameTitle={reviewing.title}
-          totalPlayed={reviewing.totalPlayed}
+          totalPlayed={reviewing.currentPlaytime}
           lastRecordedPlaytime={reviewing.lastRecordedPlaytime}
-          currentVerdict={reviewing.verdict}
-          currentRating={reviewing.rating}
+          currentVerdict={reviewing.existingVerdict ?? ""}
+          currentRating={reviewing.existingRating ?? 3}
           onClose={() => setReviewing(null)}
         />
       )}
-      {reviewing.kind === "unreviewed" && (
+      {reviewing.reason === "triage" && (
         <RetroReviewModal
           gameId={reviewing.gameId}
           gameTitle={reviewing.title}
@@ -106,12 +91,12 @@ export default function NeedsReviewList({ items: initialItems }: Props) {
           }}
         />
       )}
-      {reviewing.kind === "game_update" && (
+      {reviewing.reason === "update" && reviewing.source === "game" && (
         <GameNoteModal
           gameId={reviewing.gameId}
           gameTitle={reviewing.title}
           currentPlaytime={reviewing.currentPlaytime}
-          lastRecordedPlaytime={reviewing.playtimeAtReview}
+          lastRecordedPlaytime={reviewing.lastRecordedPlaytime}
           currentVerdict={reviewing.existingVerdict}
           currentRating={reviewing.existingRating}
           currentTier={reviewing.existingTier}
@@ -131,18 +116,13 @@ export default function NeedsReviewList({ items: initialItems }: Props) {
           </div>
           <div className="space-y-2">
             {listItems.map((item) => {
-              const isUpdate = item.kind === "game_update" || item.kind === "slot_update";
+              const isUpdate = item.reason === "update";
               const delta = isUpdate ? item.delta : null;
-              const totalMinutes =
-                item.kind === "unreviewed"
-                  ? item.playtimeMinutes
-                  : item.kind === "game_update"
-                  ? item.currentPlaytime
-                  : item.totalPlayed;
+              const totalMinutes = isUpdate ? item.currentPlaytime : item.playtimeMinutes;
 
               return (
                 <button
-                  key={`${item.kind}-${item.gameId}`}
+                  key={`${item.reason}-${item.gameId}`}
                   onClick={() => setReviewing(item)}
                   className="group flex w-full items-center gap-4 rounded-xl border border-gray-800 bg-gray-900 p-3 text-left transition-all hover:border-gray-600 hover:shadow-lg hover:shadow-black/20"
                 >

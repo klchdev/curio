@@ -3,7 +3,7 @@ import { getSessionUser } from "../../lib/session";
 import {
   getLatestRecommendations,
   getActiveSlots,
-  getUntriagedGames,
+  getAttentionQueue,
   getTierList,
   getRetroReviews,
   getStats,
@@ -21,11 +21,11 @@ export async function loadMockData(astro: AstroGlobal) {
   const user = await getSessionUser(astro);
   if (!user) return null;
 
-  const [run, slots, queue, tierSlots, tierRetro, stats, demos, history, pool] =
+  const [run, slots, attention, tierSlots, tierRetro, stats, demos, history, pool] =
     await Promise.all([
       getLatestRecommendations(user.id),
       getActiveSlots(user.id),
-      getUntriagedGames(user.id),
+      getAttentionQueue(user.id),
       getTierList(user.id),
       getRetroReviews(user.id),
       getStats(user.id),
@@ -38,6 +38,17 @@ export async function loadMockData(astro: AstroGlobal) {
   const byTier = (tier: string) => picks.filter((p) => p.tier === tier);
 
   // Библиотека для «Полки»: всё, у чего есть тир, плюс серые плитки без вердикта.
+  // Макет показывает только неразобранное — обновления отзывов ему не нужны
+  const queue = attention.items
+    .filter((item) => item.reason === "triage")
+    .map((item) => ({
+      gameId: item.gameId,
+      steamAppId: item.steamAppId,
+      title: item.title,
+      headerImage: item.headerImage,
+      hours: Math.round((item.playtimeMinutes / 60) * 10) / 10,
+    }));
+
   const shelf = [
     ...tierSlots.map((g) => ({
       gameId: g.slotId,

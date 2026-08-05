@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatPlaytime } from "../lib/vocab";
 import RetroReviewModal from "./RetroReviewModal";
 
 interface Game {
@@ -6,7 +7,7 @@ interface Game {
   steamAppId: number;
   title: string;
   headerImage: string | null;
-  hours: number;
+  playtimeMinutes: number;
 }
 
 interface Props {
@@ -52,7 +53,7 @@ export default function TriageList({ games: initial, total }: Props) {
         body: JSON.stringify({
           gameId: game.gameId,
           verdict,
-          playtimeMinutes: Math.round(game.hours * 60),
+          playtimeMinutes: game.playtimeMinutes,
         }),
       });
 
@@ -120,7 +121,7 @@ export default function TriageList({ games: initial, total }: Props) {
             >
               {game.title}
             </a>
-            <span className="text-xs text-gray-500">{game.hours}ч</span>
+            <span className="text-xs text-gray-500">{formatPlaytime(game.playtimeMinutes)}</span>
 
             <div className="ml-auto flex gap-2">
               {BUTTONS.map((button) => (
@@ -150,7 +151,7 @@ export default function TriageList({ games: initial, total }: Props) {
           gameId={reviewing.gameId}
           gameTitle={reviewing.title}
           gameImage={reviewing.headerImage}
-          currentPlaytime={Math.round(reviewing.hours * 60)}
+          currentPlaytime={reviewing.playtimeMinutes}
           onClose={() => setReviewing(null)}
           onSaved={() => {
             setGames((prev) => prev.filter((g) => g.gameId !== reviewing.gameId));

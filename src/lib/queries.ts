@@ -10,7 +10,7 @@ import {
   recommendationRuns,
   recommendations,
 } from "../db/schema";
-import { eq, and, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
+import { eq, and, or, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
 import { THRESHOLDS, isValidVerdict, type Verdict } from "./vocab";
 
 const {
@@ -326,22 +326,17 @@ export async function updateGameReview(
   return { ok: true };
 }
 
-export async function getGameNotes(userId: number, gameId: number) {
-  return db
-    .select({
-      id: slotNotes.id,
-      text: slotNotes.text,
-      playtimeMinutes: slotNotes.playtimeMinutes,
-      createdAt: slotNotes.createdAt,
-    })
-    .from(slotNotes)
-    .where(and(eq(slotNotes.userId, userId), eq(slotNotes.gameId, gameId)))
-    .orderBy(slotNotes.createdAt);
-}
-
-export type NeedsReviewItem =
+/**
+ * Единая очередь «требует внимания» вместо четырёх списков с четырьмя
+ * порогами. Раньше игра с 70 минутами и без вердикта попадала и в список
+ * дашборда, и в триаж на странице советов — это не два состояния, а одно.
+ *
+ * triage — сыграно ощутимо, но вердикта нет вообще
+ * update — отзыв есть, но с тех пор наиграно заметно больше
+ */
+export type AttentionItem =
   | {
-      kind: "unreviewed";
+      reason: "triage";
       gameId: number;
       steamAppId: number;
       title: string;
@@ -350,200 +345,204 @@ export type NeedsReviewItem =
       lastPlayedAt: string | null;
     }
   | {
-      kind: "game_update";
+      reason: "update";
+      /** Откуда отзыв: он определяет, какой формой его дополнять. */
+      source: "game" | "slot";
+      slotId: number | null;
       gameId: number;
       steamAppId: number;
       title: string;
       headerImage: string | null;
       currentPlaytime: number;
+      lastRecordedPlaytime: number;
       delta: number;
-      playtimeAtReview: number;
       existingVerdict: string | null;
       existingRating: number | null;
       existingNote: string | null;
       existingTier: string | null;
-    }
-  | {
-      kind: "slot_update";
-      slotId: number;
-      gameId: number;
-      steamAppId: number;
-      title: string;
-      headerImage: string | null;
-      totalPlayed: number;
-      lastRecordedPlaytime: number;
-      delta: number;
-      verdict: string;
-      rating: number;
     };
 
-export async function getGamesNeedingReview(userId: number): Promise<NeedsReviewItem[]> {
-  // --- game_update: gameReviews with delta >= threshold ---
-  const gameReviewRows = await db
-    .select({
-      gameId: games.id,
-      steamAppId: games.steamAppId,
-      title: games.title,
-      headerImage: games.headerImage,
-      currentPlaytime: userGames.playtimeMinutes,
-      playtimeAtReview: gameReviews.playtimeMinutes,
-      existingVerdict: gameReviews.verdict,
-      existingRating: gameReviews.rating,
-      existingNote: gameReviews.note,
-      existingTier: gameReviews.tier,
-    })
-    .from(gameReviews)
-    .innerJoin(games, eq(gameReviews.gameId, games.id))
-    .leftJoin(
-      userGames,
-      and(eq(userGames.userId, userId), eq(userGames.gameId, games.id))
-    )
-    .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false)));
+export async function getAttentionQueue(
+  userId: number,
+  options?: { triageLimit?: number }
+): Promise<{ items: AttentionItem[]; triageTotal: number }> {
+  const triageLimit = options?.triageLimit ?? TRIAGE_PAGE_SIZE;
 
-  const gameReviewedIds = new Set(gameReviewRows.map((r) => r.gameId));
+  const [reviewRows, reviewedSlots, activeSlots, playedGames] = await Promise.all([
+    db
+      .select({
+        gameId: games.id,
+        steamAppId: games.steamAppId,
+        title: games.title,
+        headerImage: games.headerImage,
+        currentPlaytime: userGames.playtimeMinutes,
+        playtimeAtReview: gameReviews.playtimeMinutes,
+        verdict: gameReviews.verdict,
+        rating: gameReviews.rating,
+        note: gameReviews.note,
+        tier: gameReviews.tier,
+      })
+      .from(gameReviews)
+      .innerJoin(games, eq(gameReviews.gameId, games.id))
+      .leftJoin(userGames, and(eq(userGames.userId, userId), eq(userGames.gameId, games.id)))
+      .where(and(eq(gameReviews.userId, userId), eq(games.isDemo, false))),
 
-  const gameUpdateItems: NeedsReviewItem[] = [];
-  for (const r of gameReviewRows) {
-    const lastGameNote = await db
-      .select({ playtimeMinutes: slotNotes.playtimeMinutes })
-      .from(slotNotes)
-      .where(and(eq(slotNotes.userId, userId), eq(slotNotes.gameId, r.gameId)))
-      .orderBy(desc(slotNotes.createdAt))
-      .limit(1)
-      .then((rows) => rows[0]);
+    db
+      .select({
+        slotId: slots.id,
+        gameId: games.id,
+        steamAppId: games.steamAppId,
+        title: games.title,
+        headerImage: games.headerImage,
+        playtimeOnStart: slots.playtimeOnStart,
+        currentPlaytime: userGames.playtimeMinutes,
+        reviewPlaytime: slotReviews.playtimeMinutes,
+        verdict: slotReviews.verdict,
+        rating: slotReviews.rating,
+        note: slotReviews.note,
+        tier: slotReviews.tier,
+      })
+      .from(slots)
+      .innerJoin(games, eq(slots.gameId, games.id))
+      .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
+      .leftJoin(userGames, and(eq(userGames.userId, userId), eq(userGames.gameId, slots.gameId)))
+      .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed"))),
 
-    const lastRecordedPlaytime = Math.max(
-      r.playtimeAtReview,
-      lastGameNote?.playtimeMinutes ?? 0
-    );
-    const delta = (r.currentPlaytime ?? 0) - lastRecordedPlaytime;
+    db
+      .select({ gameId: slots.gameId })
+      .from(slots)
+      .where(and(eq(slots.userId, userId), eq(slots.status, "active"))),
 
-    if (delta >= STILL_PLAYING_DELTA) {
-      gameUpdateItems.push({
-        kind: "game_update" as const,
-        gameId: r.gameId,
-        steamAppId: r.steamAppId,
-        title: r.title,
-        headerImage: r.headerImage,
-        currentPlaytime: r.currentPlaytime ?? 0,
-        delta,
-        playtimeAtReview: lastRecordedPlaytime,
-        existingVerdict: r.existingVerdict,
-        existingRating: r.existingRating,
-        existingNote: r.existingNote,
-        existingTier: r.existingTier,
-      });
+    db
+      .select({
+        gameId: games.id,
+        steamAppId: games.steamAppId,
+        title: games.title,
+        headerImage: games.headerImage,
+        playtimeMinutes: userGames.playtimeMinutes,
+        lastPlayedAt: userGames.lastPlayedAt,
+      })
+      .from(userGames)
+      .innerJoin(games, eq(userGames.gameId, games.id))
+      .where(
+        and(
+          eq(userGames.userId, userId),
+          eq(games.isDemo, false),
+          gt(userGames.playtimeMinutes, TRIAGE_MIN_MINUTES)
+        )
+      )
+      .orderBy(desc(userGames.playtimeMinutes)),
+  ]);
+
+  /*
+   * Заметки забираем одним запросом. Раньше здесь было по запросу на каждый
+   * отзыв — и всё это на каждый рендер дашборда.
+   */
+  const slotIds = reviewedSlots.map((r) => r.slotId);
+  const notes =
+    slotIds.length > 0 || true
+      ? await db
+          .select({
+            slotId: slotNotes.slotId,
+            gameId: slotNotes.gameId,
+            playtimeMinutes: slotNotes.playtimeMinutes,
+          })
+          .from(slotNotes)
+          .where(
+            slotIds.length > 0
+              ? or(eq(slotNotes.userId, userId), inArray(slotNotes.slotId, slotIds))
+              : eq(slotNotes.userId, userId)
+          )
+      : [];
+
+  const lastByGame = new Map<number, number>();
+  const lastBySlot = new Map<number, number>();
+  for (const note of notes) {
+    if (note.gameId != null) {
+      lastByGame.set(note.gameId, Math.max(lastByGame.get(note.gameId) ?? 0, note.playtimeMinutes));
+    }
+    if (note.slotId != null) {
+      lastBySlot.set(note.slotId, Math.max(lastBySlot.get(note.slotId) ?? 0, note.playtimeMinutes));
     }
   }
 
-  // --- slot_update: reviewed slots with delta >= threshold (skip if gameReview exists) ---
-  const reviewedSlots = await db
-    .select({
-      slotId: slots.id,
-      gameId: games.id,
-      steamAppId: games.steamAppId,
-      gameTitle: games.title,
-      gameImage: games.headerImage,
-      playtimeOnStart: slots.playtimeOnStart,
-      currentPlaytime: userGames.playtimeMinutes,
-      reviewPlaytime: slotReviews.playtimeMinutes,
-      verdict: slotReviews.verdict,
-      rating: slotReviews.rating,
-    })
-    .from(slots)
-    .innerJoin(games, eq(slots.gameId, games.id))
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .leftJoin(
-      userGames,
-      and(eq(userGames.userId, userId), eq(userGames.gameId, slots.gameId))
-    )
-    .where(and(eq(slots.userId, userId), eq(slots.status, "reviewed")));
+  const reviewedGameIds = new Set<number>();
+  const updates: AttentionItem[] = [];
 
-  const slotReviewedIds = new Set(reviewedSlots.map((r) => r.gameId));
-  const slotUpdateItems: NeedsReviewItem[] = [];
+  for (const row of reviewRows) {
+    reviewedGameIds.add(row.gameId);
+    const lastRecorded = Math.max(row.playtimeAtReview, lastByGame.get(row.gameId) ?? 0);
+    const delta = (row.currentPlaytime ?? 0) - lastRecorded;
+    if (delta < STILL_PLAYING_DELTA) continue;
 
-  for (const r of reviewedSlots) {
-    if (gameReviewedIds.has(r.gameId)) continue;
-
-    const totalPlayed = (r.currentPlaytime ?? 0) - r.playtimeOnStart;
-    const lastReviewedAt = r.reviewPlaytime ?? 0;
-
-    const lastNote = await db
-      .select({ playtimeMinutes: slotNotes.playtimeMinutes })
-      .from(slotNotes)
-      .where(eq(slotNotes.slotId, r.slotId))
-      .orderBy(desc(slotNotes.createdAt))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    const lastRecordedPlaytime = Math.max(
-      lastReviewedAt,
-      lastNote?.playtimeMinutes ?? 0
-    );
-    const delta = totalPlayed - lastRecordedPlaytime;
-
-    if (delta >= STILL_PLAYING_DELTA) {
-      slotUpdateItems.push({
-        kind: "slot_update",
-        slotId: r.slotId,
-        gameId: r.gameId,
-        steamAppId: r.steamAppId,
-        title: r.gameTitle,
-        headerImage: r.gameImage,
-        totalPlayed,
-        lastRecordedPlaytime,
-        delta,
-        verdict: r.verdict,
-        rating: r.rating,
-      });
-    }
+    updates.push({
+      reason: "update",
+      source: "game",
+      slotId: null,
+      gameId: row.gameId,
+      steamAppId: row.steamAppId,
+      title: row.title,
+      headerImage: row.headerImage,
+      currentPlaytime: row.currentPlaytime ?? 0,
+      lastRecordedPlaytime: lastRecorded,
+      delta,
+      existingVerdict: row.verdict,
+      existingRating: row.rating,
+      existingNote: row.note,
+      existingTier: row.tier,
+    });
   }
 
-  // --- unreviewed: playtime > 60, no review, not in active slot ---
-  const activeSlotGameIds = new Set(
-    (
-      await db
-        .select({ gameId: slots.gameId })
-        .from(slots)
-        .where(and(eq(slots.userId, userId), eq(slots.status, "active")))
-    ).map((r) => r.gameId)
-  );
+  for (const row of reviewedSlots) {
+    const alreadyCounted = reviewedGameIds.has(row.gameId);
+    reviewedGameIds.add(row.gameId);
+    if (alreadyCounted) continue;
 
-  const allPlayedGames = await db
-    .select({
-      gameId: games.id,
-      steamAppId: games.steamAppId,
-      title: games.title,
-      headerImage: games.headerImage,
-      playtimeMinutes: userGames.playtimeMinutes,
-      lastPlayedAt: userGames.lastPlayedAt,
-    })
-    .from(userGames)
-    .innerJoin(games, eq(userGames.gameId, games.id))
-    .where(and(eq(userGames.userId, userId), gt(userGames.playtimeMinutes, 60)))
-    .orderBy(desc(userGames.playtimeMinutes));
+    // Для слотов время считается от начала контракта, а не от нуля.
+    const totalPlayed = (row.currentPlaytime ?? 0) - row.playtimeOnStart;
+    const lastRecorded = Math.max(row.reviewPlaytime ?? 0, lastBySlot.get(row.slotId) ?? 0);
+    const delta = totalPlayed - lastRecorded;
+    if (delta < STILL_PLAYING_DELTA) continue;
 
-  const unreviewedItems: NeedsReviewItem[] = allPlayedGames
-    .filter(
-      (g) =>
-        !gameReviewedIds.has(g.gameId) &&
-        !slotReviewedIds.has(g.gameId) &&
-        !activeSlotGameIds.has(g.gameId)
-    )
-    .map((g) => ({
-      kind: "unreviewed" as const,
-      gameId: g.gameId,
-      steamAppId: g.steamAppId,
-      title: g.title,
-      headerImage: g.headerImage,
-      playtimeMinutes: g.playtimeMinutes,
-      lastPlayedAt: g.lastPlayedAt instanceof Date ? g.lastPlayedAt.toISOString() : null,
-    }));
+    updates.push({
+      reason: "update",
+      source: "slot",
+      slotId: row.slotId,
+      gameId: row.gameId,
+      steamAppId: row.steamAppId,
+      title: row.title,
+      headerImage: row.headerImage,
+      currentPlaytime: totalPlayed,
+      lastRecordedPlaytime: lastRecorded,
+      delta,
+      existingVerdict: row.verdict,
+      existingRating: row.rating,
+      existingNote: row.note,
+      existingTier: row.tier,
+    });
+  }
 
-  const updates = [...gameUpdateItems, ...slotUpdateItems].sort(
-    (a, b) => b.delta - a.delta
-  );
-  return [...updates, ...unreviewedItems];
+  const activeGameIds = new Set(activeSlots.map((r) => r.gameId));
+  const triage = playedGames
+    .filter((g) => !reviewedGameIds.has(g.gameId) && !activeGameIds.has(g.gameId))
+    .map(
+      (g): AttentionItem => ({
+        reason: "triage",
+        gameId: g.gameId,
+        steamAppId: g.steamAppId,
+        title: g.title,
+        headerImage: g.headerImage,
+        playtimeMinutes: g.playtimeMinutes,
+        lastPlayedAt: g.lastPlayedAt instanceof Date ? g.lastPlayedAt.toISOString() : null,
+      })
+    );
+
+  updates.sort((a, b) => (b.reason === "update" ? b.delta : 0) - (a.reason === "update" ? a.delta : 0));
+
+  return {
+    items: [...updates, ...triage.slice(0, triageLimit)],
+    triageTotal: triage.length,
+  };
 }
 
 export async function getFreeSkips(userId: number) {
@@ -783,45 +782,6 @@ export async function setRetroTier(
 
   await db.update(gameReviews).set({ tier }).where(eq(gameReviews.id, existing.id));
   return { ok: true };
-}
-
-export async function getUnreviewedPlayedGames(userId: number) {
-  const reviewedViaSlot = (
-    await db
-      .select({ gameId: slots.gameId })
-      .from(slots)
-      .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-      .where(eq(slots.userId, userId))
-  ).map((r) => r.gameId);
-
-  const reviewedViaRetro = (
-    await db
-      .select({ gameId: gameReviews.gameId })
-      .from(gameReviews)
-      .where(eq(gameReviews.userId, userId))
-  ).map((r) => r.gameId);
-
-  const reviewedIds = [...new Set([...reviewedViaSlot, ...reviewedViaRetro])];
-
-  const rows = await db
-    .select({
-      gameId: games.id,
-      steamAppId: games.steamAppId,
-      title: games.title,
-      headerImage: games.headerImage,
-      playtimeMinutes: userGames.playtimeMinutes,
-    })
-    .from(userGames)
-    .innerJoin(games, eq(userGames.gameId, games.id))
-    .where(
-      and(
-        eq(userGames.userId, userId),
-        gt(userGames.playtimeMinutes, 60)
-      )
-    )
-    .orderBy(desc(userGames.playtimeMinutes));
-
-  return rows.filter((row) => !reviewedIds.includes(row.gameId));
 }
 
 export async function createRetrospectiveReview(
@@ -1375,62 +1335,6 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
     hours: Math.round((row.minutes / 60) * 10) / 10,
     lastPlayedAt: row.lastPlayedAt,
   }));
-}
-
-/**
- * Сыграно ощутимо, но вердикта нет — прошёл или бросил, неизвестно.
- * Пока не разобрано, такие игры не идут ни в советы, ни в разбор брошенного.
- */
-export async function getUntriagedGames(userId: number, limit: number = TRIAGE_PAGE_SIZE) {
-  const slotReviewed = await db
-    .select({ gameId: slots.gameId })
-    .from(slots)
-    .innerJoin(slotReviews, eq(slotReviews.slotId, slots.id))
-    .where(eq(slots.userId, userId));
-
-  const slotReviewedIds = new Set(slotReviewed.map((r) => r.gameId));
-
-  const rows = await db
-    .select({
-      gameId: games.id,
-      steamAppId: games.steamAppId,
-      title: games.title,
-      headerImage: games.headerImage,
-      minutes: userGames.playtimeMinutes,
-      verdict: gameReviews.verdict,
-    })
-    .from(userGames)
-    .innerJoin(games, eq(userGames.gameId, games.id))
-    .leftJoin(
-      gameReviews,
-      and(eq(gameReviews.gameId, games.id), eq(gameReviews.userId, userId))
-    )
-    .where(
-      and(
-        eq(userGames.userId, userId),
-        eq(games.isDemo, false),
-        eq(games.excluded, false),
-        gt(userGames.playtimeMinutes, TRIAGE_MIN_MINUTES),
-        // отзыва нет вовсе: если он написан, вкус уже виден из корпуса
-        sql`${gameReviews.id} is null`
-      )
-    )
-    .orderBy(desc(userGames.playtimeMinutes));
-
-  return rows
-    .filter((row) => !slotReviewedIds.has(row.gameId))
-    .slice(0, limit)
-    .map((row) => ({
-      gameId: row.gameId,
-      steamAppId: row.steamAppId,
-      title: row.title,
-      headerImage: row.headerImage,
-      hours: Math.round((row.minutes / 60) * 10) / 10,
-    }));
-}
-
-export async function countUntriagedGames(userId: number): Promise<number> {
-  return (await getUntriagedGames(userId, Number.MAX_SAFE_INTEGER)).length;
 }
 
 async function getReviewedGameIds(userId: number): Promise<Set<number>> {

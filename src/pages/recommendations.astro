@@ -5,8 +5,7 @@ import {
   getLatestRecommendations,
   getReviewCorpus,
   getActiveRun,
-  getUntriagedGames,
-  countUntriagedGames,
+  getAttentionQueue,
 } from "../lib/queries";
 import Recommendations from "../components/Recommendations";
 import TriageList from "../components/TriageList";
@@ -17,8 +16,9 @@ if (!user) return Astro.redirect("/");
 const run = await getLatestRecommendations(user.id);
 const active = await getActiveRun(user.id);
 const reviewCount = (await getReviewCorpus(user.id)).length;
-const untriaged = await getUntriagedGames(user.id);
-const untriagedTotal = await countUntriagedGames(user.id);
+const attention = await getAttentionQueue(user.id);
+const untriaged = attention.items.filter((item) => item.reason === "triage");
+const untriagedTotal = attention.triageTotal;
 
 const iso = (value: Date | string) =>
   value instanceof Date ? value.toISOString() : String(value);

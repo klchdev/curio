@@ -1,7 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getActiveSlots, canSpin, getUnplayedGames, getGamesNeedingReview, getFreeSkips } from "../lib/queries";
+import { getActiveSlots, canSpin, getUnplayedGames, getAttentionQueue, getFreeSkips } from "../lib/queries";
 import SlotCard from "../components/SlotCard";
 import RouletteButton from "../components/RouletteButton";
 import SyncButton from "../components/SyncButton";
@@ -13,7 +13,7 @@ if (!user) return Astro.redirect("/");
 const activeSlots = await getActiveSlots(user.id);
 const canSpinNow = await canSpin(user.id);
 const poolSize = (await getUnplayedGames(user.id)).length;
-const needsReview = await getGamesNeedingReview(user.id);
+const attention = await getAttentionQueue(user.id);
 const freeSkipInfo = await getFreeSkips(user.id);
 
 const navLink =
@@ -73,5 +73,5 @@ const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
     )}
   </section>
 
-  <NeedsReviewList client:idle items={needsReview} />
+  <NeedsReviewList client:idle items={attention.items} triageTotal={attention.triageTotal} />
 </Layout>
