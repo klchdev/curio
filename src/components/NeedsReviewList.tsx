@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatPlaytime } from "../lib/vocab";
 import RetroReviewModal from "./RetroReviewModal";
 import NoteModal from "./NoteModal";
 import GameNoteModal from "./GameNoteModal";
@@ -48,11 +49,6 @@ interface Props {
   items: NeedsReviewItem[];
 }
 
-function formatPlaytime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
-}
 
 const RECENT_MS = 30 * 24 * 60 * 60 * 1000;
 

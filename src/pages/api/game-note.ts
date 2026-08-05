@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { isValidTier, isValidVerdict } from "../../lib/vocab";
 import { getUserId } from "../../lib/auth";
 import { addGameNote, updateGameReview } from "../../lib/queries";
 import { getRecentPlaytime } from "../../lib/steam";
@@ -6,8 +7,6 @@ import { db } from "../../db";
 import { users, games, userGames } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 
-const VALID_TIERS = ["S", "A", "B", "C", "D", "F"] as const;
-const VALID_VERDICTS = ["finished", "dropped", "playing", "later"] as const;
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -28,7 +27,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       headers: { "Content-Type": "application/json" },
     });
   }
-  if (verdict !== undefined && verdict !== null && !VALID_VERDICTS.includes(verdict)) {
+  if (verdict !== undefined && verdict !== null && !isValidVerdict(verdict)) {
     return new Response(JSON.stringify({ error: "Invalid verdict" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -40,7 +39,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       headers: { "Content-Type": "application/json" },
     });
   }
-  if (tier !== undefined && tier !== null && !VALID_TIERS.includes(tier)) {
+  if (tier !== undefined && tier !== null && !isValidTier(tier)) {
     return new Response(JSON.stringify({ error: "Invalid tier" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },

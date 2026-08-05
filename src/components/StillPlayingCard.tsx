@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatPlaytime } from "../lib/vocab";
 import NoteModal from "./NoteModal";
 
 interface Props {
@@ -12,11 +13,6 @@ interface Props {
   rating: number;
 }
 
-function formatPlaytime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
-}
 
 export default function StillPlayingCard({
   slotId,

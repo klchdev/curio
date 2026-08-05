@@ -11,11 +11,17 @@ import {
   recommendations,
 } from "../db/schema";
 import { eq, and, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
+import { THRESHOLDS, isValidVerdict, type Verdict } from "./vocab";
 
-const MAX_PLAYTIME_MINUTES = 15;
-const MAX_ACTIVE_SLOTS = 3;
-const MIN_PLAYTIME_TO_REVIEW = 20;
-const STILL_PLAYING_THRESHOLD = 30;
+const {
+  UNPLAYED_MAX_MINUTES,
+  MAX_ACTIVE_SLOTS,
+  MIN_PLAYTIME_TO_REVIEW,
+  STILL_PLAYING_DELTA,
+  CANDIDATE_MAX_MINUTES,
+  TRIAGE_MIN_MINUTES,
+  TRIAGE_PAGE_SIZE,
+} = THRESHOLDS;
 
 export async function getActiveSlots(userId: number) {
   return db
@@ -81,7 +87,7 @@ export async function getUnplayedGames(userId: number) {
     .where(
       and(
         eq(userGames.userId, userId),
-        lte(userGames.playtimeMinutes, MAX_PLAYTIME_MINUTES),
+        lte(userGames.playtimeMinutes, UNPLAYED_MAX_MINUTES),
         eq(games.isDemo, false)
       )
     );
@@ -130,8 +136,6 @@ export async function spinRoulette(userId: number) {
   return { slot, game: picked, decoys };
 }
 
-const VALID_VERDICTS = ["finished", "dropped", "playing", "later"] as const;
-
 export async function reviewSlot(
   slotId: number,
   userId: number,
@@ -160,7 +164,7 @@ export async function reviewSlot(
       error: `Нужно наиграть минимум ${MIN_PLAYTIME_TO_REVIEW} минут (сейчас ${delta})`,
     };
   }
-  if (!VALID_VERDICTS.includes(verdict as any)) return { error: "Некорректный вердикт" };
+  if (!isValidVerdict(verdict)) return { error: "Некорректный вердикт" };
   if (rating < 1 || rating > 5) return { error: "Оценка от 1 до 5" };
   if (note.length < 50) return { error: "Заметка минимум 50 символов" };
 
@@ -171,7 +175,7 @@ export async function reviewSlot(
   await db.insert(slotReviews)
     .values({
       slotId,
-      verdict: verdict as (typeof VALID_VERDICTS)[number],
+      verdict: verdict as Verdict,
       rating,
       note,
       playtimeMinutes: delta,
@@ -201,14 +205,14 @@ export async function updateReview(
 
   if (!slot || slot.status !== "reviewed") return { error: "Invalid slot" };
 
-  if (!VALID_VERDICTS.includes(verdict as any)) return { error: "Некорректный вердикт" };
+  if (!isValidVerdict(verdict)) return { error: "Некорректный вердикт" };
   if (rating < 1 || rating > 5) return { error: "Оценка от 1 до 5" };
 
   const delta = currentPlaytime - slot.playtimeOnStart;
 
   await db.update(slotReviews)
     .set({
-      verdict: verdict as (typeof VALID_VERDICTS)[number],
+      verdict: verdict as Verdict,
       rating,
       playtimeMinutes: delta,
       completedAt: new Date(),
@@ -414,7 +418,7 @@ export async function getGamesNeedingReview(userId: number): Promise<NeedsReview
     );
     const delta = (r.currentPlaytime ?? 0) - lastRecordedPlaytime;
 
-    if (delta >= STILL_PLAYING_THRESHOLD) {
+    if (delta >= STILL_PLAYING_DELTA) {
       gameUpdateItems.push({
         kind: "game_update" as const,
         gameId: r.gameId,
@@ -478,7 +482,7 @@ export async function getGamesNeedingReview(userId: number): Promise<NeedsReview
     );
     const delta = totalPlayed - lastRecordedPlaytime;
 
-    if (delta >= STILL_PLAYING_THRESHOLD) {
+    if (delta >= STILL_PLAYING_DELTA) {
       slotUpdateItems.push({
         kind: "slot_update",
         slotId: r.slotId,
@@ -1228,14 +1232,8 @@ export async function getStats(userId: number) {
 
 // --- AI-рекомендации ---
 
-/** Советуем только нетронутое: 20 минут — это «открыл и закрыл», вкус не сформирован. */
-const CANDIDATE_MAX_MINUTES = 20;
 const CANDIDATE_LIMIT = 700;
-/** Брошенное: поиграл ощутимо, но забросил без отзыва — материал для разбора, а не для советов. */
-const ABANDONED_MIN_MINUTES = 20;
 const ABANDONED_LIMIT = 60;
-/** Сколько игр показываем на разбор за раз — иначе список неподъёмный. */
-const TRIAGE_LIMIT = 24;
 
 export interface ReviewCorpusItem {
   title: string;
@@ -1383,7 +1381,7 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
  * Сыграно ощутимо, но вердикта нет — прошёл или бросил, неизвестно.
  * Пока не разобрано, такие игры не идут ни в советы, ни в разбор брошенного.
  */
-export async function getUntriagedGames(userId: number, limit = TRIAGE_LIMIT) {
+export async function getUntriagedGames(userId: number, limit: number = TRIAGE_PAGE_SIZE) {
   const slotReviewed = await db
     .select({ gameId: slots.gameId })
     .from(slots)
@@ -1412,7 +1410,7 @@ export async function getUntriagedGames(userId: number, limit = TRIAGE_LIMIT) {
         eq(userGames.userId, userId),
         eq(games.isDemo, false),
         eq(games.excluded, false),
-        gt(userGames.playtimeMinutes, ABANDONED_MIN_MINUTES),
+        gt(userGames.playtimeMinutes, TRIAGE_MIN_MINUTES),
         // отзыва нет вовсе: если он написан, вкус уже виден из корпуса
         sql`${gameReviews.id} is null`
       )

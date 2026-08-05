@@ -231,6 +231,7 @@ function DockTile({
 
 function ChooseZone({
   picks,
+  slots,
   index,
   setIndex,
   contracts,
@@ -373,7 +374,7 @@ function ChooseZone({
         </div>
       </Reveal>
 
-      <div key={pick.gameId} className={`grid items-center gap-10 md:grid-cols-[minmax(0,400px)_1fr] ${rolling ? "opacity-80" : ""}`}>
+      <div key={pick.gameId} className={`grid items-center gap-10 md:grid-cols-[minmax(0,400px)_1fr] ${dice === "rolling" ? "opacity-80" : ""}`}>
         <Reveal from="scale">
           <div className="relative">
             <div className={`absolute -inset-4 rounded-3xl ${tone.glow} opacity-15 blur-2xl`} />

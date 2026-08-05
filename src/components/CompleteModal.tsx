@@ -1,21 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { verdicts, worthLabels, type Verdict } from "../lib/vocab";
 
-const WORTH_LABELS = [
-  "Зря потратил время",
-  "Скорее нет",
-  "Нормально",
-  "Скорее да",
-  "Рад что попробовал",
-] as const;
 
-const VERDICTS = [
-  { value: "finished", label: "Прошёл", icon: "✅" },
-  { value: "playing", label: "Продолжаю", icon: "🎮" },
-  { value: "dropped", label: "Бросил", icon: "❌" },
-  { value: "later", label: "Вернусь позже", icon: "⏸️" },
-] as const;
-
-type Verdict = (typeof VERDICTS)[number]["value"];
 
 interface Props {
   slotId: number;
@@ -159,7 +145,7 @@ export default function CompleteModal({ slotId, gameTitle, onClose, onFreed }: P
     }
   };
 
-  const verdictLabel = VERDICTS.find((v) => v.value === verdict);
+  const verdictLabel = verdicts().find((v) => v.value === verdict);
 
   return (
     <>
@@ -193,7 +179,7 @@ export default function CompleteModal({ slotId, gameTitle, onClose, onFreed }: P
           <div className="mb-4">
             <label className="mb-2 block text-sm text-gray-400">Вердикт</label>
             <div className="flex gap-2">
-              {VERDICTS.map((v) => (
+              {verdicts().map((v) => (
                 <button
                   key={v.value}
                   type="button"
@@ -220,7 +206,7 @@ export default function CompleteModal({ slotId, gameTitle, onClose, onFreed }: P
               onChange={(e) => setRating(Number(e.target.value))}
               className="w-full accent-indigo-500"
             />
-            <div className="mt-1 text-center text-lg font-bold">{WORTH_LABELS[rating - 1]}</div>
+            <div className="mt-1 text-center text-lg font-bold">{worthLabels()[rating - 1]}</div>
           </div>
 
           <div className="mb-4">
@@ -292,7 +278,7 @@ export default function CompleteModal({ slotId, gameTitle, onClose, onFreed }: P
           </h3>
           <p className="mb-1 text-lg text-gray-300">{gameTitle}</p>
           <p className="text-sm text-gray-500">
-            {verdictLabel?.icon} {verdictLabel?.label} · {WORTH_LABELS[rating - 1]}
+            {verdictLabel?.icon} {verdictLabel?.label} · {worthLabels()[rating - 1]}
           </p>
         </div>
       </div>

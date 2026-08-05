@@ -1,21 +1,7 @@
 import { useState, useEffect } from "react";
+import { formatPlaytime, verdicts, worthLabels, type Verdict } from "../lib/vocab";
 
-const WORTH_LABELS = [
-  "Зря потратил время",
-  "Скорее нет",
-  "Нормально",
-  "Скорее да",
-  "Рад что попробовал",
-] as const;
 
-const VERDICTS = [
-  { value: "finished", label: "Прошёл", icon: "✅" },
-  { value: "playing", label: "Продолжаю", icon: "🎮" },
-  { value: "dropped", label: "Бросил", icon: "❌" },
-  { value: "later", label: "Вернусь позже", icon: "⏸️" },
-] as const;
-
-type Verdict = (typeof VERDICTS)[number]["value"];
 
 interface Props {
   slotId: number;
@@ -27,11 +13,6 @@ interface Props {
   onClose: () => void;
 }
 
-function formatPlaytime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
-}
 
 export default function NoteModal({
   slotId,
@@ -179,7 +160,7 @@ export default function NoteModal({
             <div>
               <label className="mb-2 block text-sm text-gray-400">Вердикт</label>
               <div className="flex gap-2">
-                {VERDICTS.map((v) => (
+                {verdicts().map((v) => (
                   <button
                     key={v.value}
                     type="button"
@@ -206,7 +187,7 @@ export default function NoteModal({
                 onChange={(e) => setRating(Number(e.target.value))}
                 className="w-full accent-indigo-500"
               />
-              <div className="mt-1 text-center text-lg font-bold">{WORTH_LABELS[rating - 1]}</div>
+              <div className="mt-1 text-center text-lg font-bold">{worthLabels()[rating - 1]}</div>
             </div>
           </div>
         )}

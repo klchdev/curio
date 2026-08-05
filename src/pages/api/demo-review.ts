@@ -1,10 +1,9 @@
 import type { APIRoute } from "astro";
+import { isValidTier, isValidVerdict } from "../../lib/vocab";
 import { getUserId } from "../../lib/auth";
 import { createDemoReview, deleteDemoReview } from "../../lib/queries";
 import { parseAppId, getStoreAppDetails } from "../../lib/steam";
 
-const VALID_TIERS = ["S", "A", "B", "C", "D", "F"] as const;
-const VALID_VERDICTS = ["finished", "dropped", "playing", "later"] as const;
 const MIN_NOTE = 10;
 
 function json(body: unknown, status = 200) {
@@ -26,10 +25,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return json({ error: "Укажи Steam appid или ссылку на страницу демки" }, 400);
   }
 
-  if (verdict != null && !VALID_VERDICTS.includes(verdict)) {
+  if (verdict != null && !isValidVerdict(verdict)) {
     return json({ error: "Некорректный вердикт" }, 400);
   }
-  if (tier != null && !VALID_TIERS.includes(tier)) {
+  if (tier != null && !isValidTier(tier)) {
     return json({ error: "Некорректный тир" }, 400);
   }
   if (rating != null && (rating < 1 || rating > 5)) {

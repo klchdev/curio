@@ -1,4 +1,24 @@
 import { useState } from "react";
+import { tiers, type Tier } from "../lib/vocab";
+
+/** Рекомендуемая доля тира в процентах — подсказка «не раздувай S». */
+const RECOMMENDED_SHARE: Record<Tier, [number, number]> = {
+  S: [5, 10],
+  A: [15, 25],
+  B: [25, 35],
+  C: [15, 25],
+  D: [10, 20],
+  F: [5, 10],
+};
+
+/** Словарь даёт нейтральные имена, экрану нужны свои роли. */
+const TIER_VIEW = tiers().map((t) => ({
+  ...t,
+  labelBg: t.bg,
+  labelText: t.text,
+  barBg: t.bg,
+  rec: RECOMMENDED_SHARE[t.value],
+}));
 
 type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
 type Source = "roulette" | "retro";
@@ -20,14 +40,6 @@ interface Props {
   games: Game[];
 }
 
-const TIERS: { value: TierValue; label: string; labelBg: string; labelText: string; barBg: string; hint: string; rec: [number, number] }[] = [
-  { value: "S", label: "S", labelBg: "bg-yellow-500", labelText: "text-yellow-950", barBg: "bg-yellow-500", hint: "Шедевр",   rec: [5, 10]  },
-  { value: "A", label: "A", labelBg: "bg-emerald-500", labelText: "text-emerald-950", barBg: "bg-emerald-500", hint: "Крутая",   rec: [15, 25] },
-  { value: "B", label: "B", labelBg: "bg-sky-500",     labelText: "text-sky-950",     barBg: "bg-sky-500",     hint: "Хорошая",  rec: [25, 35] },
-  { value: "C", label: "C", labelBg: "bg-orange-500",  labelText: "text-orange-950",  barBg: "bg-orange-500",  hint: "Сойдёт",   rec: [15, 25] },
-  { value: "D", label: "D", labelBg: "bg-red-500",     labelText: "text-red-950",     barBg: "bg-red-500",     hint: "Не зашло", rec: [10, 20] },
-  { value: "F", label: "F", labelBg: "bg-rose-800",    labelText: "text-rose-100",    barBg: "bg-rose-800",    hint: "Провал",   rec: [5, 10]  },
-];
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Все" },
@@ -100,7 +112,7 @@ export default function TierList({ games: initialGames }: Props) {
   const ranked = filtered.filter((g) => g.tier);
   const rankedTotal = ranked.length;
 
-  const distribution = TIERS.map((t) => {
+  const distribution = TIER_VIEW.map((t) => {
     const count = filtered.filter((g) => g.tier === t.value).length;
     const pct = rankedTotal > 0 ? Math.round((count / rankedTotal) * 100) : 0;
     const over = pct > t.rec[1];
@@ -179,7 +191,7 @@ export default function TierList({ games: initialGames }: Props) {
       )}
 
       <div className="space-y-1">
-        {TIERS.map((tier) => {
+        {TIER_VIEW.map((tier) => {
           const tierGames = filtered.filter((g) => g.tier === tier.value);
           const isOver = dropTarget === tier.value;
 

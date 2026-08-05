@@ -12,7 +12,8 @@
     "astro": "astro",
     "start": "node dist/server/entry.mjs",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "check": "astro check"
   },
   "dependencies": {
     "@astrojs/node": "^10.0.4",
@@ -29,9 +30,11 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.10",
     "@tailwindcss/vite": "^4.2.2",
     "@types/openid": "^2.0.5",
     "drizzle-kit": "^0.31.10",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3"
   }
 }

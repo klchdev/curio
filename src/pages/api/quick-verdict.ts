@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
+import { isValidVerdict } from "../../lib/vocab";
 import { getUserId } from "../../lib/auth";
 import { createRetrospectiveReview } from "../../lib/queries";
 
-const VALID = ["finished", "dropped", "playing", "later"] as const;
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { gameId, verdict, playtimeMinutes } = await request.json();
 
-  if (!Number.isInteger(gameId) || !VALID.includes(verdict)) {
+  if (!Number.isInteger(gameId) || !isValidVerdict(verdict)) {
     return new Response(JSON.stringify({ error: "Bad request" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },

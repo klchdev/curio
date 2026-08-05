@@ -1,31 +1,9 @@
 import { useState, useEffect } from "react";
+import { formatPlaytime, tiers, verdicts, worthLabels, type Verdict } from "../lib/vocab";
 
-const WORTH_LABELS = [
-  "Зря потратил время",
-  "Скорее нет",
-  "Нормально",
-  "Скорее да",
-  "Рад что попробовал",
-] as const;
 
-const VERDICTS = [
-  { value: "finished", label: "Прошёл", icon: "✅" },
-  { value: "playing", label: "Продолжаю", icon: "🎮" },
-  { value: "dropped", label: "Бросил", icon: "❌" },
-  { value: "later", label: "Вернусь позже", icon: "⏸️" },
-] as const;
-
-type Verdict = (typeof VERDICTS)[number]["value"];
 type Tier = "S" | "A" | "B" | "C" | "D" | "F";
 
-const TIERS: { value: Tier; bg: string; text: string; hint: string }[] = [
-  { value: "S", bg: "bg-yellow-500", text: "text-yellow-950", hint: "Шедевр" },
-  { value: "A", bg: "bg-emerald-500", text: "text-emerald-950", hint: "Крутая" },
-  { value: "B", bg: "bg-sky-500", text: "text-sky-950", hint: "Хорошая" },
-  { value: "C", bg: "bg-orange-500", text: "text-orange-950", hint: "Сойдёт" },
-  { value: "D", bg: "bg-red-500", text: "text-red-950", hint: "Не зашло" },
-  { value: "F", bg: "bg-rose-800", text: "text-rose-100", hint: "Провал" },
-];
 
 interface Props {
   gameId: number;
@@ -38,11 +16,6 @@ interface Props {
   onClose: () => void;
 }
 
-function formatPlaytime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
-}
 
 export default function GameNoteModal({
   gameId,
@@ -182,7 +155,7 @@ export default function GameNoteModal({
             <div>
               <label className="mb-2 block text-sm text-gray-400">Вердикт</label>
               <div className="flex gap-2">
-                {VERDICTS.map((v) => (
+                {verdicts().map((v) => (
                   <button
                     key={v.value}
                     type="button"
@@ -202,7 +175,7 @@ export default function GameNoteModal({
             <div>
               <label className="mb-2 block text-sm text-gray-400">Тир</label>
               <div className="flex gap-2">
-                {TIERS.map((t) => (
+                {tiers().map((t) => (
                   <button
                     key={t.value}
                     type="button"
@@ -230,7 +203,7 @@ export default function GameNoteModal({
                 onChange={(e) => setRating(Number(e.target.value))}
                 className="w-full accent-indigo-500"
               />
-              <div className="mt-1 text-center text-lg font-bold">{WORTH_LABELS[rating - 1]}</div>
+              <div className="mt-1 text-center text-lg font-bold">{worthLabels()[rating - 1]}</div>
             </div>
           </div>
         )}

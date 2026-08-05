@@ -1,31 +1,11 @@
 import { useState, useEffect } from "react";
+import { tiers, verdicts, worthLabels } from "../lib/vocab";
 
 type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
 type VerdictValue = "finished" | "dropped" | "playing" | "later";
 
-const TIERS: { value: TierValue; label: string; bg: string; text: string; hint: string }[] = [
-  { value: "S", label: "S", bg: "bg-yellow-500", text: "text-yellow-950", hint: "Шедевр" },
-  { value: "A", label: "A", bg: "bg-emerald-500", text: "text-emerald-950", hint: "Крутая" },
-  { value: "B", label: "B", bg: "bg-sky-500", text: "text-sky-950", hint: "Хорошая" },
-  { value: "C", label: "C", bg: "bg-orange-500", text: "text-orange-950", hint: "Сойдёт" },
-  { value: "D", label: "D", bg: "bg-red-500", text: "text-red-950", hint: "Не зашло" },
-  { value: "F", label: "F", bg: "bg-rose-800", text: "text-rose-100", hint: "Провал" },
-];
 
-const VERDICTS: { value: VerdictValue; label: string; icon: string }[] = [
-  { value: "finished", label: "Прошёл", icon: "✅" },
-  { value: "playing", label: "Жду релиз", icon: "🎮" },
-  { value: "dropped", label: "Не зашло", icon: "❌" },
-  { value: "later", label: "Под вопросом", icon: "⏸️" },
-];
 
-const WORTH_LABELS = [
-  "Зря потратил время",
-  "Скорее нет",
-  "Нормально",
-  "Скорее да",
-  "Рад что попробовал",
-] as const;
 
 const MIN_NOTE = 10;
 
@@ -120,7 +100,7 @@ export default function AddDemoModal({ onClose }: Props) {
             Вердикт <span className="text-gray-600">(необязательно)</span>
           </label>
           <div className="flex gap-2">
-            {VERDICTS.map((v) => (
+            {verdicts(undefined, { demo: true }).map((v) => (
               <button
                 key={v.value}
                 type="button"
@@ -142,7 +122,7 @@ export default function AddDemoModal({ onClose }: Props) {
             Тир <span className="text-gray-600">(необязательно)</span>
           </label>
           <div className="flex gap-2">
-            {TIERS.map((t) => (
+            {tiers().map((t) => (
               <button
                 key={t.value}
                 title={t.hint}
@@ -170,7 +150,7 @@ export default function AddDemoModal({ onClose }: Props) {
             className="w-full accent-indigo-500"
           />
           <div className="mt-1 text-center text-sm font-medium">
-            {WORTH_LABELS[rating - 1]}
+            {worthLabels()[rating - 1]}
           </div>
         </div>
 

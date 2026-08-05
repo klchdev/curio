@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatPlaytime } from "../lib/vocab";
 
 type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
 
@@ -41,11 +42,6 @@ const WORTH_LABELS = [
   "Рад что попробовал",
 ];
 
-function formatPlaytime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
-}
 
 function formatDate(d: string | Date) {
   const date = typeof d === "string" ? new Date(d) : d;

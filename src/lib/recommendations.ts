@@ -1,11 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { CandidateGame, ReviewCorpusItem } from "./queries";
+import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
 
 export const RECOMMENDATION_MODEL = "gemini-3.6-flash";
 
 export const MAX_PICKS = 40;
-const TIERS = ["S", "A", "B", "C", "D"] as const;
-type Tier = (typeof TIERS)[number];
 
 const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по его собственным отзывам и советуешь, что запустить из его библиотеки Steam.
 
@@ -51,7 +50,7 @@ const RESPONSE_SCHEMA = {
         type: Type.OBJECT,
         properties: {
           steamAppId: { type: Type.INTEGER, description: "steamAppId строго из списка кандидатов" },
-          tier: { type: Type.STRING, enum: [...TIERS] },
+          tier: { type: Type.STRING, enum: [...ADVISOR_TIER_VALUES] },
           reason: { type: Type.STRING, description: "1-2 предложения со ссылкой на отзывы игрока" },
         },
         required: ["steamAppId", "tier", "reason"],
@@ -109,7 +108,8 @@ function formatCandidates(candidates: CandidateGame[]): string {
 
 export interface GeneratedRecommendations {
   profile: string;
-  picks: { steamAppId: number; tier: Tier; reason: string }[];
+  picks: { steamAppId: number; tier: AdvisorTier; reason: string }[];
+  abandoned: { steamAppId: number; stance: "agree" | "disagree"; text: string }[];
 }
 
 /** Сколько игр модель уже выдала — считаем по накопленному куску JSON. */
@@ -176,7 +176,7 @@ export async function generateRecommendations(
   const picks = (parsed.picks ?? [])
     .filter((pick) => {
       if (!allowed.has(pick.steamAppId) || seen.has(pick.steamAppId)) return false;
-      if (!TIERS.includes(pick.tier)) return false;
+      if (!ADVISOR_TIER_VALUES.includes(pick.tier)) return false;
       seen.add(pick.steamAppId);
       return true;
     })

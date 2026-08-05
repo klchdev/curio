@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
+import { isValidTier } from "../../lib/vocab";
 import { getUserId } from "../../lib/auth";
 import { setRetroTier } from "../../lib/queries";
 
-const VALID_TIERS = ["S", "A", "B", "C", "D", "F"] as const;
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  if (tier !== null && !VALID_TIERS.includes(tier)) {
+  if (tier !== null && !isValidTier(tier)) {
     return new Response(JSON.stringify({ error: "Invalid tier" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },

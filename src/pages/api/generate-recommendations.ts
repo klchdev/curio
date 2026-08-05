@@ -12,8 +12,8 @@ import {
 } from "../../lib/queries";
 import { generateRecommendations, RECOMMENDATION_MODEL } from "../../lib/recommendations";
 import { GEMINI_API_KEY } from "astro:env/server";
+import { THRESHOLDS } from "../../lib/vocab";
 
-const MIN_REVIEWS = 5;
 /** Прогресс в БД пишем не чаще, чем раз в столько мс. */
 const PROGRESS_THROTTLE_MS = 1500;
 
@@ -92,8 +92,8 @@ export const POST: APIRoute = async ({ cookies }) => {
     getRecommendationCandidates(userId).then((c) => c.length),
   ]);
 
-  if (reviewCount < MIN_REVIEWS) {
-    return json({ error: `Нужно минимум ${MIN_REVIEWS} отзывов, сейчас ${reviewCount}` }, 400);
+  if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
+    return json({ error: `Нужно минимум ${THRESHOLDS.MIN_REVIEWS_FOR_AI} отзывов, сейчас ${reviewCount}` }, 400);
   }
   if (candidateCount === 0) {
     return json({ error: "Нет непройденных игр в библиотеке" }, 400);

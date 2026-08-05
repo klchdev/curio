@@ -1,37 +1,12 @@
 import { useState, useEffect } from "react";
+import { formatPlaytime, tiers, verdicts, worthLabels } from "../lib/vocab";
 
 type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
 type VerdictValue = "finished" | "dropped" | "playing" | "later";
 
-const TIERS: { value: TierValue; label: string; bg: string; text: string; hint: string }[] = [
-  { value: "S", label: "S", bg: "bg-yellow-500", text: "text-yellow-950", hint: "Шедевр" },
-  { value: "A", label: "A", bg: "bg-emerald-500", text: "text-emerald-950", hint: "Крутая" },
-  { value: "B", label: "B", bg: "bg-sky-500", text: "text-sky-950", hint: "Хорошая" },
-  { value: "C", label: "C", bg: "bg-orange-500", text: "text-orange-950", hint: "Сойдёт" },
-  { value: "D", label: "D", bg: "bg-red-500", text: "text-red-950", hint: "Не зашло" },
-  { value: "F", label: "F", bg: "bg-rose-800", text: "text-rose-100", hint: "Провал" },
-];
 
-const VERDICTS: { value: VerdictValue; label: string; icon: string }[] = [
-  { value: "finished", label: "Прошёл", icon: "✅" },
-  { value: "playing", label: "Продолжаю", icon: "🎮" },
-  { value: "dropped", label: "Бросил", icon: "❌" },
-  { value: "later", label: "Вернусь", icon: "⏸️" },
-];
 
-const WORTH_LABELS = [
-  "Зря потратил время",
-  "Скорее нет",
-  "Нормально",
-  "Скорее да",
-  "Рад что попробовал",
-] as const;
 
-function formatPlaytime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return hours > 0 ? `${hours} ч ${mins} мин` : `${mins} мин`;
-}
 
 interface Props {
   gameId: number;
@@ -159,7 +134,7 @@ export default function RetroReviewModal({
         <div className="mb-4">
           <label className="mb-2 block text-sm text-gray-400">Вердикт</label>
           <div className="flex gap-2">
-            {VERDICTS.map((v) => (
+            {verdicts().map((v) => (
               <button
                 key={v.value}
                 type="button"
@@ -179,7 +154,7 @@ export default function RetroReviewModal({
         <div className="mb-4">
           <label className="mb-2 block text-sm text-gray-400">Тир</label>
           <div className="flex gap-2">
-            {TIERS.map((t) => (
+            {tiers().map((t) => (
               <button
                 key={t.value}
                 title={t.hint}
@@ -207,7 +182,7 @@ export default function RetroReviewModal({
             className="w-full accent-indigo-500"
           />
           <div className="mt-1 text-center text-sm font-medium">
-            {WORTH_LABELS[rating - 1]}
+            {worthLabels()[rating - 1]}
           </div>
         </div>
 
