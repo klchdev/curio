@@ -76,7 +76,9 @@ async function main() {
       } else {
         const list = (value: unknown): string[] =>
           Array.isArray(value)
-            ? value.map((x: { description?: string }) => x.description).filter(Boolean)
+            ? value
+                .map((x: { description?: string }) => x.description)
+                .filter((x): x is string => !!x)
             : [];
 
         const genres = list(entry.data.genres);

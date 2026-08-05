@@ -329,10 +329,12 @@ export async function getAttentionQueue(
   const activeGameIds = new Set(activeSlots.map((r) => r.gameId));
   const withText = new Set(records.map((r) => r.gameId));
 
+  type TriageItem = Extract<AttentionItem, { reason: "triage" }>;
+
   const triage = playedGames
     .filter((g) => !reviewedGameIds.has(g.gameId) && !activeGameIds.has(g.gameId))
     .map(
-      (g): AttentionItem => ({
+      (g): TriageItem => ({
         reason: "triage",
         gameId: g.gameId,
         steamAppId: g.steamAppId,
@@ -441,6 +443,8 @@ export async function getHistory(userId: number) {
         currentVerdict: gameRecords.verdict,
         currentRating: gameRecords.rating,
         currentTier: gameRecords.tier,
+        /** Откуда текст: перенесённый из Steam честнее пометить. */
+        origin: gameRecords.origin,
       })
       .from(gameEntries)
       .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))

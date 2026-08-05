@@ -103,6 +103,11 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
                 <span class="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-500">
                   {KIND_LABEL[entry.kind] ?? entry.kind}
                 </span>
+                {entry.origin === "steam" && (
+                  <span class="rounded border border-sky-900 px-1.5 py-0.5 text-[10px] text-sky-400/80">
+                    {s.pages.fromSteam}
+                  </span>
+                )}
                 <span class="ml-auto text-xs text-gray-600">
                   {dateFormat.format(new Date(entry.date))}
                 </span>

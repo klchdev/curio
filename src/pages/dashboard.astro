@@ -119,6 +119,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
         deltaMinutes: entry.deltaMinutes,
         verdict: entry.verdict,
         tier: entry.tier,
+        origin: entry.origin,
       }))}
     demos={demos.slice(0, 8).map((d) => ({
       gameId: d.gameId,

@@ -56,6 +56,7 @@ export interface QueueItem {
 }
 
 export interface DiaryEntry {
+  origin?: string | null;
   id: number;
   gameId: number;
   title: string;
@@ -1346,6 +1347,11 @@ function RecapZone({
                     {entry.tier && (
                       <span className={`text-xs font-bold ${TIER_STYLE[entry.tier as Tier]?.accent}`}>
                         {entry.tier}
+                      </span>
+                    )}
+                    {entry.origin === "steam" && (
+                      <span className="rounded border border-sky-900 px-1.5 py-0.5 text-[10px] text-sky-400/80">
+                        {s.pages.fromSteam}
                       </span>
                     )}
                   </div>
