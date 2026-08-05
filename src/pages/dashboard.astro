@@ -135,5 +135,14 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     runProfile={run?.profile ?? null}
     runDate={run ? dateFormat.format(new Date(run.createdAt)) : null}
     activeRunId={activeRun?.id ?? null}
+    activeRunProgress={
+      activeRun
+        ? {
+            stage: activeRun.stage,
+            picksReady: activeRun.picksReady,
+            startedAt: new Date(activeRun.createdAt).getTime(),
+          }
+        : null
+    }
   />
 </Layout>

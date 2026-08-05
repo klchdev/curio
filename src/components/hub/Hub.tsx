@@ -78,6 +78,8 @@ export interface Props {
   runProfile: string | null;
   runDate: string | null;
   activeRunId: number | null;
+  /** Состояние идущего прогона с сервера: первый кадр не должен врать про стадию. */
+  activeRunProgress: RunProgressState | null;
   locale: Locale;
   /** Зона из адреса: сюда приходят редиректы со старых страниц. */
   initialZone: Zone;
@@ -109,6 +111,7 @@ export default function Hub(props: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runId, setRunId] = useState<number | null>(activeRunId);
+  const [progress, setProgress] = useState<RunProgressState | null>(props.activeRunProgress);
 
   const pick = picks[index];
   const tone = TIER_STYLE[pick?.tier as Tier] ?? TIER_STYLE.B;
@@ -123,24 +126,48 @@ export default function Hub(props: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [zone, picks.length]);
 
-  // Прогон идёт в фоне — опрашиваем и перезагружаем страницу по готовности
+  /*
+   * Прогон идёт в фоне. Опрос забирает не только «готово или нет», но и
+   * стадию с числом разобранных игр — их бэкенд уже пишет в базу, а экран
+   * раньше показывал вместо этого статичную полоску.
+   */
   useEffect(() => {
     if (runId === null) return;
-    const timer = setInterval(async () => {
+
+    let stop = false;
+    async function poll() {
       try {
         const res = await fetch(`/api/recommendation-status?runId=${runId}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.status === "done") window.location.reload();
-        if (data.status === "error") {
-          setError(data.error ?? s.errors.runFailed);
-          setRunId(null);
+        if (stop) return;
+
+        if (data.status === "done") {
+          window.location.reload();
+          return;
         }
+        if (data.status === "error") {
+          setError(data.error || s.errors.runFailed);
+          setRunId(null);
+          setProgress(null);
+          return;
+        }
+        setProgress({
+          stage: data.stage ?? "collecting",
+          picksReady: data.picksReady ?? 0,
+          startedAt: data.startedAt ? Date.parse(data.startedAt) : Date.now(),
+        });
       } catch {
         // сеть моргнула — ждём следующего опроса
       }
-    }, 2500);
-    return () => clearInterval(timer);
+    }
+
+    poll();
+    const timer = setInterval(poll, 2000);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
   }, [runId]);
 
   async function post(url: string, body?: unknown): Promise<boolean> {
@@ -203,6 +230,7 @@ export default function Hub(props: Props) {
             post={post}
             runId={runId}
             setRunId={setRunId}
+            progress={progress}
           />
         )}
         {zone === "now" && (
@@ -293,25 +321,40 @@ function ChooseZone({
   post,
   runId,
   setRunId,
+  progress,
 }: ZoneProps & {
   index: number;
   setIndex: (fn: (i: number) => number) => void;
   runId: number | null;
   setRunId: (value: number | null) => void;
+  progress: RunProgressState | null;
 }) {
   const s = t(locale);
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
+  const [runError, setRunError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
   const slotsLeft = THRESHOLDS.MAX_ACTIVE_SLOTS - slots.length;
 
+  /*
+   * Раньше здесь был голый fetch без разбора ответа: любая ошибка — занятый
+   * прогон, нехватка отзывов, упавший сервер — оставляла экран нетронутым,
+   * и кнопка выглядела сломанной.
+   */
   async function startRun() {
     setBusy("run");
+    setRunError(null);
     try {
       const res = await fetch("/api/generate-recommendations", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) setRunId(data.runId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.runId) {
+        setRunError(data.error || s.errors.generic);
+        return;
+      }
+      setRunId(data.runId);
+    } catch {
+      setRunError(s.errors.network);
     } finally {
       setBusy(null);
     }
@@ -325,16 +368,34 @@ function ChooseZone({
   }
 
   const blindSpin = (
-    <BlindSpin
-      poolSize={poolSize}
+    <>
+      {runError && (
+        <p className="mt-6 rounded-lg border border-red-900 bg-red-950/40 px-4 py-2.5 text-sm text-red-300">
+          {runError}
+        </p>
+      )}
+      <BlindSpin
+        poolSize={poolSize}
       busy={busy === "spin"}
-      onSpin={spinBlind}
-      disabled={slotsLeft <= 0}
-      s={s}
-    />
+        onSpin={spinBlind}
+        disabled={slotsLeft <= 0}
+        s={s}
+      />
+    </>
   );
 
-  if (runId !== null) return <RunProgress s={s} />;
+  if (runId !== null) {
+    return (
+      <RunProgress
+        s={s}
+        progress={progress}
+        onRestart={() => {
+          setRunId(null);
+          startRun();
+        }}
+      />
+    );
+  }
   if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
     return (
       <GateCard reviewCount={reviewCount} s={s}>
@@ -403,6 +464,11 @@ function ChooseZone({
             {s.choose.regenerate}
           </button>
         </div>
+        {runError && (
+          <p className="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-4 py-2 text-sm text-red-300">
+            {runError}
+          </p>
+        )}
       </Reveal>
 
       <Reveal delay={40}>
@@ -554,14 +620,87 @@ function ChooseZone({
   );
 }
 
-function RunProgress({ s }: { s: Dict }) {
+interface RunProgressState {
+  stage: "collecting" | "thinking" | "saving";
+  picksReady: number;
+  startedAt: number;
+}
+
+/** Сколько игр обычно выдаёт прогон — по этому числу растёт полоса на разборе. */
+const EXPECTED_PICKS = 30;
+
+/*
+ * Стадии занимают очень разное время: сбор и сохранение — секунды, разбор —
+ * почти всю минуту. Поэтому на разбор отдано 75% полосы, и внутри неё она
+ * движется по числу уже разобранных игр, а не по таймеру.
+ */
+const STAGE_RANGE = {
+  collecting: [0, 0.12],
+  thinking: [0.12, 0.88],
+  saving: [0.88, 1],
+} as const;
+
+function RunProgress({
+  s,
+  progress,
+  onRestart,
+}: {
+  s: Dict;
+  progress: RunProgressState | null;
+  onRestart: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const stage = progress?.stage ?? "collecting";
+  const picks = progress?.picksReady ?? 0;
+  const elapsed = progress ? Math.max(0, Math.round((now - progress.startedAt) / 1000)) : 0;
+
+  const [from, to] = STAGE_RANGE[stage];
+  const within = stage === "thinking" ? Math.min(1, picks / EXPECTED_PICKS) : 0;
+  const percent = Math.round((from + (to - from) * within) * 100);
+
+  // Прогон, который молчит дольше стального порога, уже не оживёт сам
+  const stuck = elapsed > 300;
+
   return (
     <Reveal>
       <div className="mx-auto max-w-xl py-16 text-center">
-        <div className="mb-4 h-2 overflow-hidden rounded-full bg-gray-800">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-600/70" />
+        <p className="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">{s.choose.eyebrow}</p>
+
+        <div className="mb-3 h-2 overflow-hidden rounded-full bg-gray-800">
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-[width] duration-700 ease-out"
+            style={{ width: `${Math.max(4, percent)}%` }}
+          />
         </div>
-        <p className="text-sm text-gray-400">{s.choose.running}</p>
+
+        <div className="mb-2 flex items-baseline justify-between text-sm">
+          <span className="flex items-center gap-2 text-gray-300">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+            {s.choose.runStages[stage]}
+          </span>
+          <span className="tabular-nums text-gray-600">{s.choose.runElapsed(elapsed)}</span>
+        </div>
+
+        <p className="text-sm text-gray-500">
+          {stage === "thinking" && picks > 0 ? s.choose.runPicks(picks) : s.choose.runHint}
+        </p>
+
+        {stuck && (
+          <div className="mt-8 border-t border-gray-800 pt-6">
+            <p className="mb-3 text-sm text-amber-300">{s.choose.runStuck}</p>
+            <button
+              onClick={onRestart}
+              className="rounded-xl border border-gray-700 px-5 py-2.5 text-sm transition hover:border-emerald-600 hover:text-emerald-300"
+            >
+              {s.choose.runRetry}
+            </button>
+          </div>
+        )}
       </div>
     </Reveal>
   );

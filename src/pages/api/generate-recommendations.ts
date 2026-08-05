@@ -11,7 +11,7 @@ import {
   failRecommendationRun,
   hasActiveRun,
 } from "../../lib/queries";
-import { generateRecommendations, RECOMMENDATION_MODEL } from "../../lib/recommendations";
+import { generateRecommendations, RECOMMENDATION_MODEL, errorCode } from "../../lib/recommendations";
 import { GEMINI_API_KEY } from "astro:env/server";
 import { THRESHOLDS } from "../../lib/vocab";
 import { localeFrom, type Locale } from "../../lib/i18n";
@@ -78,7 +78,21 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
     });
   } catch (err) {
     console.error("[recommendations]", err);
-    const message = err instanceof Error ? err.message : t(locale).errors.runFailedFallback;
+    /*
+     * В message от SDK лежит сырой JSON провайдера — пользователю он
+     * бесполезен, а на экране выглядит как простыня. Переводим известные
+     * коды в человеческий текст, остальное отдаём как есть.
+     */
+    const s = t(locale).errors;
+    const code = errorCode(err);
+    const message =
+      code === 429
+        ? s.modelQuota
+        : code === 500 || code === 503 || code === 504
+          ? s.modelBusy
+          : err instanceof Error && !err.message.trim().startsWith("{")
+            ? err.message
+            : s.runFailedFallback;
     await failRecommendationRun(runId, message).catch(() => {});
   }
 }

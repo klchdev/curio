@@ -125,6 +125,16 @@ const RU = {
 
     running:
       "Читаю твои отзывы и раскладываю библиотеку по тирам. Занимает около минуты — можно уйти со страницы.",
+    runStages: {
+      collecting: "Собираю отзывы и кандидатов",
+      thinking: "Читаю отзывы и раскладываю по тирам",
+      saving: "Сохраняю советы",
+    },
+    runPicks: (n: number) => `${n} ${plural(n, "игра разобрана", "игры разобрано", "игр разобрано")}`,
+    runElapsed: (sec: number) => `${sec} с`,
+    runHint: "Можно уйти со страницы — прогон продолжится",
+    runStuck: "Прогон завис и не отвечает. Попробуй запустить заново.",
+    runRetry: "Запустить заново",
 
     gateTitle: (left: number) =>
       `Ещё ${left} ${plural(left, "отзыв", "отзыва", "отзывов")} — и я смогу советовать`,
@@ -241,6 +251,8 @@ const RU = {
     needReviews: (need: number, have: number) => `Нужно минимум ${need} отзывов, сейчас ${have}`,
     noCandidates: "Нет непройденных игр в библиотеке",
     runFailedFallback: "Не удалось получить рекомендации",
+    modelBusy: "Модель сейчас перегружена. Попробуй через пару минут — это временно.",
+    modelQuota: "Дневной лимит запросов к модели исчерпан.",
     badRequest: "Некорректный запрос",
     noGame: "Не указана игра",
     gameNotFound: "Игра не найдена",
@@ -359,6 +371,16 @@ const EN: Dict = {
 
     running:
       "Reading your reviews and sorting the library into tiers. Takes about a minute — feel free to leave the page.",
+    runStages: {
+      collecting: "Collecting reviews and candidates",
+      thinking: "Reading your reviews and sorting into tiers",
+      saving: "Saving the picks",
+    },
+    runPicks: (n: number) => `${n} ${n === 1 ? "game sorted" : "games sorted"}`,
+    runElapsed: (sec: number) => `${sec}s`,
+    runHint: "You can leave the page — the run keeps going",
+    runStuck: "The run stopped responding. Try starting it again.",
+    runRetry: "Start again",
 
     gateTitle: (left: number) => `${left} more ${left === 1 ? "review" : "reviews"} and I can advise`,
     gateText:
@@ -474,6 +496,8 @@ const EN: Dict = {
     needReviews: (need: number, have: number) => `Needs at least ${need} reviews, you have ${have}`,
     noCandidates: "No unplayed games left in the library",
     runFailedFallback: "Couldn't get the recommendations",
+    modelBusy: "The model is overloaded right now. Try again in a couple of minutes — it's temporary.",
+    modelQuota: "The daily request quota for the model is used up.",
     badRequest: "Malformed request",
     noGame: "No game specified",
     gameNotFound: "Game not found",
