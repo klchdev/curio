@@ -624,6 +624,7 @@ export async function getStats(userId: number) {
     db
       .select({
         verdict: gameRecords.verdict,
+        origin: gameRecords.origin,
         rating: gameRecords.rating,
         playtime: gameRecords.playtimeAtLastEntry,
         createdAt: gameRecords.createdAt,
@@ -695,6 +696,8 @@ export async function getStats(userId: number) {
     excludedCount: excludedRow[0]?.n ?? 0,
     activeCount: activeRow[0]?.n ?? 0,
     skippedCount: skippedRow[0]?.n ?? 0,
+    // Сколько мнений перенесено из Steam, а сколько написано здесь
+    steamCount: records.filter((r) => r.origin === "steam").length,
     finishedCount: byVerdict("finished"),
     endlessCount: byVerdict("endless"),
     droppedCount: byVerdict("dropped"),
@@ -1492,7 +1495,7 @@ export async function importSteamReviews(
 export async function recordAdvisorResponse(
   userId: number,
   gameId: number,
-  data: { argument: string; accepted: boolean }
+  data: { argument: string; accepted: boolean; stance?: "agree" | "disagree" }
 ): Promise<SaveResult> {
   const record = await db
     .select({ id: gameRecords.id, playtime: gameRecords.playtimeAtLastEntry })
@@ -1503,9 +1506,18 @@ export async function recordAdvisorResponse(
 
   if (!record) return { error: "Запись об игре не найдена" };
 
-  const decision = data.accepted
-    ? "Согласился дать второй шанс."
-    : "Не согласился: вердикт остаётся.";
+  /*
+   * Спор бывает двух видов, и «не согласился» подходит только к одному.
+   * Когда модель согласна с вердиктом, спорить не с чем — запись об этом
+   * раньше выходила враньём: человек нажимал «записать в дневник», а в
+   * ленте появлялось, что он с чем-то не согласился.
+   */
+  const decision =
+    data.stance === "agree"
+      ? "Модель согласна с вердиктом."
+      : data.accepted
+        ? "Согласился дать второй шанс."
+        : "Не согласился: вердикт остаётся.";
 
   await addEntry(record.id, {
     kind: "advisor",

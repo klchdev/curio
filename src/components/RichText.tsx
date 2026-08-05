@@ -1,22 +1,38 @@
 import type { ReactNode } from "react";
 
 /**
- * Модель размечает названия игр звёздочками (*The Witcher 3 (S)*).
- * Рендерим их выделением, а не показываем сырую разметку.
+ * Маркдаун из ответов модели.
+ *
+ * Она размечает две разные вещи: `**жирным**` — мысль абзаца, `*звёздочкой*`
+ * — названия игр. Раньше и то и другое рисовалось одинаково белым, и портрет
+ * читался как сплошная подсветка: целое предложение выглядело названием.
+ * Поэтому мысль — просто светлее и плотнее, а название — своим оттенком.
  */
-export default function RichText({ text, className = "" }: { text: string; className?: string }) {
-  const parts = text.split(/(\*\*?[^*]+\*\*?)/g);
+const TOKEN = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
 
+export default function RichText({ text, className = "" }: { text: string; className?: string }) {
   return (
     <>
-      {parts.map((part, index): ReactNode => {
-        const match = /^\*\*?([^*]+)\*\*?$/.exec(part);
-        if (!match) return part;
-        return (
-          <em key={index} className={`text-white not-italic ${className}`}>
-            {match[1]}
-          </em>
-        );
+      {text.split(TOKEN).map((part, index): ReactNode => {
+        const strong = /^\*\*([^*]+)\*\*$/.exec(part);
+        if (strong) {
+          return (
+            <strong key={index} className={`font-medium text-gray-100 ${className}`}>
+              {strong[1]}
+            </strong>
+          );
+        }
+
+        const title = /^\*([^*]+)\*$/.exec(part);
+        if (title) {
+          return (
+            <em key={index} className={`not-italic text-sky-200/90 ${className}`}>
+              {title[1]}
+            </em>
+          );
+        }
+
+        return part;
       })}
     </>
   );

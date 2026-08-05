@@ -9,7 +9,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  const { gameId, argument, accepted } = await request.json();
+  const { gameId, argument, accepted, stance } = await request.json();
 
   if (!Number.isInteger(gameId) || typeof argument !== "string" || !argument.trim()) {
     return new Response(JSON.stringify({ error: t(localeFrom(cookies, request)).errors.badRequest }), {
@@ -21,6 +21,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const result = await recordAdvisorResponse(userId, gameId, {
     argument,
     accepted: Boolean(accepted),
+    stance: stance === "agree" || stance === "disagree" ? stance : undefined,
   });
 
   return new Response(JSON.stringify(result), {

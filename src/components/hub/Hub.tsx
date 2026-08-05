@@ -7,6 +7,7 @@ import {
   formatPlaytime,
   advisorHint,
   verdictLabel,
+  verdicts,
   worthLabel,
   TIER_STYLE,
   THRESHOLDS,
@@ -91,7 +92,13 @@ export interface Props {
   tierGames: { gameId: number; title: string; image: string | null; tier: string | null }[];
   diary: DiaryEntry[];
   demos: { gameId: number; title: string; headerImage: string | null; tier: string | null; note: string | null }[];
-  stats: { totalGames: number; totalLibrary: number; streak: number; wallOfShame: string[] };
+  stats: {
+    totalGames: number;
+    totalLibrary: number;
+    streak: number;
+    wallOfShame: string[];
+    steamCount: number;
+  };
   reviewCount: number;
   poolSize: number;
   freeSkips: number;
@@ -132,6 +139,26 @@ export default function Hub(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [runId, setRunId] = useState<number | null>(activeRunId);
   const [progress, setProgress] = useState<RunProgressState | null>(props.activeRunProgress);
+  /*
+   * Взятые за эту сессию контракты. Раньше страница перезагружалась целиком
+   * ради одной карточки — теперь она просто дорисовывается, а человек видит
+   * подтверждение, не теряя того, что читал.
+   */
+  const [taken, setTaken] = useState<Slot[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const allSlots = taken.length > 0 ? [...slots, ...taken] : slots;
+
+  function onTaken(slot: Slot) {
+    setTaken((prev) => [...prev, slot]);
+    setToast(slot.title);
+  }
 
   const pick = picks[index];
   const tone = TIER_STYLE[pick?.tier as Tier] ?? TIER_STYLE.B;
@@ -243,6 +270,8 @@ export default function Hub(props: Props) {
         {zone === "choose" && (
           <ChooseZone
             {...props}
+            slots={allSlots}
+            onTaken={onTaken}
             index={index}
             setIndex={setIndex}
             busy={busy}
@@ -254,10 +283,40 @@ export default function Hub(props: Props) {
           />
         )}
         {zone === "now" && (
-          <NowZone {...props} busy={busy} setBusy={setBusy} post={post} onZone={goTo} />
+          <NowZone
+            {...props}
+            slots={allSlots}
+            busy={busy}
+            setBusy={setBusy}
+            post={post}
+            onZone={goTo}
+          />
         )}
         {zone === "recap" && <RecapZone {...props} post={post} />}
       </div>
+
+      {toast && (
+        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-6">
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-800 bg-emerald-950/90 px-4 py-2.5 text-sm shadow-lg shadow-black/40 backdrop-blur">
+            <span className="text-emerald-200">{s.choose.taken(toast)}</span>
+            <button
+              onClick={() => {
+                setToast(null);
+                goTo("now");
+              }}
+              className="text-xs text-emerald-400 underline-offset-2 transition hover:underline"
+            >
+              {s.choose.takenGo}
+            </button>
+            <button
+              onClick={() => setToast(null)}
+              className="text-emerald-500/70 transition hover:text-emerald-300"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-800/80 bg-gray-950/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl gap-2 px-6 py-3">
@@ -342,12 +401,14 @@ function ChooseZone({
   runId,
   setRunId,
   progress,
+  onTaken,
 }: ZoneProps & {
   index: number;
   setIndex: (fn: (i: number) => number) => void;
   runId: number | null;
   setRunId: (value: number | null) => void;
   progress: RunProgressState | null;
+  onTaken: (slot: Slot) => void;
 }) {
   const s = t(locale);
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
@@ -355,6 +416,7 @@ function ChooseZone({
   const [dives, setDives] = useState<Record<number, DeepDive | "loading" | string>>({});
   /** Игра, про которую спросили руками: её разбор показывается отдельно от советов. */
   const [asked, setAsked] = useState<LibraryGame | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
   const [sheet, setSheet] = useState<{ mode: "retro" | "entry"; item: LibraryGame } | null>(null);
 
   /** Игра, в которую уже играли, просит отзыв, а не обязательство. */
@@ -465,11 +527,34 @@ function ChooseZone({
   const shownTier = (pick.deepTier ?? pick.tier) as Tier;
   const tone = TIER_STYLE[shownTier] ?? TIER_STYLE.B;
 
-  async function take(gameId: number) {
+  async function take(gameId: number, fallback?: { title: string; image: string | null }) {
     setBusy(`take-${gameId}`);
-    const ok = await post("/api/contract", { gameId });
-    setBusy(null);
-    if (ok) window.location.reload();
+    setRunError(null);
+    try {
+      const res = await fetch("/api/contract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.slotId) {
+        setRunError(data.error || s.errors.generic);
+        return;
+      }
+
+      const source = picks.find((item) => item.gameId === gameId);
+      onTaken({
+        slotId: data.slotId,
+        gameId,
+        title: source?.title ?? fallback?.title ?? "",
+        image: source?.headerImage ?? fallback?.image ?? null,
+        played: 0,
+      });
+    } catch {
+      setRunError(s.errors.network);
+    } finally {
+      setBusy(null);
+    }
   }
 
   /*
@@ -523,15 +608,42 @@ function ChooseZone({
       </Reveal>
 
       <Reveal delay={20}>
-        <AskAnyGame
-          s={s}
-          locale={locale}
-          busy={dives}
-          onPick={(game) => {
-            setAsked(game);
-            deepDive(game.gameId);
-          }}
-        />
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          {!askOpen && (
+            <button
+              onClick={() => setAskOpen(true)}
+              className="rounded-full border border-gray-800 px-4 py-1.5 text-xs text-gray-500 transition hover:border-sky-700 hover:text-sky-300"
+            >
+              🔍 {s.deep.askAny}
+            </button>
+          )}
+
+          {dice === "idle" && (
+            <>
+              <button
+                onClick={() => setDice("confirm")}
+                disabled={slotsLeft <= 0}
+                className="rounded-full border border-gray-700 px-4 py-1.5 text-xs text-gray-400 transition hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {s.choose.diceIdle}
+              </button>
+              {slotsLeft <= 0 && <span className="text-xs text-gray-600">{s.choose.slotsFull}</span>}
+            </>
+          )}
+        </div>
+
+        {askOpen && (
+          <AskAnyGame
+            s={s}
+            locale={locale}
+            busy={dives}
+            onClose={() => setAskOpen(false)}
+            onPick={(game) => {
+              setAsked(game);
+              deepDive(game.gameId);
+            }}
+          />
+        )}
       </Reveal>
 
       {asked && dives[asked.gameId] === "loading" && <DeepDiveLoading s={s} />}
@@ -541,7 +653,11 @@ function ChooseZone({
           value={dives[asked.gameId] as DeepDive | string}
           s={s}
           onRefresh={() => deepDive(asked.gameId, true)}
-          onTake={actionFor(asked) ? undefined : () => take(asked.gameId)}
+          onTake={
+            actionFor(asked)
+              ? undefined
+              : () => take(asked.gameId, { title: asked.title, image: asked.headerImage })
+          }
           taking={busy === `take-${asked.gameId}`}
           slotsLeft={slotsLeft}
           onReview={
@@ -565,22 +681,7 @@ function ChooseZone({
       )}
 
       <Reveal delay={40}>
-        <div className="mb-8">
-          {dice === "idle" && (
-            <>
-              <button
-                onClick={() => setDice("confirm")}
-                disabled={slotsLeft <= 0}
-                className="rounded-full border border-gray-700 px-4 py-1.5 text-xs text-gray-400 transition hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {s.choose.diceIdle}
-              </button>
-              {slotsLeft <= 0 && (
-                <span className="ml-3 text-xs text-gray-600">{s.choose.slotsFull}</span>
-              )}
-            </>
-          )}
-
+        <div className={dice === "idle" ? "" : "mb-8"}>
           {dice === "confirm" && (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-900/70 bg-amber-950/20 p-4">
               <div className="min-w-0 flex-1">
@@ -726,7 +827,7 @@ function ChooseZone({
             <summary className="cursor-pointer text-sm font-medium text-gray-300">
               {s.choose.profileSummary}
             </summary>
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-3">
               {parseProfile(runProfile).map((line, i) =>
                 line.heading ? (
                   <h3 key={i} className="pt-2 text-sm font-medium text-gray-200">
@@ -785,13 +886,15 @@ function AskAnyGame({
   locale,
   busy,
   onPick,
+  onClose,
 }: {
   s: Dict;
   locale: Locale;
   busy: Record<number, unknown>;
   onPick: (game: LibraryGame) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const open = true;
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<LibraryGame[] | null>(null);
 
@@ -818,27 +921,13 @@ function AskAnyGame({
     };
   }, [query, open]);
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="mb-6 rounded-full border border-gray-800 px-4 py-1.5 text-xs text-gray-500 transition hover:border-sky-700 hover:text-sky-300"
-      >
-        🔍 {s.deep.askAny}
-      </button>
-    );
-  }
-
   return (
     <div className="mb-6 rounded-xl border border-gray-800 bg-gray-900/40 p-4">
       <div className="mb-2 flex items-baseline gap-3">
         <span className="text-sm font-medium">{s.deep.askAny}</span>
         <span className="text-xs text-gray-600">{s.deep.askAnyHint}</span>
         <button
-          onClick={() => {
-            setOpen(false);
-            setQuery("");
-          }}
+          onClick={onClose}
           className="ml-auto text-xs text-gray-600 transition hover:text-gray-300"
         >
           ✕
@@ -1272,6 +1361,7 @@ function NowZone({
       gameId: item.gameId,
       argument: item.text,
       accepted,
+      stance: item.stance,
     });
     const ok = accepted ? await post("/api/contract", { gameId: item.gameId }) : true;
     setBusy(null);
@@ -1435,50 +1525,14 @@ function NowZone({
           <div className="grid gap-2 md:grid-cols-2">
             {pending.slice(0, 8).map((game, i) => (
               <Reveal key={game.gameId} delay={220 + 40 * i}>
-                <article className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/40 p-2.5">
-                  {game.headerImage && (
-                    <img src={game.headerImage} alt="" className="h-12 w-24 shrink-0 rounded object-cover" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{game.title}</p>
-                    <p className="text-xs text-gray-600">
-                      {formatPlaytime(game.playtimeMinutes, locale)}
-                      {game.hasReview && (
-                        <span className="ml-2 text-emerald-500/80">· {s.now.hasReview}</span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="ml-auto flex shrink-0 gap-1.5">
-                    <button
-                      onClick={() => verdict(game.gameId, "finished", game.playtimeMinutes)}
-                      disabled={busy !== null}
-                      className="rounded-lg border border-emerald-800 px-2.5 py-1 text-xs text-emerald-300 transition hover:bg-emerald-950/60 disabled:opacity-40"
-                    >
-                      {s.now.finished}
-                    </button>
-                    <button
-                      onClick={() => verdict(game.gameId, "endless", game.playtimeMinutes)}
-                      disabled={busy !== null}
-                      title={s.now.endlessHint}
-                      className="rounded-lg border border-violet-900 px-2.5 py-1 text-xs text-violet-300 transition hover:bg-violet-950/50 disabled:opacity-40"
-                    >
-                      {s.now.endless}
-                    </button>
-                    <button
-                      onClick={() => verdict(game.gameId, "dropped", game.playtimeMinutes)}
-                      disabled={busy !== null}
-                      className="rounded-lg border border-red-900 px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-950/50 disabled:opacity-40"
-                    >
-                      {s.now.dropped}
-                    </button>
-                    <button
-                      onClick={() => setSheet({ mode: "retro", item: game })}
-                      className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-400 transition hover:bg-gray-800"
-                    >
-                      {s.now.review}
-                    </button>
-                  </div>
-                </article>
+                <QueueCard
+                  game={game}
+                  s={s}
+                  locale={locale}
+                  busy={busy !== null}
+                  onVerdict={(value) => verdict(game.gameId, value, game.playtimeMinutes)}
+                  onReview={() => setSheet({ mode: "retro", item: game })}
+                />
               </Reveal>
             ))}
           </div>
@@ -1580,6 +1634,88 @@ function NowZone({
   );
 }
 
+/**
+ * Строка очереди разбора.
+ *
+ * Вердиктов пять, и вывести их все кнопками нельзя: четыре уже расплющили
+ * карточку так, что от названия оставалось «PUB…». Поэтому одна кнопка,
+ * а статусы — списком по клику; заодно доступны все пять, а не два частых.
+ */
+function QueueCard({
+  game,
+  s,
+  locale,
+  busy,
+  onVerdict,
+  onReview,
+}: {
+  game: QueueItem;
+  s: Dict;
+  locale: Locale;
+  busy: boolean;
+  onVerdict: (value: string) => void;
+  onReview: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <article className="relative flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/40 p-2.5">
+      {game.headerImage && (
+        <img src={game.headerImage} alt="" className="h-12 w-24 shrink-0 rounded object-cover" />
+      )}
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{game.title}</p>
+        <p className="truncate text-xs text-gray-600">
+          {formatPlaytime(game.playtimeMinutes, locale)}
+          {game.hasReview && <span className="ml-2 text-emerald-500/80">· {s.now.hasReview}</span>}
+        </p>
+      </div>
+
+      <button
+        onClick={() => setOpen((value) => !value)}
+        disabled={busy}
+        className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-gray-800 disabled:opacity-40"
+      >
+        {s.now.setVerdict} ▾
+      </button>
+
+      {open && (
+        <>
+          {/* Клик мимо закрывает меню — без этого оно ловится только повторным нажатием */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-full right-2.5 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-gray-700 bg-gray-950 py-1 shadow-xl shadow-black/50">
+            {verdicts(locale).map((option) => (
+              <button
+                key={option.value}
+                onClick={() => {
+                  setOpen(false);
+                  onVerdict(option.value);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-300 transition hover:bg-gray-800"
+              >
+                <span>{option.icon}</span>
+                {option.label}
+              </button>
+            ))}
+            <div className="my-1 border-t border-gray-800" />
+            <button
+              onClick={() => {
+                setOpen(false);
+                onReview();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-400 transition hover:bg-gray-800"
+            >
+              <span>📝</span>
+              {s.now.review}
+            </button>
+          </div>
+        </>
+      )}
+    </article>
+  );
+}
+
 /* ================= ИТОГИ ================= */
 
 function RecapZone({
@@ -1621,7 +1757,14 @@ function RecapZone({
     <div className="space-y-12">
       <section className="grid gap-3 sm:grid-cols-4">
         {[
-          { value: stats.totalGames, label: s.recap.statReviews },
+          {
+            value: stats.totalGames,
+            label: s.recap.statReviews,
+            // Импортированное — не то же самое, что написанное здесь
+            hint: stats.steamCount > 0
+              ? s.recap.statSplit(stats.totalGames - stats.steamCount, stats.steamCount)
+              : null,
+          },
           { value: stats.totalLibrary, label: s.recap.statLibrary },
           { value: stats.streak, label: s.recap.statStreak },
           { value: stats.wallOfShame.length, label: s.recap.statShame },
@@ -1630,6 +1773,9 @@ function RecapZone({
             <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-5 text-center">
               <p className="text-3xl font-bold">{cell.value}</p>
               <p className="mt-1 text-xs text-gray-500">{cell.label}</p>
+              {"hint" in cell && cell.hint && (
+                <p className="mt-1 text-[10px] leading-tight text-gray-600">{cell.hint}</p>
+              )}
             </div>
           </Reveal>
         ))}

@@ -119,6 +119,8 @@ const RU = {
     neverLaunched: "ни разу не запускал",
     take: "Взять контракт",
     taking: "Беру…",
+    taken: (title: string) => `Контракт взят: ${title}`,
+    takenGo: "Открыть «Сейчас»",
     next: "Дальше",
     contractNote: `Контракт — обязательство сыграть минимум ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и записать первое впечатление. Одновременно их может быть ${THRESHOLDS.MAX_ACTIVE_SLOTS}.`,
     profileSummary: "Что видно по твоим отзывам",
@@ -205,6 +207,7 @@ const RU = {
     queue: "Требует ответа",
     queueCount: (total: number) => `${total} игр сыграно, но вердикта нет`,
     hasReview: "отзыв есть — нужен вердикт",
+    setVerdict: "Вердикт",
     finished: "Прошёл",
     endless: "В ротации",
     endlessHint: "Игра без конца — Dota, PUBG, песочницы: «прошёл» к ним неприменимо",
@@ -227,6 +230,7 @@ const RU = {
 
   recap: {
     statReviews: "отзывов",
+    statSplit: (own: number, steam: number) => `${own} здесь · ${steam} из Steam`,
     statLibrary: "игр в библиотеке",
     statStreak: "дней подряд",
     statShame: "на стене стыда",
@@ -404,6 +408,8 @@ const EN: Dict = {
     neverLaunched: "never launched",
     take: "Take the contract",
     taking: "Taking…",
+    taken: (title: string) => `Contract taken: ${title}`,
+    takenGo: "Open \"Now\"",
     next: "Next",
     contractNote: `A contract is a commitment: at least ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} minutes and a written first impression. You can hold ${THRESHOLDS.MAX_ACTIVE_SLOTS} at a time.`,
     profileSummary: "What your reviews say about you",
@@ -489,6 +495,7 @@ const EN: Dict = {
     queue: "Needs an answer",
     queueCount: (total: number) => `${total} games played with no verdict`,
     hasReview: "review written — needs a verdict",
+    setVerdict: "Verdict",
     finished: "Finished",
     endless: "In rotation",
     endlessHint: "A game with no ending — Dota, PUBG, sandboxes: \"finished\" makes no sense",
@@ -511,6 +518,7 @@ const EN: Dict = {
 
   recap: {
     statReviews: "reviews",
+    statSplit: (own: number, steam: number) => `${own} here · ${steam} from Steam`,
     statLibrary: "games in library",
     statStreak: "day streak",
     statShame: "on the wall of shame",
