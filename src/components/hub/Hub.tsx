@@ -265,6 +265,7 @@ function ChooseZone({
   picks,
   slots,
   reviewCount,
+  poolSize,
   runProfile,
   runDate,
   index,
@@ -297,10 +298,27 @@ function ChooseZone({
     }
   }
 
+  async function spinBlind() {
+    setBusy("spin");
+    const ok = await post("/api/spin");
+    setBusy(null);
+    if (ok) window.location.reload();
+  }
+
+  const blindSpin = (
+    <BlindSpin poolSize={poolSize} busy={busy === "spin"} onSpin={spinBlind} disabled={slotsLeft <= 0} />
+  );
+
   if (runId !== null) return <RunProgress />;
-  if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) return <GateCard reviewCount={reviewCount} />;
+  if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
+    return <GateCard reviewCount={reviewCount}>{blindSpin}</GateCard>;
+  }
   if (picks.length === 0) {
-    return <EmptyCard reviewCount={reviewCount} onStart={startRun} busy={busy === "run"} />;
+    return (
+      <EmptyCard reviewCount={reviewCount} onStart={startRun} busy={busy === "run"}>
+        {blindSpin}
+      </EmptyCard>
+    );
   }
 
   const pick = picks[index]!;
@@ -313,13 +331,22 @@ function ChooseZone({
     if (ok) window.location.reload();
   }
 
-  /** Жребий сразу создаёт контракт — иначе это просто перетасовка. */
+  /*
+   * Жребий сразу создаёт контракт — иначе это просто перетасовка. Тир D
+   * значит «не трать время», поэтому выпадать он не должен: жребий решает,
+   * какую из хороших, а не какую-нибудь.
+   */
+  const rollable = picks
+    .map((item, i) => ({ item, i }))
+    .filter(({ item }) => item.tier !== "D");
+
   function roll() {
+    if (rollable.length === 0) return;
     setDice("rolling");
     let ticks = 0;
-    let landed = 0;
+    let landed = rollable[0]!.i;
     timer.current = setInterval(() => {
-      landed = Math.floor(Math.random() * picks.length);
+      landed = rollable[Math.floor(Math.random() * rollable.length)]!.i;
       setIndex(() => landed);
       ticks += 1;
       if (ticks > 18 && timer.current) {
@@ -373,9 +400,11 @@ function ChooseZone({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-amber-200">Жребий сразу создаст контракт</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-gray-400">
-                  Выпавшую игру нельзя будет просто пролистать: {THRESHOLDS.MIN_PLAYTIME_TO_REVIEW}{" "}
-                  минут и первое впечатление, иначе придётся пропускать — а пропуск без причины
-                  идёт на стену стыда. Свободных контрактов: {slotsLeft}.
+                  Жребий бросается между {rollable.length} советами — игры из тира D в него не
+                  попадают. Выпавшую нельзя будет просто пролистать:{" "}
+                  {THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и первое впечатление, иначе придётся
+                  пропускать, а пропуск без причины идёт на стену стыда. Свободных контрактов:{" "}
+                  {slotsLeft}.
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -521,7 +550,13 @@ function RunProgress() {
   );
 }
 
-function GateCard({ reviewCount }: { reviewCount: number }) {
+function GateCard({
+  reviewCount,
+  children,
+}: {
+  reviewCount: number;
+  children?: React.ReactNode;
+}) {
   const need = THRESHOLDS.MIN_REVIEWS_FOR_AI;
   const left = Math.max(0, need - reviewCount);
   return (
@@ -546,8 +581,38 @@ function GateCard({ reviewCount }: { reviewCount: number }) {
             {reviewCount} / {need}
           </span>
         </div>
+        {children}
       </div>
     </Reveal>
+  );
+}
+
+/** Рулетка вслепую: без советов это единственный способ взять контракт. */
+function BlindSpin({
+  poolSize,
+  busy,
+  onSpin,
+  disabled,
+}: {
+  poolSize: number;
+  busy: boolean;
+  onSpin: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="mt-10 border-t border-gray-800 pt-6">
+      <p className="mb-3 text-sm text-gray-500">
+        Пока советов нет, игру можно выбрать по-старому — жребием по всему пулу из {poolSize} игр.
+      </p>
+      <button
+        onClick={onSpin}
+        disabled={busy || disabled}
+        className="rounded-xl border border-gray-700 px-5 py-2.5 text-sm transition hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+      >
+        {busy ? "Кручу…" : "🎰 Крутить рулетку"}
+      </button>
+      {disabled && <p className="mt-2 text-xs text-gray-600">все три контракта заняты</p>}
+    </div>
   );
 }
 
@@ -555,10 +620,12 @@ function EmptyCard({
   reviewCount,
   onStart,
   busy,
+  children,
 }: {
   reviewCount: number;
   onStart: () => void;
   busy: boolean;
+  children?: React.ReactNode;
 }) {
   return (
     <Reveal>
@@ -579,6 +646,7 @@ function EmptyCard({
           {busy ? "Запускаю…" : "Собрать рекомендации"}
         </button>
         <p className="mt-4 text-xs text-gray-600">Занимает около минуты · можно уйти со страницы</p>
+        {children}
       </div>
     </Reveal>
   );

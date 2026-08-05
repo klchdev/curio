@@ -265,5 +265,5 @@ export const THRESHOLDS = {
   /** Разбор: сыграно ощутимо, но вердикта нет. */
   TRIAGE_MIN_MINUTES: 20,
   TRIAGE_PAGE_SIZE: 24,
-  MIN_REVIEWS_FOR_AI: 5,
+  MIN_REVIEWS_FOR_AI: 10,
 } as const;
