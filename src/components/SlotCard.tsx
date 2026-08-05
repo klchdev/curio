@@ -1,5 +1,5 @@
 import { useState } from "react";
-import CompleteModal from "./CompleteModal";
+import ImpressionSheet from "./ImpressionSheet";
 import SkipModal from "./SkipModal";
 
 interface Props {
@@ -126,11 +126,12 @@ export default function SlotCard({
       </div>
 
       {showComplete && (
-        <CompleteModal
+        <ImpressionSheet
+          mode="slot-first"
           slotId={slotId}
           gameTitle={title}
           onClose={() => setShowComplete(false)}
-          onFreed={() => setFreed(true)}
+          onSaved={() => setFreed(true)}
         />
       )}
       {showSkip && (

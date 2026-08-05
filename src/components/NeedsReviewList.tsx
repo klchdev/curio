@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { formatPlaytime } from "../lib/vocab";
-import RetroReviewModal from "./RetroReviewModal";
-import NoteModal from "./NoteModal";
-import GameNoteModal from "./GameNoteModal";
+import ImpressionSheet from "./ImpressionSheet";
 
 type TriageItem = {
   reason: "triage";
@@ -66,44 +64,23 @@ export default function NeedsReviewList({ items: initialItems, triageTotal }: Pr
     setItems((prev) => prev.filter((i) => i.gameId !== gameId));
 
   const modal = reviewing && (
-    <>
-      {reviewing.reason === "update" && reviewing.source === "slot" && (
-        <NoteModal
-          slotId={reviewing.slotId!}
-          gameTitle={reviewing.title}
-          totalPlayed={reviewing.currentPlaytime}
-          lastRecordedPlaytime={reviewing.lastRecordedPlaytime}
-          currentVerdict={reviewing.existingVerdict ?? ""}
-          currentRating={reviewing.existingRating ?? 3}
-          onClose={() => setReviewing(null)}
-        />
-      )}
-      {reviewing.reason === "triage" && (
-        <RetroReviewModal
-          gameId={reviewing.gameId}
-          gameTitle={reviewing.title}
-          gameImage={reviewing.headerImage}
-          currentPlaytime={reviewing.playtimeMinutes}
-          onClose={() => setReviewing(null)}
-          onSaved={() => {
-            removeItem(reviewing.gameId);
-            setReviewing(null);
-          }}
-        />
-      )}
-      {reviewing.reason === "update" && reviewing.source === "game" && (
-        <GameNoteModal
-          gameId={reviewing.gameId}
-          gameTitle={reviewing.title}
-          currentPlaytime={reviewing.currentPlaytime}
-          lastRecordedPlaytime={reviewing.lastRecordedPlaytime}
-          currentVerdict={reviewing.existingVerdict}
-          currentRating={reviewing.existingRating}
-          currentTier={reviewing.existingTier}
-          onClose={() => setReviewing(null)}
-        />
-      )}
-    </>
+    <ImpressionSheet
+      mode={reviewing.reason === "triage" ? "retro" : "entry"}
+      gameTitle={reviewing.title}
+      gameImage={reviewing.headerImage}
+      gameId={reviewing.reason === "update" && reviewing.source === "slot" ? undefined : reviewing.gameId}
+      slotId={reviewing.reason === "update" && reviewing.source === "slot" ? reviewing.slotId! : undefined}
+      currentPlaytime={reviewing.reason === "triage" ? reviewing.playtimeMinutes : reviewing.currentPlaytime}
+      lastRecordedPlaytime={reviewing.reason === "update" ? reviewing.lastRecordedPlaytime : undefined}
+      currentVerdict={reviewing.reason === "update" ? reviewing.existingVerdict : null}
+      currentRating={reviewing.reason === "update" ? reviewing.existingRating : null}
+      currentTier={reviewing.reason === "update" ? reviewing.existingTier : null}
+      onClose={() => setReviewing(null)}
+      onSaved={() => {
+        removeItem(reviewing.gameId);
+        setReviewing(null);
+      }}
+    />
   );
 
   return (

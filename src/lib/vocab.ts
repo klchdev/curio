@@ -161,6 +161,95 @@ export function formatPlaytime(minutes: number, locale: Locale = DEFAULT_LOCALE)
   return hours > 0 ? `${hours} ${h} ${mins} ${m}` : `${mins} ${m}`;
 }
 
+/* ---------- Правила формы впечатления ---------- */
+
+/**
+ * Один лист впечатления вместо шести почти одинаковых модалок. Режим задаёт
+ * не отдельную форму, а набор правил — и таблица лежит здесь, чтобы клиент и
+ * сервер проверяли ввод по одному и тому же источнику, а не по двум копиям.
+ */
+export type ImpressionMode = "slot-first" | "entry" | "retro" | "quick" | "demo";
+
+export interface SheetRule {
+  /** Минимальная длина заметки, когда она вообще заполняется. */
+  minNote: number;
+  /** Без заметки сохранять нельзя. */
+  noteRequired: boolean;
+  verdictRequired: boolean;
+  showTier: boolean;
+  showRating: boolean;
+  /** Только для демок: игры ещё нет в библиотеке, нужен appid или ссылка. */
+  showAppIdInput: boolean;
+  /** У демок свои значения вердиктов: «Жду релиз» вместо «Продолжаю». */
+  demoLabels: boolean;
+  celebrate: boolean;
+  title: Record<Locale, string>;
+  submit: Record<Locale, string>;
+}
+
+export const SHEET_RULES: Record<ImpressionMode, SheetRule> = {
+  "slot-first": {
+    minNote: 50,
+    noteRequired: true,
+    verdictRequired: true,
+    showTier: false,
+    showRating: true,
+    showAppIdInput: false,
+    demoLabels: false,
+    celebrate: true,
+    title: { ru: "Первое впечатление", en: "First impression" },
+    submit: { ru: "Закрыть контракт", en: "Close contract" },
+  },
+  entry: {
+    minNote: 10,
+    noteRequired: false,
+    verdictRequired: false,
+    showTier: true,
+    showRating: true,
+    showAppIdInput: false,
+    demoLabels: false,
+    celebrate: false,
+    title: { ru: "Дополнить впечатление", en: "Add to the timeline" },
+    submit: { ru: "Записать", en: "Save" },
+  },
+  retro: {
+    minNote: 50,
+    noteRequired: true,
+    verdictRequired: true,
+    showTier: true,
+    showRating: true,
+    showAppIdInput: false,
+    demoLabels: false,
+    celebrate: false,
+    title: { ru: "Отзыв об игре", en: "Game review" },
+    submit: { ru: "Сохранить отзыв", en: "Save review" },
+  },
+  quick: {
+    minNote: 0,
+    noteRequired: false,
+    verdictRequired: true,
+    showTier: false,
+    showRating: false,
+    showAppIdInput: false,
+    demoLabels: false,
+    celebrate: false,
+    title: { ru: "Вердикт", en: "Verdict" },
+    submit: { ru: "Сохранить", en: "Save" },
+  },
+  demo: {
+    minNote: 10,
+    noteRequired: true,
+    verdictRequired: false,
+    showTier: true,
+    showRating: true,
+    showAppIdInput: true,
+    demoLabels: true,
+    celebrate: false,
+    title: { ru: "Демка с фестиваля", en: "Festival demo" },
+    submit: { ru: "Добавить демку", en: "Add demo" },
+  },
+};
+
 /* ---------- Пороги ---------- */
 
 export const THRESHOLDS = {

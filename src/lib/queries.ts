@@ -11,7 +11,14 @@ import {
   recommendations,
 } from "../db/schema";
 import { eq, and, or, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
-import { THRESHOLDS, isValidVerdict, type Verdict } from "./vocab";
+import {
+  THRESHOLDS,
+  isValidVerdict,
+  SHEET_RULES,
+  type Verdict,
+  type Tier,
+  type ImpressionMode,
+} from "./vocab";
 
 const {
   UNPLAYED_MAX_MINUTES,
@@ -1594,4 +1601,138 @@ export async function getActiveRun(userId: number) {
   if (Date.now() - new Date(run.createdAt).getTime() > RUN_STALE_MS) return null;
 
   return run;
+}
+
+
+/* ================= Единая запись впечатления ================= */
+
+export interface ImpressionInput {
+  mode: ImpressionMode;
+  slotId?: number;
+  gameId?: number;
+  verdict?: Verdict | null;
+  tier?: Tier | null;
+  rating?: number | null;
+  note?: string | null;
+  /** Абсолютное наигранное время: слот считает дельту от начала контракта. */
+  currentPlaytime: number;
+  /** Что было в записи до правки — чтобы отличить «не трогали» от «сбросили». */
+  previous?: {
+    verdict?: string | null;
+    rating?: number | null;
+    tier?: string | null;
+  };
+}
+
+/**
+ * Единственная точка записи мнения об игре.
+ *
+ * Раньше это делали шесть модалок через шесть эндпоинтов с разными
+ * правилами. Сейчас функция раскладывает вход по существующим операциям;
+ * на Шаге 2, когда slot_reviews / game_reviews / slot_notes сольются в одну
+ * модель, поменяется только её тело — вызывающий код останется прежним.
+ */
+type SaveResult = { ok: true } | { error: string };
+
+/** Нижележащие функции отдают {ok: boolean}; сужаем к общему результату. */
+function normalize(result: { ok?: boolean } | { error: string }): SaveResult {
+  return "error" in result ? result : { ok: true };
+}
+
+export async function saveImpression(
+  userId: number,
+  input: ImpressionInput
+): Promise<SaveResult> {
+  const rule = SHEET_RULES[input.mode];
+  const note = input.note?.trim() ?? "";
+
+  if (rule.noteRequired && note.length < rule.minNote) {
+    return { error: `Заметка минимум ${rule.minNote} символов` };
+  }
+  if (note.length > 0 && note.length < rule.minNote) {
+    return { error: `Заметка минимум ${rule.minNote} символов` };
+  }
+  if (rule.verdictRequired && !isValidVerdict(input.verdict)) {
+    return { error: "Выбери вердикт" };
+  }
+  if (input.rating != null && (input.rating < 1 || input.rating > 5)) {
+    return { error: "Оценка от 1 до 5" };
+  }
+
+  switch (input.mode) {
+    case "slot-first": {
+      if (!input.slotId) return { error: "Не указан контракт" };
+      return normalize(
+        await reviewSlot(
+          input.slotId,
+          userId,
+          input.verdict as string,
+          input.rating ?? 3,
+          note,
+          input.currentPlaytime
+        )
+      );
+    }
+
+    case "entry": {
+      // Дополнение слотового контракта: заметка и правка вердикта живут отдельно
+      if (input.slotId) {
+        const changed = (field: keyof NonNullable<ImpressionInput["previous"]>) =>
+          input[field as "verdict" | "rating" | "tier"] !== undefined &&
+          input[field as "verdict" | "rating" | "tier"] !== input.previous?.[field];
+
+        if (note.length >= rule.minNote) {
+          const result = await addNote(input.slotId, userId, note, input.currentPlaytime);
+          if ("error" in result && result.error) return { error: result.error };
+        }
+        if (changed("verdict") || changed("rating")) {
+          const result = await updateReview(
+            input.slotId,
+            userId,
+            (input.verdict ?? input.previous?.verdict) as string,
+            input.rating ?? input.previous?.rating ?? 3,
+            input.currentPlaytime
+          );
+          if ("error" in result && result.error) return { error: result.error };
+        }
+        if (changed("tier")) {
+          const result = await setTier(input.slotId, userId, (input.tier ?? null) as Tier | null);
+          if ("error" in result && result.error) return { error: result.error };
+        }
+        return { ok: true };
+      }
+
+      if (!input.gameId) return { error: "Не указана игра" };
+      if (note.length >= rule.minNote) {
+        const result = await addGameNote(userId, input.gameId, note, input.currentPlaytime);
+        if ("error" in result && result.error) return { error: result.error };
+      }
+      return normalize(
+        await updateGameReview(userId, input.gameId, {
+        verdict: input.verdict,
+        rating: input.rating,
+        tier: input.tier,
+          playtimeMinutes: input.currentPlaytime,
+        })
+      );
+    }
+
+    case "retro":
+    case "quick": {
+      if (!input.gameId) return { error: "Не указана игра" };
+      return normalize(
+        await createRetrospectiveReview(userId, input.gameId, {
+        verdict: input.verdict,
+        // Быстрый вердикт не трогает остальные поля: undefined значит «не передали»
+        tier: input.mode === "quick" ? undefined : input.tier,
+        rating: input.mode === "quick" ? undefined : input.rating,
+        note: input.mode === "quick" ? undefined : note || null,
+          playtimeMinutes: input.currentPlaytime,
+        })
+      );
+    }
+
+    case "demo":
+      return { error: "Демки добавляются через отдельный путь: нужен appid" };
+  }
 }

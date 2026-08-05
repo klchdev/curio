@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import RetroReviewModal from "./RetroReviewModal";
+import ImpressionSheet from "./ImpressionSheet";
 
 type TierValue = "S" | "A" | "B" | "C" | "D";
 
@@ -406,7 +406,8 @@ export default function Recommendations({
       )}
 
       {reviewing && (
-        <RetroReviewModal
+        <ImpressionSheet
+          mode="retro"
           gameId={reviewing.gameId}
           gameTitle={reviewing.title}
           gameImage={reviewing.headerImage}

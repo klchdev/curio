@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import AddDemoModal from "./AddDemoModal";
+import ImpressionSheet from "./ImpressionSheet";
 
 type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
 
@@ -155,7 +155,7 @@ export default function DemoList({ reviews }: Props) {
 
       {showModal &&
         createPortal(
-          <AddDemoModal onClose={() => setShowModal(false)} />,
+          <ImpressionSheet mode="demo" gameTitle="Новая демка" onClose={() => setShowModal(false)} />,
           document.body
         )}
     </>

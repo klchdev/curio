@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatPlaytime } from "../lib/vocab";
-import RetroReviewModal from "./RetroReviewModal";
+import ImpressionSheet from "./ImpressionSheet";
 
 interface Game {
   gameId: number;
@@ -147,7 +147,8 @@ export default function TriageList({ games: initial, total }: Props) {
       </ul>
 
       {reviewing && (
-        <RetroReviewModal
+        <ImpressionSheet
+          mode="retro"
           gameId={reviewing.gameId}
           gameTitle={reviewing.title}
           gameImage={reviewing.headerImage}

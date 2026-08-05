@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import GameNoteModal from "./GameNoteModal";
+import ImpressionSheet from "./ImpressionSheet";
 
 interface Props {
   gameId: number;
@@ -33,7 +33,8 @@ export default function AddGameNoteButton({
       </button>
       {showModal &&
         createPortal(
-          <GameNoteModal
+          <ImpressionSheet
+            mode="entry"
             gameId={gameId}
             gameTitle={gameTitle}
             currentPlaytime={currentPlaytime}
