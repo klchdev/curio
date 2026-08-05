@@ -107,7 +107,7 @@ export const gameRecords = pgTable(
     tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
     rating: integer("rating"),
     /** Откуда пришла запись — невидимая деталь хранения, не фильтр в интерфейсе. */
-    origin: text("origin", { enum: ["roulette", "retro", "triage", "demo"] })
+    origin: text("origin", { enum: ["roulette", "retro", "triage", "demo", "steam"] })
       .notNull()
       .default("retro"),
     slotId: integer("slot_id").references(() => slots.id),

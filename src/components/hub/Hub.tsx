@@ -48,6 +48,7 @@ export interface Slot {
 }
 
 export interface QueueItem {
+  hasReview?: boolean;
   gameId: number;
   title: string;
   headerImage: string | null;
@@ -1115,6 +1116,9 @@ function NowZone({
                     <p className="truncate text-sm font-medium">{game.title}</p>
                     <p className="text-xs text-gray-600">
                       {formatPlaytime(game.playtimeMinutes, locale)}
+                      {game.hasReview && (
+                        <span className="ml-2 text-emerald-500/80">· {s.now.hasReview}</span>
+                      )}
                     </p>
                   </div>
                   <div className="ml-auto flex shrink-0 gap-1.5">
@@ -1246,6 +1250,32 @@ function RecapZone({
   post,
 }: Props & { post: (url: string, body?: unknown) => Promise<boolean> }) {
   const s = t(locale);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
+  async function importSteam() {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await fetch("/api/import-steam-reviews", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setImportResult(data.error ?? s.errors.generic);
+        return;
+      }
+      if (data.imported > 0) {
+        setImportResult(s.recap.imported(data.imported));
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        setImportResult(s.recap.importedNone);
+      }
+    } catch {
+      setImportResult(s.errors.network);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-12">
       <section className="grid gap-3 sm:grid-cols-4">
@@ -1263,6 +1293,22 @@ function RecapZone({
           </Reveal>
         ))}
       </section>
+
+      <Reveal delay={120}>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={importSteam}
+              disabled={importing}
+              className="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
+            >
+              {importing ? s.recap.importing : s.recap.importSteam}
+            </button>
+            <span className="text-xs text-gray-600">{s.recap.importHint}</span>
+          </div>
+          {importResult && <p className="mt-3 text-sm text-emerald-400">{importResult}</p>}
+        </div>
+      </Reveal>
 
       <Reveal delay={200}>
         <TierBoard

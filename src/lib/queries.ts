@@ -211,6 +211,8 @@ export type AttentionItem =
       headerImage: string | null;
       playtimeMinutes: number;
       lastPlayedAt: string | null;
+      /** Текст уже есть (например, перенесён из Steam) — не хватает вердикта. */
+      hasReview: boolean;
     }
   | {
       reason: "update";
@@ -287,7 +289,14 @@ export async function getAttentionQueue(
       .orderBy(desc(userGames.playtimeMinutes)),
   ]);
 
-  const reviewedGameIds = new Set(records.map((r) => r.gameId));
+  /*
+   * В разбор попадает и то, по чему запись уже есть, но вердикта нет:
+   * так приходят отзывы, перенесённые из Steam. Иначе они исчезали бы из
+   * очереди, не получив ни «прошёл», ни «бросил».
+   */
+  const reviewedGameIds = new Set(
+    records.filter((r) => r.verdict !== null).map((r) => r.gameId)
+  );
 
   type UpdateItem = Extract<AttentionItem, { reason: "update" }>;
 
@@ -318,6 +327,8 @@ export async function getAttentionQueue(
     .sort((a, b) => b.delta - a.delta);
 
   const activeGameIds = new Set(activeSlots.map((r) => r.gameId));
+  const withText = new Set(records.map((r) => r.gameId));
+
   const triage = playedGames
     .filter((g) => !reviewedGameIds.has(g.gameId) && !activeGameIds.has(g.gameId))
     .map(
@@ -329,8 +340,14 @@ export async function getAttentionQueue(
         headerImage: g.headerImage,
         playtimeMinutes: g.playtimeMinutes,
         lastPlayedAt: g.lastPlayedAt instanceof Date ? g.lastPlayedAt.toISOString() : null,
+        hasReview: withText.has(g.gameId),
       })
-    );
+    )
+    /*
+     * Сначала те, где текст уже написан: им не хватает одного клика, а среди
+     * четырёх сотен нетронутых игр они иначе просто утонут.
+     */
+    .sort((a, b) => Number(b.hasReview) - Number(a.hasReview));
 
   return {
     items: [...updates, ...triage.slice(0, triageLimit)],
@@ -1268,7 +1285,8 @@ interface RecordPatch {
   verdict?: Verdict | null;
   tier?: Tier | null;
   rating?: number | null;
-  origin?: "roulette" | "retro" | "triage" | "demo";
+  /** steam — отзыв перенесён с профиля, а не написан здесь. */
+  origin?: "roulette" | "retro" | "triage" | "demo" | "steam";
   slotId?: number | null;
   playtimeMinutes: number;
 }
@@ -1357,6 +1375,69 @@ async function addEntry(
     tierAt: data.tier ?? null,
     createdAt: new Date(),
   });
+}
+
+/**
+ * Переносит отзывы, написанные в Steam, в корпус приложения.
+ *
+ * Вердикт не выставляется: палец вверх в Steam не значит «прошёл», а вниз —
+ * «бросил», и придумывать за игрока нельзя. Запись без вердикта остаётся в
+ * очереди разбора, и человек проставит его сам — зато текст и штамп времени
+ * уже на месте.
+ *
+ * Игры, по которым в приложении уже есть запись, не трогаем: написанное
+ * здесь свежее и подробнее.
+ */
+export async function importSteamReviews(
+  userId: number,
+  reviews: { steamAppId: number; positive: boolean; playtimeMinutes: number; text: string }[]
+): Promise<{ imported: number; skippedExisting: number; notOwned: number }> {
+  if (reviews.length === 0) return { imported: 0, skippedExisting: 0, notOwned: 0 };
+
+  const appIds = reviews.map((r) => r.steamAppId);
+  const owned = await db
+    .select({ gameId: games.id, steamAppId: games.steamAppId, recordId: gameRecords.id })
+    .from(games)
+    .innerJoin(
+      userGames,
+      and(eq(userGames.gameId, games.id), eq(userGames.userId, userId))
+    )
+    .leftJoin(
+      gameRecords,
+      and(eq(gameRecords.gameId, games.id), eq(gameRecords.userId, userId))
+    )
+    .where(inArray(games.steamAppId, appIds));
+
+  const byAppId = new Map(owned.map((row) => [row.steamAppId, row]));
+
+  let imported = 0;
+  let skippedExisting = 0;
+  let notOwned = 0;
+
+  for (const review of reviews) {
+    const target = byAppId.get(review.steamAppId);
+    if (!target) {
+      notOwned += 1;
+      continue;
+    }
+    if (target.recordId !== null) {
+      skippedExisting += 1;
+      continue;
+    }
+
+    const recordId = await upsertRecord(userId, target.gameId, {
+      origin: "steam",
+      playtimeMinutes: review.playtimeMinutes,
+    });
+    await addEntry(recordId, {
+      kind: "first",
+      text: review.text,
+      playtimeMinutes: review.playtimeMinutes,
+    });
+    imported += 1;
+  }
+
+  return { imported, skippedExisting, notOwned };
 }
 
 /**

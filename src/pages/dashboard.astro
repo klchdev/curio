@@ -97,6 +97,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
         title: item.title,
         headerImage: item.headerImage,
         playtimeMinutes: item.playtimeMinutes,
+        hasReview: item.hasReview,
       }))}
     queueTotal={attention.triageTotal}
     tierGames={tierGames.map((g) => ({
