@@ -7,6 +7,9 @@ export const RECOMMENDATION_MODEL = "gemini-3.6-flash";
 
 export const MAX_PICKS = 40;
 
+export const GROUNDING_VALUES = ["known", "from-description", "guess"] as const;
+export type Grounding = (typeof GROUNDING_VALUES)[number];
+
 const RETRIES = 3;
 const RETRY_DELAYS_MS = [2000, 6000, 15000];
 
@@ -53,6 +56,10 @@ const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по
 Не подстраивайся: если есть основания спорить — спорь. Ставь disagree там, где реально видишь ошибку, а не для баланса.
 Разбери 6-12 игр, text — 1-3 предложения.
 
+Про каждого кандидата ты видишь жанры, дату релиза и описание из магазина. Если игру ты знаешь — опирайся на знание. Если не знаешь (инди, свежий релиз) — опирайся на описание и честно ставь grounding. Придуманная деталь хуже честного «сужу по описанию»: игрок потратит на неё вечер.
+
+grounding: known — игру действительно знаешь; from-description — судишь по описанию и жанрам; guess — не знаешь и описания нет.
+
 profile — 4-7 пунктов маркдауна о том, какой это игрок. Только неочевидное, выведенное из сопоставления отзывов. Обращайся на «ты». Каждый пункт подкрепляй конкретными играми из его отзывов.
 
 Хотя бы один пункт построй на динамике: где мнение менялось по ходу игры и что именно его развернуло. Если лент в отзывах нет — не выдумывай, пропусти.
@@ -84,8 +91,14 @@ const RESPONSE_SCHEMA = {
           steamAppId: { type: Type.INTEGER, description: "steamAppId строго из списка кандидатов" },
           tier: { type: Type.STRING, enum: [...ADVISOR_TIER_VALUES] },
           reason: { type: Type.STRING, description: "1-2 предложения со ссылкой на отзывы игрока" },
+          grounding: {
+            type: Type.STRING,
+            enum: ["known", "from-description", "guess"],
+            description:
+              "known — игру знаю; from-description — сужу по описанию из магазина; guess — не знаю игру",
+          },
         },
-        required: ["steamAppId", "tier", "reason"],
+        required: ["steamAppId", "tier", "reason", "grounding"],
         propertyOrdering: ["steamAppId", "tier", "reason"],
       },
     },
@@ -128,19 +141,40 @@ function formatReviews(reviews: ReviewCorpusItem[]): string {
   return lines.join("\n");
 }
 
+/**
+ * Кандидат уезжает с жанрами и описанием из магазина. Раньше в промпте было
+ * только название, и всё содержание игры модель добирала из памяти — по инди
+ * и по свежим релизам это давало уверенно звучащую выдумку.
+ */
 function formatCandidates(candidates: CandidateGame[]): string {
-  const lines = candidates.map((game) => {
-    const last = game.lastPlayedAt
-      ? new Date(game.lastPlayedAt).toISOString().slice(0, 7)
-      : "никогда не запускал";
-    return `${game.steamAppId}\t${game.title}\t${game.hours}ч\t${last}`;
-  });
-  return lines.join("\n");
+  return candidates
+    .map((game) => {
+      const last = game.lastPlayedAt
+        ? new Date(game.lastPlayedAt).toISOString().slice(0, 7)
+        : "никогда не запускал";
+
+      const facts = [
+        game.genres,
+        game.releaseDate,
+        // Описание длинное, а нужен только предмет разговора
+        game.description ? game.description.slice(0, 220) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      return `${game.steamAppId}\t${game.title}\t${game.hours}ч\t${last}${facts ? `\n\t${facts}` : "\t[описания нет]"}`;
+    })
+    .join("\n");
 }
 
 export interface GeneratedRecommendations {
   profile: string;
-  picks: { steamAppId: number; tier: AdvisorTier; reason: string }[];
+  picks: {
+    steamAppId: number;
+    tier: AdvisorTier;
+    reason: string;
+    grounding: Grounding;
+  }[];
   abandoned: { steamAppId: number; stance: "agree" | "disagree"; text: string }[];
 }
 
@@ -164,7 +198,7 @@ export async function generateRecommendations(
     formatReviews(reviews),
     "",
     `# Кандидаты — нетронутое, отсюда берутся picks (${candidates.length})`,
-    "Формат: steamAppId<TAB>название<TAB>наиграно<TAB>последний запуск",
+    "Формат: steamAppId<TAB>название<TAB>наиграно<TAB>последний запуск, следующей строкой — жанры, дата релиза и описание из магазина",
     formatCandidates(candidates),
     "",
     `# Брошенное — отсюда берётся abandoned (${abandonedGames.length})`,
@@ -231,7 +265,12 @@ export async function generateRecommendations(
       seen.add(pick.steamAppId);
       return true;
     })
-    .slice(0, MAX_PICKS);
+    .slice(0, MAX_PICKS)
+    // Молчание про источник знания приравниваем к догадке, а не к знанию
+    .map((pick) => ({
+      ...pick,
+      grounding: GROUNDING_VALUES.includes(pick.grounding) ? pick.grounding : "guess",
+    }));
 
   if (picks.length === 0) throw new Error("Gemini не вернул ни одной валидной игры");
 

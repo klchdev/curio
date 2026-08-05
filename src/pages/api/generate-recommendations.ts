@@ -69,6 +69,7 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
         gameId: byAppId.get(pick.steamAppId)!,
         tier: pick.tier,
         reason: pick.reason,
+        grounding: pick.grounding,
       })),
       abandoned: result.abandoned.map((item) => ({
         gameId: byAppId.get(item.steamAppId)!,

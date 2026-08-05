@@ -122,6 +122,8 @@ const RU = {
     next: "Дальше",
     contractNote: `Контракт — обязательство сыграть минимум ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и записать первое впечатление. Одновременно их может быть ${THRESHOLDS.MAX_ACTIVE_SLOTS}.`,
     profileSummary: "Что видно по твоим отзывам",
+    groundingDescription: "сужу по описанию из магазина",
+    groundingGuess: "игру не знаю — догадка по жанру",
 
     running:
       "Читаю твои отзывы и раскладываю библиотеку по тирам. Занимает около минуты — можно уйти со страницы.",
@@ -368,6 +370,8 @@ const EN: Dict = {
     next: "Next",
     contractNote: `A contract is a commitment: at least ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} minutes and a written first impression. You can hold ${THRESHOLDS.MAX_ACTIVE_SLOTS} at a time.`,
     profileSummary: "What your reviews say about you",
+    groundingDescription: "judging by the store description",
+    groundingGuess: "don't know this game — guessing from the genre",
 
     running:
       "Reading your reviews and sorting the library into tiers. Takes about a minute — feel free to leave the page.",

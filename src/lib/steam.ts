@@ -1,4 +1,5 @@
 import openid from "openid";
+import { classifyAsSoftware } from "./store-classify";
 import { STEAM_API_KEY } from "astro:env/server";
 
 const STEAM_OPENID_URL = "https://steamcommunity.com/openid";
@@ -120,8 +121,16 @@ export interface StoreAppDetails {
   appid: number;
   name: string;
   headerImage: string | null;
+  /** game / dlc / software / video / music / demo — чем игра не является. */
   type: string | null;
+  shortDescription: string | null;
+  genres: string | null;
+  categories: string | null;
+  releaseDate: string | null;
+  /** Софт, а не игра: вердикт «прошёл/бросил» к нему неприменим. */
+  isSoftware: boolean;
 }
+
 
 // Fetch title + header image from the public Steam store API.
 // Works for demo appids (they have their own store page).
@@ -134,14 +143,41 @@ export async function getStoreAppDetails(
   const data = await res.json();
   const entry = data?.[String(appId)];
   if (!entry?.success || !entry.data) return null;
+  const list = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value.map((x: { description?: string }) => x.description).filter((x): x is string => !!x)
+      : [];
+
+  const genres = list(entry.data.genres);
+  const categories = list(entry.data.categories);
+  const type = (entry.data.type as string) ?? null;
+
   return {
     appid: appId,
     name: entry.data.name as string,
     headerImage:
       (entry.data.header_image as string) ??
       `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
-    type: (entry.data.type as string) ?? null,
+    type,
+    // Описание приходит с html-сущностями и иногда с тегами
+    shortDescription: cleanText(entry.data.short_description),
+    genres: genres.join(", ") || null,
+    categories: categories.join(", ") || null,
+    releaseDate: (entry.data.release_date?.date as string) || null,
+    isSoftware: classifyAsSoftware(type, genres, categories),
   };
+}
+
+function cleanText(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**

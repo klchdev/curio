@@ -1,12 +1,19 @@
 import type { APIRoute } from "astro";
 import { getUserId } from "../../lib/auth";
-import { getOwnedGames } from "../../lib/steam";
+import { getOwnedGames, getStoreAppDetails } from "../../lib/steam";
 import { db } from "../../db";
 import { users, games, userGames } from "../../db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const CHUNK = 500;
+
+/*
+ * Сколько карточек магазина дозапрашиваем за один синк. Валве лимиты не
+ * публикует, поэтому берём понемногу: библиотека дозаполнится за несколько
+ * заходов, а разовый бэкофилл делает scripts/fetch-app-details.ts.
+ */
+const DETAILS_PER_SYNC = 20;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -87,12 +94,45 @@ export const POST: APIRoute = async ({ cookies }) => {
       });
   }
 
+  // 4. Дозаполняем карточки магазина у новых игр — по ним отличается софт
+  const pending = await db
+    .select({ id: games.id, steamAppId: games.steamAppId })
+    .from(games)
+    .where(isNull(games.detailsFetchedAt))
+    .limit(DETAILS_PER_SYNC);
+
+  for (const game of pending) {
+    try {
+      const details = await getStoreAppDetails(game.steamAppId);
+      await db
+        .update(games)
+        .set({
+          // Страницы может не быть вовсе — время попытки ставим в любом случае,
+          // иначе будем спрашивать про неё при каждом синке
+          detailsFetchedAt: new Date(),
+          ...(details
+            ? {
+                type: details.type,
+                shortDescription: details.shortDescription,
+                genres: details.genres,
+                categories: details.categories,
+                releaseDate: details.releaseDate,
+                isSoftware: details.isSoftware,
+              }
+            : {}),
+        })
+        .where(eq(games.id, game.id));
+    } catch {
+      // Steam моргнул — попробуем при следующем синке
+    }
+  }
+
   await db
     .update(users)
     .set({ lastLibrarySync: new Date() })
     .where(eq(users.id, userId));
 
-  return new Response(JSON.stringify({ synced: ugValues.length }), {
+  return new Response(JSON.stringify({ synced: ugValues.length, detailsFetched: pending.length }), {
     headers: { "Content-Type": "application/json" },
   });
 };

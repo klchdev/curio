@@ -17,6 +17,7 @@ import { t, type Dict } from "../../lib/strings";
 import SkipModal from "../SkipModal";
 
 export interface Pick {
+  grounding?: "known" | "from-description" | "guess" | null;
   gameId: number;
   steamAppId: number;
   title: string;
@@ -550,6 +551,12 @@ function ChooseZone({
             <p className="max-w-lg text-lg leading-relaxed text-gray-400">
               <RichText text={pick.reason} />
             </p>
+            {/* Тихая пометка, а не баннер: важно знать, но не пугать */}
+            {pick.grounding && pick.grounding !== "known" && (
+              <p className="mt-3 text-xs text-gray-600">
+                ⚠ {pick.grounding === "guess" ? s.choose.groundingGuess : s.choose.groundingDescription}
+              </p>
+            )}
           </Reveal>
           <Reveal delay={340} from="up">
             <div className="mt-8 flex flex-wrap items-center gap-4">

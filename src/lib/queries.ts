@@ -86,7 +86,8 @@ export async function getUnplayedGames(userId: number) {
         eq(userGames.userId, userId),
         lte(userGames.playtimeMinutes, UNPLAYED_MAX_MINUTES),
         eq(userGames.excluded, false),
-        eq(games.isDemo, false)
+        eq(games.isDemo, false),
+        eq(games.isSoftware, false)
       )
     );
 
@@ -277,6 +278,8 @@ export async function getAttentionQueue(
         and(
           eq(userGames.userId, userId),
           eq(games.isDemo, false),
+          // Blender и Wallpaper Engine наиграны сотнями часов, но «прошёл» им не подходит
+          eq(games.isSoftware, false),
           gt(userGames.playtimeMinutes, TRIAGE_MIN_MINUTES)
         )
       )
@@ -765,6 +768,14 @@ export interface CandidateGame {
   title: string;
   hours: number;
   lastPlayedAt: Date | null;
+  /*
+   * Жанры и описание из магазина. Без них модель знала о кандидате только
+   * название и всё остальное восстанавливала по памяти — для инди и для
+   * всего, что вышло после её обучения, это выдумка.
+   */
+  genres: string | null;
+  description: string | null;
+  releaseDate: string | null;
 }
 
 /** Нетронутое и едва начатое: то, что имеет смысл советовать. */
@@ -776,6 +787,9 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
       gameId: games.id,
       steamAppId: games.steamAppId,
       title: games.title,
+      genres: games.genres,
+      description: games.shortDescription,
+      releaseDate: games.releaseDate,
       minutes: userGames.playtimeMinutes,
       lastPlayedAt: userGames.lastPlayedAt,
     })
@@ -785,6 +799,7 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
       and(
         eq(userGames.userId, userId),
         eq(games.isDemo, false),
+        eq(games.isSoftware, false),
         eq(userGames.excluded, false),
         lt(userGames.playtimeMinutes, CANDIDATE_MAX_MINUTES)
       )
@@ -800,6 +815,9 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
       title: row.title,
       hours: Math.round((row.minutes / 60) * 10) / 10,
       lastPlayedAt: row.lastPlayedAt,
+      genres: row.genres,
+      description: row.description,
+      releaseDate: row.releaseDate,
     }));
 }
 
@@ -813,6 +831,9 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
       gameId: games.id,
       steamAppId: games.steamAppId,
       title: games.title,
+      genres: games.genres,
+      description: games.shortDescription,
+      releaseDate: games.releaseDate,
       minutes: userGames.playtimeMinutes,
       lastPlayedAt: userGames.lastPlayedAt,
     })
@@ -827,6 +848,7 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
         eq(gameRecords.userId, userId),
         eq(gameRecords.verdict, "dropped"),
         eq(games.isDemo, false),
+        eq(games.isSoftware, false),
         eq(userGames.excluded, false),
         /*
          * Спор, на который уже ответили, не поднимается снова — иначе модель
@@ -850,6 +872,9 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
     title: row.title,
     hours: Math.round((row.minutes / 60) * 10) / 10,
     lastPlayedAt: row.lastPlayedAt,
+    genres: row.genres,
+    description: row.description,
+    releaseDate: row.releaseDate,
   }));
 }
 
@@ -890,7 +915,12 @@ export async function completeRecommendationRun(
     profile: string;
     reviewsUsed: number;
     candidatesUsed: number;
-    items: { gameId: number; tier: "S" | "A" | "B" | "C" | "D"; reason: string }[];
+    items: {
+      gameId: number;
+      tier: "S" | "A" | "B" | "C" | "D";
+      reason: string;
+      grounding: "known" | "from-description" | "guess";
+    }[];
     abandoned: { gameId: number; stance: "agree" | "disagree"; text: string }[];
   }
 ) {
@@ -903,6 +933,7 @@ export async function completeRecommendationRun(
       stance: null,
       rank: index,
       reason: item.reason,
+      grounding: item.grounding,
     })),
     ...data.abandoned.map((item, index) => ({
       runId,
@@ -1004,6 +1035,7 @@ export async function getLatestRecommendations(userId: number) {
       tier: recommendations.tier,
       stance: recommendations.stance,
       reason: recommendations.reason,
+      grounding: recommendations.grounding,
       hours: userGames.playtimeMinutes,
     })
     .from(recommendations)
@@ -1031,6 +1063,7 @@ export async function getLatestRecommendations(userId: number) {
         headerImage: item.headerImage,
         tier: item.tier!,
         reason: item.reason,
+        grounding: item.grounding,
         hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
       })),
     abandoned: items

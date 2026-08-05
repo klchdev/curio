@@ -17,10 +17,31 @@ export const games = pgTable("games", {
   title: text("title").notNull(),
   headerImage: text("header_image"),
   isDemo: boolean("is_demo").notNull().default(false),
+
+  /*
+   * Данные из карточки магазина. Раньше о кандидате модель знала только
+   * название и выдумывала всё остальное, а в очередь разбора попадали Blender
+   * и Wallpaper Engine — отличить софт от игры было нечем.
+   *
+   * `type`: game / dlc / software / video / music / demo. Пока null — про игру
+   * ещё не спрашивали, и она считается игрой, чтобы бэкофилл не выключил
+   * половину приложения на время работы.
+   */
+  type: text("type"),
+  shortDescription: text("short_description"),
+  /** Жанры через запятую: их всегда 1-4, отдельная таблица тут излишество. */
+  genres: text("genres"),
+  categories: text("categories"),
+  /** Вердикт классификатора: в SQL жанры разбирать неудобно. */
+  isSoftware: boolean("is_software").notNull().default(false),
+  /** Дата релиза как её отдаёт Steam — формат гуляет по локалям. */
+  releaseDate: text("release_date"),
+  detailsFetchedAt: timestamp("details_fetched_at"),
+
   createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
-});
+}, (t) => [index("games_details_fetched_idx").on(t.detailsFetchedAt)]);
 
 export const userGames = pgTable(
   "user_games",
@@ -175,6 +196,12 @@ export const recommendations = pgTable("recommendations", {
   stance: text("stance", { enum: ["agree", "disagree"] }),
   rank: integer("rank").notNull().default(0),
   reason: text("reason").notNull(),
+  /*
+   * Откуда у модели знание об игре. Без этого совет по игре, которую она
+   * знает наизусть, и совет по игре, о которой не знает ничего, выглядят
+   * одинаково уверенно.
+   */
+  grounding: text("grounding", { enum: ["known", "from-description", "guess"] }),
 });
 
 export const slotSkips = pgTable("slot_skips", {
