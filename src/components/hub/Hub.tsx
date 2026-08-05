@@ -339,6 +339,8 @@ function ChooseZone({
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
   const [runError, setRunError] = useState<string | null>(null);
   const [dives, setDives] = useState<Record<number, DeepDive | "loading" | string>>({});
+  /** Игра, про которую спросили руками: её разбор показывается отдельно от советов. */
+  const [asked, setAsked] = useState<number | null>(null);
 
   /* Разбор кэшируется на сервере по паре (игрок, игра) — второй клик бесплатен. */
   async function deepDive(gameId: number, refresh = false) {
@@ -499,6 +501,26 @@ function ChooseZone({
         )}
       </Reveal>
 
+      <Reveal delay={20}>
+        <AskAnyGame
+          s={s}
+          locale={locale}
+          busy={dives}
+          onPick={(gameId) => {
+            setAsked(gameId);
+            deepDive(gameId);
+          }}
+        />
+      </Reveal>
+
+      {asked !== null && dives[asked] && dives[asked] !== "loading" && (
+        <DeepDivePanel
+          value={dives[asked] as DeepDive | string}
+          s={s}
+          onRefresh={() => deepDive(asked, true)}
+        />
+      )}
+
       <Reveal delay={40}>
         <div className="mb-8">
           {dice === "idle" && (
@@ -657,20 +679,156 @@ function ChooseZone({
               {s.choose.profileSummary}
             </summary>
             <div className="mt-3 space-y-2">
-              {runProfile
-                .split("\n")
-                .map((line) => line.trim().replace(/^[-*•\d.]+\s*/, "").replace(/\*\*/g, ""))
-                .filter(Boolean)
-                .map((line, i) => (
+              {parseProfile(runProfile).map((line, i) =>
+                line.heading ? (
+                  <h3 key={i} className="pt-2 text-sm font-medium text-gray-200">
+                    {line.text}
+                  </h3>
+                ) : (
                   <p key={i} className="text-sm leading-relaxed text-gray-400">
-                    {line}
+                    <RichText text={line.text} />
                   </p>
-                ))}
+                )
+              )}
             </div>
           </details>
         </Reveal>
       )}
     </>
+  );
+}
+
+/**
+ * Модель отвечает маркдауном: заголовки решёткой, названия игр звёздочками.
+ * Раньше решётки и одиночные звёздочки уезжали на экран как есть — вычищали
+ * только `**`, и портрет начинался со строки «### Твой игровой портрет».
+ */
+function parseProfile(profile: string): { text: string; heading: boolean }[] {
+  return profile
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const heading = /^#{1,6}\s+/.test(line);
+      return {
+        heading,
+        // Маркеры списка и решётки — разметка, а не текст
+        text: line.replace(/^#{1,6}\s+/, "").replace(/^[-•]\s+/, "").replace(/^\d+[.)]\s+/, ""),
+      };
+    });
+}
+
+interface LibraryGame {
+  gameId: number;
+  title: string;
+  headerImage: string | null;
+  hours: number;
+  verdict: string | null;
+}
+
+/**
+ * Спросить мнение про любую игру библиотеки, а не только про то, что модель
+ * сама вынесла в советы. Разбор тот же — отличается только способ выбора.
+ */
+function AskAnyGame({
+  s,
+  locale,
+  busy,
+  onPick,
+}: {
+  s: Dict;
+  locale: Locale;
+  busy: Record<number, unknown>;
+  onPick: (gameId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<LibraryGame[] | null>(null);
+
+  useEffect(() => {
+    if (!open || query.trim().length < 2) {
+      setItems(null);
+      return;
+    }
+    // Печатают быстрее, чем отвечает сервер — ждём паузу и гасим устаревший ответ
+    let stale = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/library-search?q=${encodeURIComponent(query.trim())}`);
+        const data = await res.json();
+        if (!stale) setItems(data.items ?? []);
+      } catch {
+        if (!stale) setItems([]);
+      }
+    }, 250);
+
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [query, open]);
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mb-6 rounded-full border border-gray-800 px-4 py-1.5 text-xs text-gray-500 transition hover:border-sky-700 hover:text-sky-300"
+      >
+        🔍 {s.deep.askAny}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+      <div className="mb-2 flex items-baseline gap-3">
+        <span className="text-sm font-medium">{s.deep.askAny}</span>
+        <span className="text-xs text-gray-600">{s.deep.askAnyHint}</span>
+        <button
+          onClick={() => {
+            setOpen(false);
+            setQuery("");
+          }}
+          className="ml-auto text-xs text-gray-600 transition hover:text-gray-300"
+        >
+          ✕
+        </button>
+      </div>
+
+      <input
+        autoFocus
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={s.deep.askPlaceholder}
+        className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm outline-none focus:border-gray-500"
+      />
+
+      {items !== null && (
+        <div className="mt-2 max-h-64 overflow-y-auto">
+          {items.length === 0 ? (
+            <p className="px-1 py-2 text-sm text-gray-600">{s.deep.askNothing}</p>
+          ) : (
+            items.map((game) => (
+              <button
+                key={game.gameId}
+                onClick={() => onPick(game.gameId)}
+                disabled={busy[game.gameId] === "loading"}
+                className="flex w-full items-center gap-3 rounded-lg px-1 py-1.5 text-left transition hover:bg-gray-800/60 disabled:opacity-40"
+              >
+                {game.headerImage && (
+                  <img src={game.headerImage} alt="" className="h-8 w-16 shrink-0 rounded object-cover" />
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm">{game.title}</span>
+                <span className="shrink-0 text-xs text-gray-600">
+                  {game.verdict ? `${verdictLabel(game.verdict as any, locale)} · ` : ""}
+                  {game.hours > 0 ? s.choose.hoursShort(game.hours) : s.deep.askNeverPlayed}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

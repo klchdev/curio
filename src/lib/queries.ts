@@ -801,6 +801,44 @@ export interface CandidateGame {
   releaseDate: string | null;
 }
 
+/**
+ * Поиск игры в своей библиотеке по части названия.
+ *
+ * Софт не прячем: спросить мнение про Blender странно, но это выбор
+ * человека, а не наше дело — фильтр нужен там, где приложение решает само.
+ */
+export async function searchLibrary(userId: number, query: string) {
+  const rows = await db
+    .select({
+      gameId: games.id,
+      title: games.title,
+      headerImage: games.headerImage,
+      playtimeMinutes: userGames.playtimeMinutes,
+      verdict: gameRecords.verdict,
+    })
+    .from(userGames)
+    .innerJoin(games, eq(games.id, userGames.gameId))
+    .leftJoin(
+      gameRecords,
+      and(eq(gameRecords.gameId, games.id), eq(gameRecords.userId, userId))
+    )
+    .where(
+      and(
+        eq(userGames.userId, userId),
+        eq(games.isDemo, false),
+        sql`${games.title} ilike ${"%" + query + "%"}`
+      )
+    )
+    // Сначала то, во что играл: скорее всего спрашивают про знакомое
+    .orderBy(desc(userGames.playtimeMinutes))
+    .limit(12);
+
+  return rows.map((row) => ({
+    ...row,
+    hours: Math.round((row.playtimeMinutes / 60) * 10) / 10,
+  }));
+}
+
 /** Нетронутое и едва начатое: то, что имеет смысл советовать. */
 export async function getRecommendationCandidates(userId: number): Promise<CandidateGame[]> {
   const reviewedIds = await getReviewedGameIds(userId);

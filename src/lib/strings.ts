@@ -158,6 +158,11 @@ const RU = {
 
   deep: {
     button: "Разобрать подробно",
+    askAny: "Спросить про свою игру",
+    askAnyHint: "Любая игра из библиотеки — модель разберёт её по твоим отзывам",
+    askPlaceholder: "Начни вводить название…",
+    askNothing: "Ничего не нашлось",
+    askNeverPlayed: "не запускал",
     loading: "Читаю отзывы игроков…",
     hint: "Модель прочитает отзывы в Steam и сверит их с твоим вкусом",
     summary: "Что это на самом деле",
@@ -428,6 +433,11 @@ const EN: Dict = {
 
   deep: {
     button: "Dig deeper",
+    askAny: "Ask about any game",
+    askAnyHint: "Any game in your library — the model reads it against your reviews",
+    askPlaceholder: "Start typing a title…",
+    askNothing: "Nothing found",
+    askNeverPlayed: "never launched",
     loading: "Reading player reviews…",
     hint: "The model reads Steam reviews and checks them against your taste",
     summary: "What it actually is",
