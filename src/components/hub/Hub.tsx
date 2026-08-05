@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Reveal from "../Reveal";
 import RichText from "../RichText";
 import TierBoard from "../TierBoard";
@@ -1663,9 +1664,34 @@ function QueueCard({
   onReview: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+
+  /*
+   * Меню живёт в портале, а не внутри карточки. Reveal анимирует transform и
+   * opacity, а каждый из них создаёт контекст наложения — z-index внутри него
+   * не работает наружу, и меню уезжало под соседнюю карточку.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    function place() {
+      const rect = button.current?.getBoundingClientRect();
+      if (rect) setAt({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    }
+
+    place();
+    // Меню закреплено на экране, поэтому при прокрутке его надо двигать следом
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
 
   return (
-    <article className="relative flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/40 p-2.5">
+    <article className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/40 p-2.5">
       {game.headerImage && (
         <img src={game.headerImage} alt="" className="h-12 w-24 shrink-0 rounded object-cover" />
       )}
@@ -1679,6 +1705,7 @@ function QueueCard({
       </div>
 
       <button
+        ref={button}
         onClick={() => setOpen((value) => !value)}
         disabled={busy}
         className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-gray-800 disabled:opacity-40"
@@ -1686,11 +1713,14 @@ function QueueCard({
         {s.now.setVerdict} ▾
       </button>
 
-      {open && (
+      {open && at && createPortal(
         <>
           {/* Клик мимо закрывает меню — без этого оно ловится только повторным нажатием */}
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full right-2.5 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-gray-700 bg-gray-950 py-1 shadow-xl shadow-black/50">
+          <div className="fixed inset-0 z-50" onClick={() => setOpen(false)} />
+          <div
+            style={{ top: at.top, right: at.right }}
+            className="fixed z-50 w-52 overflow-hidden rounded-xl border border-gray-700 bg-gray-950 py-1 shadow-xl shadow-black/60"
+          >
             {verdicts(locale).map((option) => (
               <button
                 key={option.value}
@@ -1716,7 +1746,8 @@ function QueueCard({
               {s.now.review}
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </article>
   );
