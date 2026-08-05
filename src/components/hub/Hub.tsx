@@ -68,11 +68,25 @@ export interface DiaryEntry {
   tier: string | null;
 }
 
+/** Игра, по которой отзыв есть, но с тех пор наиграно заметно больше. */
+interface UpdateItem {
+  gameId: number;
+  title: string;
+  headerImage: string | null;
+  currentPlaytime: number;
+  lastRecordedPlaytime: number;
+  delta: number;
+  verdict: string | null;
+  rating: number | null;
+  tier: string | null;
+}
+
 export interface Props {
   picks: Pick[];
   abandoned: Abandoned[];
   slots: Slot[];
   queue: QueueItem[];
+  updates: UpdateItem[];
   queueTotal: number;
   tierGames: { gameId: number; title: string; image: string | null; tier: string | null }[];
   diary: DiaryEntry[];
@@ -340,7 +354,14 @@ function ChooseZone({
   const [runError, setRunError] = useState<string | null>(null);
   const [dives, setDives] = useState<Record<number, DeepDive | "loading" | string>>({});
   /** Игра, про которую спросили руками: её разбор показывается отдельно от советов. */
-  const [asked, setAsked] = useState<number | null>(null);
+  const [asked, setAsked] = useState<LibraryGame | null>(null);
+  const [sheet, setSheet] = useState<{ mode: "retro" | "entry"; item: LibraryGame } | null>(null);
+
+  /** Игра, в которую уже играли, просит отзыв, а не обязательство. */
+  function actionFor(game: { playtimeMinutes: number; hasRecord: boolean }) {
+    if (game.playtimeMinutes < THRESHOLDS.MIN_PLAYTIME_TO_REVIEW) return null;
+    return game.hasRecord ? ("entry" as const) : ("retro" as const);
+  }
 
   /* Разбор кэшируется на сервере по паре (игрок, игра) — второй клик бесплатен. */
   async function deepDive(gameId: number, refresh = false) {
@@ -506,18 +527,40 @@ function ChooseZone({
           s={s}
           locale={locale}
           busy={dives}
-          onPick={(gameId) => {
-            setAsked(gameId);
-            deepDive(gameId);
+          onPick={(game) => {
+            setAsked(game);
+            deepDive(game.gameId);
           }}
         />
       </Reveal>
 
-      {asked !== null && dives[asked] && dives[asked] !== "loading" && (
+      {asked && dives[asked.gameId] === "loading" && <DeepDiveLoading s={s} />}
+
+      {asked && dives[asked.gameId] && dives[asked.gameId] !== "loading" && (
         <DeepDivePanel
-          value={dives[asked] as DeepDive | string}
+          value={dives[asked.gameId] as DeepDive | string}
           s={s}
-          onRefresh={() => deepDive(asked, true)}
+          onRefresh={() => deepDive(asked.gameId, true)}
+          onTake={actionFor(asked) ? undefined : () => take(asked.gameId)}
+          taking={busy === `take-${asked.gameId}`}
+          slotsLeft={slotsLeft}
+          onReview={
+            actionFor(asked) ? () => setSheet({ mode: actionFor(asked)!, item: asked }) : undefined
+          }
+          reviewLabel={asked.hasRecord ? s.deep.addToReview : s.deep.writeReview}
+        />
+      )}
+
+      {sheet && (
+        <ImpressionSheet
+          mode={sheet.mode}
+          gameId={sheet.item.gameId}
+          gameTitle={sheet.item.title}
+          gameImage={sheet.item.headerImage}
+          currentPlaytime={sheet.item.playtimeMinutes}
+          currentVerdict={sheet.item.verdict}
+          locale={locale}
+          onClose={() => setSheet(null)}
         />
       )}
 
@@ -640,11 +683,16 @@ function ChooseZone({
         </div>
       </div>
 
+      {dives[pick.gameId] === "loading" && <DeepDiveLoading s={s} />}
+
       {dives[pick.gameId] && dives[pick.gameId] !== "loading" && (
         <DeepDivePanel
           value={dives[pick.gameId] as DeepDive | string}
           s={s}
           onRefresh={() => deepDive(pick.gameId, true)}
+          onTake={() => take(pick.gameId)}
+          taking={busy === `take-${pick.gameId}`}
+          slotsLeft={slotsLeft}
         />
       )}
 
@@ -722,8 +770,10 @@ interface LibraryGame {
   gameId: number;
   title: string;
   headerImage: string | null;
+  playtimeMinutes: number;
   hours: number;
   verdict: string | null;
+  hasRecord: boolean;
 }
 
 /**
@@ -739,7 +789,7 @@ function AskAnyGame({
   s: Dict;
   locale: Locale;
   busy: Record<number, unknown>;
-  onPick: (gameId: number) => void;
+  onPick: (game: LibraryGame) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -811,7 +861,7 @@ function AskAnyGame({
             items.map((game) => (
               <button
                 key={game.gameId}
-                onClick={() => onPick(game.gameId)}
+                onClick={() => onPick(game)}
                 disabled={busy[game.gameId] === "loading"}
                 className="flex w-full items-center gap-3 rounded-lg px-1 py-1.5 text-left transition hover:bg-gray-800/60 disabled:opacity-40"
               >
@@ -848,14 +898,67 @@ const FIT_STYLE: Record<DeepDive["fit"], string> = {
   no: "border-red-900 bg-red-950/20 text-red-300",
 };
 
+/**
+ * Разбор идёт около десяти секунд, и всё это время экран не менялся вообще.
+ * Стадии здесь не выдуманы: сначала два запроса в Steam за отзывами, потом
+ * модель, поэтому подпись переключается по времени, а не по случайности.
+ */
+function DeepDiveLoading({ s }: { s: Dict }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const stage =
+    elapsed < 3 ? s.deep.stageFetch : elapsed < 9 ? s.deep.stageRead : s.deep.stageConclude;
+
+  return (
+    <Reveal className="mt-8" from="up">
+      <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-6">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400" />
+          <span className="text-sm text-gray-300">{stage}</span>
+          <span className="ml-auto text-xs tabular-nums text-gray-600">
+            {s.choose.runElapsed(elapsed)}
+          </span>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          {[0, 1, 2, 3].map((block) => (
+            <div key={block} className="space-y-2">
+              <div className="h-2 w-28 animate-pulse rounded bg-gray-800" />
+              <div className="h-3 animate-pulse rounded bg-gray-800/70" style={{ animationDelay: `${block * 120}ms` }} />
+              <div className="h-3 w-11/12 animate-pulse rounded bg-gray-800/70" style={{ animationDelay: `${block * 120 + 60}ms` }} />
+              <div className="h-3 w-8/12 animate-pulse rounded bg-gray-800/70" style={{ animationDelay: `${block * 120 + 120}ms` }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
 function DeepDivePanel({
   value,
   s,
   onRefresh,
+  onTake,
+  taking,
+  slotsLeft,
+  onReview,
+  reviewLabel,
 }: {
   value: DeepDive | string;
   s: Dict;
   onRefresh: () => void;
+  /** Разбор часто и есть решение — от него до контракта не должно быть пути через экран. */
+  onTake?: () => void;
+  taking?: boolean;
+  slotsLeft?: number;
+  /** Наиграно много — контракт бессмысленен, нужен отзыв. */
+  onReview?: () => void;
+  reviewLabel?: string;
 }) {
   if (typeof value === "string") {
     return (
@@ -886,6 +989,24 @@ function DeepDivePanel({
           >
             {s.deep.refresh}
           </button>
+          {onReview && (
+            <button
+              onClick={onReview}
+              className="rounded-lg border border-gray-700 px-4 py-1.5 text-sm transition hover:border-emerald-600 hover:text-emerald-300"
+            >
+              {reviewLabel}
+            </button>
+          )}
+          {onTake && (
+            <button
+              onClick={onTake}
+              disabled={taking || slotsLeft === 0}
+              title={slotsLeft === 0 ? s.choose.slotsFull : undefined}
+              className="rounded-lg bg-white px-4 py-1.5 text-sm font-medium text-gray-950 transition hover:scale-[1.02] disabled:opacity-40"
+            >
+              {taking ? s.choose.taking : s.choose.take}
+            </button>
+          )}
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
@@ -1114,6 +1235,7 @@ function EmptyCard({
 function NowZone({
   slots,
   queue,
+  updates,
   queueTotal,
   abandoned,
   poolSize,
@@ -1124,7 +1246,9 @@ function NowZone({
   post,
 }: ZoneProps & { onZone: (zone: Zone) => void }) {
   const s = t(locale);
-  const [sheet, setSheet] = useState<{ mode: "slot-first" | "retro"; item: any } | null>(null);
+  const [sheet, setSheet] = useState<{ mode: "slot-first" | "retro" | "entry"; item: any } | null>(
+    null
+  );
   const [skipping, setSkipping] = useState<Slot | null>(null);
   const [done, setDone] = useState<number[]>([]);
   const [answered, setAnswered] = useState<number[]>([]);
@@ -1264,6 +1388,41 @@ function NowZone({
         {syncResult && <span className="ml-3 text-xs text-emerald-400">{syncResult}</span>}
       </section>
 
+      {updates.length > 0 && (
+        <section>
+          <Reveal delay={150}>
+            <div className="mb-4 flex flex-wrap items-baseline gap-3">
+              <h2 className="text-2xl font-bold">{s.now.updates}</h2>
+              <span className="text-sm text-gray-500">{s.now.updatesHint}</span>
+            </div>
+          </Reveal>
+
+          <div className="grid gap-2 md:grid-cols-2">
+            {updates.map((game, i) => (
+              <Reveal key={game.gameId} delay={170 + 40 * i} from="left">
+                <article className="flex items-center gap-3 rounded-xl border border-indigo-900/60 bg-indigo-950/20 p-2.5">
+                  {game.headerImage && (
+                    <img src={game.headerImage} alt="" className="h-12 w-24 shrink-0 rounded object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{game.title}</p>
+                    <p className="text-xs text-indigo-300/80">
+                      {s.now.updateDelta(formatPlaytime(game.delta, locale))}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSheet({ mode: "entry", item: game })}
+                    className="ml-auto shrink-0 rounded-lg border border-indigo-800 px-3 py-1.5 text-xs text-indigo-200 transition hover:bg-indigo-950/60"
+                  >
+                    {s.now.addEntry}
+                  </button>
+                </article>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+      )}
+
       {pending.length > 0 && (
         <section>
           <Reveal delay={200}>
@@ -1395,8 +1554,14 @@ function NowZone({
           gameTitle={sheet.item.title}
           gameImage={sheet.item.image ?? sheet.item.headerImage}
           slotId={sheet.mode === "slot-first" ? sheet.item.slotId : undefined}
-          gameId={sheet.mode === "retro" ? sheet.item.gameId : undefined}
-          currentPlaytime={sheet.item.playtimeMinutes ?? sheet.item.played}
+          gameId={sheet.mode === "slot-first" ? undefined : sheet.item.gameId}
+          currentPlaytime={
+            sheet.item.currentPlaytime ?? sheet.item.playtimeMinutes ?? sheet.item.played
+          }
+          lastRecordedPlaytime={sheet.item.lastRecordedPlaytime}
+          currentVerdict={sheet.item.verdict}
+          currentRating={sheet.item.rating}
+          currentTier={sheet.item.tier}
           locale={locale}
           onClose={() => setSheet(null)}
         />

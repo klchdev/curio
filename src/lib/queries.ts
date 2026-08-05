@@ -815,6 +815,7 @@ export async function searchLibrary(userId: number, query: string) {
       headerImage: games.headerImage,
       playtimeMinutes: userGames.playtimeMinutes,
       verdict: gameRecords.verdict,
+      recordId: gameRecords.id,
     })
     .from(userGames)
     .innerJoin(games, eq(games.id, userGames.gameId))
@@ -833,9 +834,10 @@ export async function searchLibrary(userId: number, query: string) {
     .orderBy(desc(userGames.playtimeMinutes))
     .limit(12);
 
-  return rows.map((row) => ({
+  return rows.map(({ recordId, ...row }) => ({
     ...row,
     hours: Math.round((row.playtimeMinutes / 60) * 10) / 10,
+    hasRecord: recordId !== null,
   }));
 }
 

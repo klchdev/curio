@@ -90,6 +90,19 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
       image: game.headerImage,
       played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
     }))}
+    updates={attention.items
+      .filter((item) => item.reason === "update")
+      .map((item) => ({
+        gameId: item.gameId,
+        title: item.title,
+        headerImage: item.headerImage,
+        currentPlaytime: item.currentPlaytime,
+        lastRecordedPlaytime: item.lastRecordedPlaytime,
+        delta: item.delta,
+        verdict: item.existingVerdict,
+        rating: item.existingRating,
+        tier: item.existingTier,
+      }))}
     queue={attention.items
       .filter((item) => item.reason === "triage")
       .map((item) => ({
