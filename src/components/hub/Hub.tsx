@@ -742,12 +742,9 @@ function ChooseZone({
             <h2 className="mb-5 text-4xl leading-tight font-bold text-balance">{pick.title}</h2>
           </Reveal>
           <Reveal delay={240} from="left">
-            <div className="flex max-w-lg gap-3">
-              <CurioMark className="mt-1.5 h-5 w-5 shrink-0 text-gray-700" />
-              <p className="text-lg leading-relaxed text-gray-400">
-                <RichText text={pick.reason} />
-              </p>
-            </div>
+            <p className="max-w-lg text-lg leading-relaxed text-gray-400">
+              <RichText text={pick.reason} />
+            </p>
             {/* Тихая пометка, а не баннер: важно знать, но не пугать */}
             {pick.deepTier && pick.deepTier !== pick.tier && (
               <p className="mt-3 text-xs text-sky-400/80">
