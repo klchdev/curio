@@ -32,10 +32,19 @@ const SOFTWARE_TYPES = new Set(["software", "video", "music", "audio", "movie", 
 const PLAYER_CATEGORIES = ["Single-player", "Multi-player", "Co-op", "PvP", "MMO"];
 
 /**
- * Способ распространения, а не свойство продукта: у делистнутых игр это
- * бывает единственная категория, и принимать её за признак нельзя.
+ * Техническая обвязка, а не свойство продукта. У ARC Raiders Playtest в
+ * карточке нет ничего, кроме поддержки геймпадов, — принимать это за признак
+ * заполненной карточки нельзя, иначе плейтесты уезжают в софт.
  */
-const NON_FEATURE_CATEGORIES = new Set(["Family Sharing"]);
+const NON_FEATURE_CATEGORIES = new Set([
+  "Family Sharing",
+  "Steam Cloud",
+  "Stats",
+  "Full controller support",
+  "Partial Controller Support",
+  "DualShock Controller Support",
+  "DualSense Controller Support",
+]);
 
 export function classifyAsSoftware(
   type: string | null,
