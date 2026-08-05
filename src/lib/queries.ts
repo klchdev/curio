@@ -827,7 +827,18 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
         eq(gameRecords.userId, userId),
         eq(gameRecords.verdict, "dropped"),
         eq(games.isDemo, false),
-        eq(userGames.excluded, false)
+        eq(userGames.excluded, false),
+        /*
+         * Спор, на который уже ответили, не поднимается снова — иначе модель
+         * спорит об одном и том же каждый прогон. Но если с тех пор игру
+         * запускали, разговор снова осмыслен: аргумент проверяли делом.
+         */
+        sql`not exists (
+          select 1 from ${gameEntries}
+          where ${gameEntries.recordId} = ${gameRecords.id}
+            and ${gameEntries.kind} = 'advisor'
+            and ${gameEntries.playtimeTotalMinutes} >= ${userGames.playtimeMinutes}
+        )`
       )
     )
     .orderBy(desc(userGames.playtimeMinutes))
