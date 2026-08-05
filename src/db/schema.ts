@@ -1,4 +1,4 @@
-import { pgTable, text, integer, serial, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, serial, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -109,6 +109,77 @@ export const gameReviews = pgTable(
   // Без индекса две параллельные вставки создавали вторую, и читатели
   // с .limit(1) молча выбирали произвольную.
   (t) => [uniqueIndex("game_reviews_user_id_game_id_idx").on(t.userId, t.gameId)]
+);
+
+/**
+ * Единая модель мнения об игре.
+ *
+ * game_records — что игрок думает сейчас, game_entries — как он к этому
+ * пришёл. Заменяет три таблицы (slot_reviews, game_reviews, slot_notes),
+ * у которых было три разных правила дедупликации и одна колонка времени
+ * с двумя несовместимыми смыслами.
+ */
+export const gameRecords = pgTable(
+  "game_records",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    gameId: integer("game_id")
+      .notNull()
+      .references(() => games.id),
+    verdict: text("verdict", { enum: ["finished", "dropped", "playing", "later"] }),
+    tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
+    rating: integer("rating"),
+    /** Откуда пришла запись — невидимая деталь хранения, не фильтр в интерфейсе. */
+    origin: text("origin", { enum: ["roulette", "retro", "triage", "demo"] })
+      .notNull()
+      .default("retro"),
+    slotId: integer("slot_id").references(() => slots.id),
+    /** Абсолютные минуты на момент последней записи — по ним считается «наиграл ещё». */
+    playtimeAtLastEntry: integer("playtime_at_last_entry").notNull().default(0),
+    firstEntryAt: timestamp("first_entry_at").notNull(),
+    lastEntryAt: timestamp("last_entry_at").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    // Это и есть новое правило дедупликации: одна запись на пару
+    uniqueIndex("game_records_user_game_idx").on(t.userId, t.gameId),
+    index("game_records_user_verdict_idx").on(t.userId, t.verdict),
+    index("game_records_user_tier_idx").on(t.userId, t.tier),
+  ]
+);
+
+export const gameEntries = pgTable(
+  "game_entries",
+  {
+    id: serial("id").primaryKey(),
+    recordId: integer("record_id")
+      .notNull()
+      .references(() => gameRecords.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["first", "update", "verdict", "advisor"] })
+      .notNull()
+      .default("update"),
+    text: text("text").notNull(),
+    /**
+     * Храним и абсолют, и дельту. Раньше slot_notes.playtime_minutes значил
+     * дельту от начала контракта в одной форме строки и общее время в другой —
+     * в одной и той же колонке.
+     */
+    playtimeTotalMinutes: integer("playtime_total_minutes").notNull(),
+    playtimeDeltaMinutes: integer("playtime_delta_minutes").notNull().default(0),
+    /** Снимок мнения на момент записи — из него видно эволюцию. */
+    verdictAt: text("verdict_at"),
+    ratingAt: integer("rating_at"),
+    tierAt: text("tier_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index("game_entries_record_created_idx").on(t.recordId, t.createdAt)]
 );
 
 export const recommendationRuns = pgTable("recommendation_runs", {
