@@ -1,171 +1,198 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 interface Props {
   slotId: number;
+  gameTitle: string;
   freeSkips: number;
+  locale?: Locale;
   onClose: () => void;
 }
 
-const LEGITIMATE_REASONS = [
-  "Это не игра / демка",
-  "Не запускается",
-  "Уже не в библиотеке",
-];
+/**
+ * Причина уезжает на сервер кодом, а не текстом. Раньше сервер решал, стыдный
+ * скип или нет, сравнением с русскими строками — при переводе интерфейса
+ * любая уважительная причина стала бы позорной.
+ */
+export const SKIP_CODES = ["not-a-game", "wont-launch", "not-owned"] as const;
+export type SkipCode = (typeof SKIP_CODES)[number] | "custom";
 
-export default function SkipModal({ slotId, freeSkips, onClose }: Props) {
-  const [selected, setSelected] = useState<string | null>(null);
+export default function SkipModal({
+  slotId,
+  gameTitle,
+  freeSkips,
+  locale = DEFAULT_LOCALE,
+  onClose,
+}: Props) {
+  const s = t(locale);
+  const [selected, setSelected] = useState<SkipCode | null>(null);
   const [customText, setCustomText] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [visible, setVisible] = useState(false);
 
-  const handleFreeSkip = async () => {
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  function close() {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  }
+
+  const REASONS: { code: SkipCode; label: string }[] = [
+    { code: "not-a-game", label: s.skip.notAGame },
+    { code: "wont-launch", label: s.skip.wontLaunch },
+    { code: "not-owned", label: s.skip.notOwned },
+  ];
+
+  async function send(body: Record<string, unknown>) {
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/skip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotId, useFreeSkip: true }),
+        body: JSON.stringify({ slotId, ...body }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error);
+        setError(data.error ?? s.errors.generic);
         setLoading(false);
         return;
       }
       location.reload();
     } catch {
-      setError("Ошибка сети");
+      setError(s.errors.network);
       setLoading(false);
     }
-  };
+  }
 
-  const handleSubmit = async () => {
-    let reason = selected;
-    if (!reason) {
-      setError("Выбери причину");
+  function submit() {
+    if (!selected) {
+      setError(s.skip.pickReason);
       return;
     }
-    if (reason === "custom") {
-      if (!customText.trim()) {
-        setError("Напиши причину");
-        return;
-      }
-      reason = customText;
+    if (selected === "custom" && !customText.trim()) {
+      setError(s.skip.writeReason);
+      return;
     }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/skip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotId, reason }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error);
-        setLoading(false);
-        return;
-      }
-
-      location.reload();
-    } catch {
-      setError("Ошибка сети");
-      setLoading(false);
-    }
-  };
+    // Текст нужен для дневника, код — для решения «стыдный или нет»
+    const label = selected === "custom" ? customText.trim() : REASONS.find((r) => r.code === selected)!.label;
+    send({ reasonCode: selected, reason: label });
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-gray-900 p-8" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-6 text-xl font-bold">Пропустить игру</h3>
+    <div
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/70 transition-opacity duration-200 sm:items-center sm:p-6 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+      onClick={close}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className={`max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-gray-800 bg-gray-950 p-6 transition-all duration-200 sm:rounded-2xl ${
+          visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
+        }`}
+      >
+        <header className="mb-5">
+          <p className="text-xs tracking-[0.15em] text-gray-500 uppercase">{s.skip.title}</p>
+          <h2 className="mt-1 text-xl font-bold">{gameTitle}</h2>
+        </header>
 
         {freeSkips > 0 && (
           <div className="mb-5">
             <button
-              onClick={handleFreeSkip}
+              onClick={() => send({ useFreeSkip: true })}
               disabled={loading}
-              className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-left transition hover:bg-emerald-500/20 disabled:opacity-50"
+              className="w-full rounded-xl border border-emerald-800 bg-emerald-950/30 p-4 text-left transition hover:bg-emerald-950/60 disabled:opacity-40"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-emerald-300">Бесплатный скип</p>
-                  <p className="text-sm text-emerald-400/70">Без позора. Заслужил обзорами!</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-emerald-300">{s.skip.freeSkip}</p>
+                  <p className="text-sm text-emerald-400/70">{s.skip.freeSkipHint}</p>
                 </div>
-                <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-bold text-emerald-300">
-                  {freeSkips} шт
+                <span className="shrink-0 rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-bold text-emerald-300">
+                  {s.skip.freeSkipCount(freeSkips)}
                 </span>
               </div>
             </button>
             <div className="my-4 flex items-center gap-3">
-              <div className="h-px flex-1 bg-gray-700" />
-              <span className="text-xs text-gray-500">или выбери причину</span>
-              <div className="h-px flex-1 bg-gray-700" />
+              <div className="h-px flex-1 bg-gray-800" />
+              <span className="text-xs text-gray-600">{s.skip.orReason}</span>
+              <div className="h-px flex-1 bg-gray-800" />
             </div>
           </div>
         )}
 
+        <p className="mb-2 text-sm text-gray-400">{s.skip.legitimate}</p>
         <div className="mb-4 space-y-2">
-          <p className="mb-3 text-sm text-gray-400">Легитимные причины (нейтрально):</p>
-          {LEGITIMATE_REASONS.map((reason) => (
+          {REASONS.map((reason) => (
             <label
-              key={reason}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-700 p-3 transition hover:bg-gray-800"
+              key={reason.code}
+              className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition ${
+                selected === reason.code
+                  ? "border-gray-500 bg-gray-900"
+                  : "border-gray-800 hover:bg-gray-900/60"
+              }`}
             >
               <input
                 type="radio"
                 name="skip-reason"
-                value={reason}
-                checked={selected === reason}
-                onChange={() => setSelected(reason)}
-                className="accent-indigo-500"
+                checked={selected === reason.code}
+                onChange={() => setSelected(reason.code)}
+                className="accent-emerald-500"
               />
-              <span>{reason}</span>
+              <span>{reason.label}</span>
             </label>
           ))}
 
-          <div className="my-3 border-t border-gray-700" />
-          <p className="mb-3 text-sm text-yellow-400">Другое (будет записано как &quot;Сдался&quot; 😔):</p>
-          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-yellow-800/50 p-3 transition hover:bg-gray-800">
+          <p className="pt-2 text-sm text-amber-400/90">{s.skip.shameHeading}</p>
+          <label
+            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition ${
+              selected === "custom" ? "border-amber-700 bg-amber-950/30" : "border-amber-900/50 hover:bg-gray-900/60"
+            }`}
+          >
             <input
               type="radio"
               name="skip-reason"
-              value="custom"
               checked={selected === "custom"}
               onChange={() => setSelected("custom")}
-              className="accent-yellow-500"
+              className="accent-amber-500"
             />
-            <span>Другая причина</span>
+            <span>{s.skip.other}</span>
           </label>
           {selected === "custom" && (
             <textarea
               rows={2}
               value={customText}
-              onChange={(e) => setCustomText(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 p-3 text-sm"
-              placeholder="Почему сдаёшься?"
+              onChange={(event) => setCustomText(event.target.value)}
+              placeholder={s.skip.otherPlaceholder}
+              className="w-full resize-none rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm outline-none focus:border-gray-500"
             />
           )}
         </div>
 
-        {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+        {error && (
+          <p className="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
-            onClick={handleSubmit}
+            onClick={submit}
             disabled={loading}
-            className="flex-1 rounded-lg bg-yellow-700 px-4 py-3 font-medium transition hover:bg-yellow-600 disabled:opacity-50"
+            className="flex-1 rounded-xl bg-amber-600 py-3 font-medium text-amber-50 transition hover:bg-amber-500 disabled:opacity-40"
           >
-            {loading ? "..." : "Пропустить"}
+            {loading ? "…" : s.skip.submit}
           </button>
           <button
-            onClick={onClose}
-            className="rounded-lg border border-gray-700 px-4 py-3 transition hover:bg-gray-800"
+            onClick={close}
+            className="rounded-xl border border-gray-700 px-5 py-3 text-gray-400 transition hover:bg-gray-800"
           >
-            Отмена
+            {s.sheet.cancel}
           </button>
         </div>
       </div>

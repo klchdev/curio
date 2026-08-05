@@ -2,6 +2,12 @@
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { getStats } from "../lib/queries";
+import { formatPlaytime, verdictLabel } from "../lib/vocab";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
@@ -13,17 +19,10 @@ const progressPercent = stats.poolSize > 0
   ? Math.round((stats.totalGames / (stats.totalGames + stats.poolSize)) * 100)
   : 0;
 
-function formatTime(minutes: number) {
-  if (minutes >= 60) {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
-  }
-  return `${minutes} мин`;
-}
+const formatTime = (minutes: number) => formatPlaytime(minutes, locale);
 ---
 
-<Layout title="Профиль">
+<Layout title={s.pages.profile}>
   <div class="mb-6 flex items-center justify-between">
     <div class="flex items-center gap-4">
       {user.avatarUrl && (
@@ -31,19 +30,19 @@ function formatTime(minutes: number) {
       )}
       <h1 class="text-2xl font-bold">{user.username}</h1>
     </div>
-    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; {s.pages.back}</a>
   </div>
 
   <!-- Backlog Progress -->
   <section class="mb-8">
-    <h2 class="mb-4 text-lg font-semibold">Прогресс бэклога</h2>
+    <h2 class="mb-4 text-lg font-semibold">{s.pages.backlog}</h2>
     <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
       <div class="mb-4 flex items-end justify-between">
         <div>
           <span class="text-4xl font-bold text-indigo-400">{stats.totalGames}</span>
           <span class="text-lg text-gray-400"> / {stats.totalGames + stats.poolSize}</span>
         </div>
-        <span class="text-sm text-gray-500">{progressPercent}% пула пройдено</span>
+        <span class="text-sm text-gray-500">{s.pages.poolDone(progressPercent)}</span>
       </div>
       <div class="mb-3 h-3 w-full overflow-hidden rounded-full bg-gray-800">
         <div
@@ -52,11 +51,11 @@ function formatTime(minutes: number) {
         />
       </div>
       <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-400">
-        <span>В пуле рулетки: <strong class="text-gray-200">{stats.poolSize}</strong></span>
-        <span>Активные слоты: <strong class="text-gray-200">{stats.activeCount}/3</strong></span>
-        <span>Уже играл (&gt;15 мин): <strong class="text-gray-200">{alreadyPlayed}</strong></span>
+        <span>{s.pages.inPool}: <strong class="text-gray-200">{stats.poolSize}</strong></span>
+        <span>{s.pages.activeSlots}: <strong class="text-gray-200">{stats.activeCount}/3</strong></span>
+        <span>{s.pages.alreadyPlayed}: <strong class="text-gray-200">{alreadyPlayed}</strong></span>
         {stats.excludedCount > 0 && (
-          <span>Исключено: <strong class="text-gray-200">{stats.excludedCount}</strong></span>
+          <span>{s.pages.excluded}: <strong class="text-gray-200">{stats.excludedCount}</strong></span>
         )}
       </div>
     </div>
@@ -64,23 +63,23 @@ function formatTime(minutes: number) {
 
   <!-- Stats Grid -->
   <section class="mb-8">
-    <h2 class="mb-4 text-lg font-semibold">Статистика</h2>
+    <h2 class="mb-4 text-lg font-semibold">{s.pages.statistics}</h2>
     <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
       <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
         <div class="text-3xl font-bold text-indigo-400">{stats.totalGames}</div>
-        <div class="mt-1 text-sm text-gray-400">Оценено игр</div>
+        <div class="mt-1 text-sm text-gray-400">{s.pages.ratedGames}</div>
       </div>
       <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
         <div class="text-3xl font-bold text-indigo-400">{formatTime(stats.totalMinutes)}</div>
-        <div class="mt-1 text-sm text-gray-400">Суммарное время</div>
+        <div class="mt-1 text-sm text-gray-400">{s.pages.totalTime}</div>
       </div>
       <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
         <div class="text-3xl font-bold text-indigo-400">{formatTime(stats.avgMinutes)}</div>
-        <div class="mt-1 text-sm text-gray-400">Среднее на игру</div>
+        <div class="mt-1 text-sm text-gray-400">{s.pages.avgPerGame}</div>
       </div>
       <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
         <div class="text-3xl font-bold text-amber-400">{stats.avgRating}</div>
-        <div class="mt-1 text-sm text-gray-400">Средняя оценка</div>
+        <div class="mt-1 text-sm text-gray-400">{s.pages.avgRating}</div>
       </div>
     </div>
   </section>
@@ -88,23 +87,23 @@ function formatTime(minutes: number) {
   <!-- Verdict Breakdown -->
   {stats.totalGames > 0 && (
     <section class="mb-8">
-      <h2 class="mb-4 text-lg font-semibold">Вердикты</h2>
+      <h2 class="mb-4 text-lg font-semibold">{s.pages.verdicts}</h2>
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div class="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-5 text-center">
           <div class="text-3xl font-bold text-emerald-400">{stats.finishedCount}</div>
-          <div class="mt-1 text-sm text-emerald-400/70">Прошёл</div>
+          <div class="mt-1 text-sm text-emerald-400/70">{verdictLabel("finished", locale)}</div>
         </div>
         <div class="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-5 text-center">
           <div class="text-3xl font-bold text-indigo-400">{stats.playingCount}</div>
-          <div class="mt-1 text-sm text-indigo-400/70">Продолжаю</div>
+          <div class="mt-1 text-sm text-indigo-400/70">{verdictLabel("playing", locale)}</div>
         </div>
         <div class="rounded-xl border border-red-900/50 bg-red-950/20 p-5 text-center">
           <div class="text-3xl font-bold text-red-400">{stats.droppedCount}</div>
-          <div class="mt-1 text-sm text-red-400/70">Бросил</div>
+          <div class="mt-1 text-sm text-red-400/70">{verdictLabel("dropped", locale)}</div>
         </div>
         <div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-5 text-center">
           <div class="text-3xl font-bold text-amber-400">{stats.laterCount}</div>
-          <div class="mt-1 text-sm text-amber-400/70">Вернусь позже</div>
+          <div class="mt-1 text-sm text-amber-400/70">{verdictLabel("later", locale)}</div>
         </div>
       </div>
     </section>
@@ -114,14 +113,14 @@ function formatTime(minutes: number) {
   <section class="mb-8">
     <div class="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center">
       <div class="text-3xl font-bold text-green-400">{stats.streak}</div>
-      <div class="mt-1 text-sm text-gray-400">Стрик (недель без стыда)</div>
+      <div class="mt-1 text-sm text-gray-400">{s.pages.streakWeeks}</div>
     </div>
   </section>
 
   <!-- Wall of Shame -->
   {stats.wallOfShame.length > 0 && (
     <section class="mb-8">
-      <h2 class="mb-4 text-xl font-semibold text-red-400">Стена стыда</h2>
+      <h2 class="mb-4 text-xl font-semibold text-red-400">{s.pages.wallOfShame}</h2>
       <div class="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
         <ul class="space-y-1">
           {stats.wallOfShame.map((title) => (
@@ -135,7 +134,7 @@ function formatTime(minutes: number) {
   {stats.wallOfShame.length === 0 && stats.totalGames > 0 && (
     <div class="rounded-xl border border-green-900/50 bg-green-950/20 p-6 text-center">
       <span class="text-3xl">🏆</span>
-      <p class="mt-2 text-green-400">Чистая совесть! Ни одного позорного скипа.</p>
+      <p class="mt-2 text-green-400">{s.pages.cleanRecord}</p>
     </div>
   )}
 </Layout>

@@ -1,4 +1,6 @@
 import type { APIRoute } from "astro";
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
 import { getUserId } from "../../lib/auth";
 import { takeContract } from "../../lib/queries";
 
@@ -9,7 +11,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const { gameId } = await request.json();
   if (!Number.isInteger(gameId)) {
-    return new Response(JSON.stringify({ error: "Не указана игра" }), {
+    return new Response(JSON.stringify({ error: t(localeFrom(cookies, request)).errors.noGame }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });

@@ -14,6 +14,8 @@ import {
 import { generateRecommendations, RECOMMENDATION_MODEL } from "../../lib/recommendations";
 import { GEMINI_API_KEY } from "astro:env/server";
 import { THRESHOLDS } from "../../lib/vocab";
+import { localeFrom, type Locale } from "../../lib/i18n";
+import { t } from "../../lib/strings";
 
 /** Прогресс в БД пишем не чаще, чем раз в столько мс. */
 const PROGRESS_THROTTLE_MS = 1500;
@@ -28,7 +30,7 @@ const json = (body: unknown, status = 200) =>
  * Генерация идёт до минуты и дольше, поэтому крутится в фоне: роут только
  * заводит прогон и сразу отдаёт его id, клиент опрашивает статус.
  */
-async function runInBackground(runId: number, userId: number) {
+async function runInBackground(runId: number, userId: number, locale: Locale) {
   try {
     const [reviews, candidates, abandonedGames] = await Promise.all([
       getReviewCorpus(userId),
@@ -44,6 +46,7 @@ async function runInBackground(runId: number, userId: number) {
       candidates,
       abandonedGames,
       GEMINI_API_KEY,
+      locale,
       (picksReady) => {
         const now = Date.now();
         if (now - lastWrite < PROGRESS_THROTTLE_MS) return;
@@ -75,17 +78,20 @@ async function runInBackground(runId: number, userId: number) {
     });
   } catch (err) {
     console.error("[recommendations]", err);
-    const message = err instanceof Error ? err.message : "Не удалось получить рекомендации";
+    const message = err instanceof Error ? err.message : t(locale).errors.runFailedFallback;
     await failRecommendationRun(runId, message).catch(() => {});
   }
 }
 
-export const POST: APIRoute = async ({ cookies }) => {
+export const POST: APIRoute = async ({ cookies, request }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
+  const locale = localeFrom(cookies, request);
+  const s = t(locale);
+
   if (await hasActiveRun(userId)) {
-    return json({ error: "Генерация уже идёт" }, 409);
+    return json({ error: s.errors.runInProgress }, 409);
   }
 
   const [reviewCount, candidateCount] = await Promise.all([
@@ -94,16 +100,16 @@ export const POST: APIRoute = async ({ cookies }) => {
   ]);
 
   if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
-    return json({ error: `Нужно минимум ${THRESHOLDS.MIN_REVIEWS_FOR_AI} отзывов, сейчас ${reviewCount}` }, 400);
+    return json({ error: s.errors.needReviews(THRESHOLDS.MIN_REVIEWS_FOR_AI, reviewCount) }, 400);
   }
   if (candidateCount === 0) {
-    return json({ error: "Нет непройденных игр в библиотеке" }, 400);
+    return json({ error: s.errors.noCandidates }, 400);
   }
 
   const runId = await createRecommendationRun(userId, RECOMMENDATION_MODEL);
 
   // Намеренно не ждём: ответ уходит сразу, работа продолжается в процессе.
-  void runInBackground(runId, userId);
+  void runInBackground(runId, userId, locale);
 
   return json({ ok: true, runId });
 };

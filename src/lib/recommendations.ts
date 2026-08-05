@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { CandidateGame, ReviewCorpusItem } from "./queries";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
 
@@ -40,7 +41,17 @@ profile — 4-7 пунктов маркдауна о том, какой это �
 
 Хотя бы один пункт построй на динамике: где мнение менялось по ходу игры и что именно его развернуло. Если лент в отзывах нет — не выдумывай, пропусти.
 
-Пиши по-русски.`;
+`;
+
+/*
+ * Сама инструкция остаётся русской: это внутренний промпт, модель работает
+ * с ним одинаково. От языка пользователя зависит только то, на чём написан
+ * ответ, который он увидит.
+ */
+const OUTPUT_LANGUAGE: Record<Locale, string> = {
+  ru: "Пиши по-русски.",
+  en: "Write in English, even though these instructions are in Russian. The player's reviews may be in Russian — quote and paraphrase them in English.",
+};
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -127,6 +138,7 @@ export async function generateRecommendations(
   candidates: CandidateGame[],
   abandonedGames: CandidateGame[],
   apiKey: string,
+  locale: Locale = DEFAULT_LOCALE,
   onProgress?: (picksReady: number) => void
 ): Promise<GeneratedRecommendations> {
   const ai = new GoogleGenAI({ apiKey });
@@ -150,7 +162,7 @@ export async function generateRecommendations(
     model: RECOMMENDATION_MODEL,
     contents: prompt,
     config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
       responseMimeType: "application/json",
       responseSchema: RESPONSE_SCHEMA,
     },

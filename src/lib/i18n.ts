@@ -45,3 +45,14 @@ export function resolveLocale(
   if (isLocale(cookieValue)) return cookieValue;
   return localeFromHeader(acceptLanguage);
 }
+
+/**
+ * Язык запроса. Отдельная функция, чтобы каждая страница и каждый роут
+ * решали это одинаково, а не по-своему.
+ */
+export function localeFrom(
+  cookies: { get(name: string): { value: string } | undefined },
+  request: Request
+): Locale {
+  return resolveLocale(cookies.get(LOCALE_COOKIE)?.value, request.headers.get("accept-language"));
+}

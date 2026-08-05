@@ -12,8 +12,11 @@ import {
   getHistory,
   getDemoReviews,
   getStats,
+  getFreeSkips,
 } from "../lib/queries";
 import Hub from "../components/hub/Hub";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
@@ -22,21 +25,39 @@ if (!user) return Astro.redirect("/");
  * Хаб получает всё с сервера одним заходом: острову остаётся переключать
  * зоны и отправлять действия, догружать он ничего не должен.
  */
-const [activeSlots, pool, attention, run, activeRun, reviewCount, tierGames, history, demos, stats] =
-  await Promise.all([
-    getActiveSlots(user.id),
-    getUnplayedGames(user.id),
-    getAttentionQueue(user.id),
-    getLatestRecommendations(user.id),
-    getActiveRun(user.id),
-    getReviewCorpusSize(user.id),
-    getTierList(user.id),
-    getHistory(user.id),
-    getDemoReviews(user.id),
-    getStats(user.id),
-  ]);
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
 
-const dateFormat = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+const [
+  activeSlots,
+  pool,
+  attention,
+  run,
+  activeRun,
+  reviewCount,
+  tierGames,
+  history,
+  demos,
+  stats,
+  freeSkips,
+] = await Promise.all([
+  getActiveSlots(user.id),
+  getUnplayedGames(user.id),
+  getAttentionQueue(user.id),
+  getLatestRecommendations(user.id),
+  getActiveRun(user.id),
+  getReviewCorpusSize(user.id),
+  getTierList(user.id),
+  getHistory(user.id),
+  getDemoReviews(user.id),
+  getStats(user.id),
+  getFreeSkips(user.id),
+]);
+
+const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
+  day: "numeric",
+  month: "long",
+});
 ---
 
 <Layout title="BacklogRoulette">
@@ -46,10 +67,10 @@ const dateFormat = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "lo
       <span class="font-medium">{user.username}</span>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-500">
-      <a href="/history" class="transition hover:text-white">Дневник</a>
-      <a href="/demos" class="transition hover:text-white">Демки</a>
-      <a href="/profile" class="transition hover:text-white">Профиль</a>
-      <a href="/auth/logout" class="text-red-400/80 transition hover:text-red-300">Выйти</a>
+      <a href="/history" class="transition hover:text-white">{s.nav.diary}</a>
+      <a href="/demos" class="transition hover:text-white">{s.nav.demos}</a>
+      <a href="/profile" class="transition hover:text-white">{s.nav.profile}</a>
+      <a href="/auth/logout" class="text-red-400/80 transition hover:text-red-300">{s.nav.logout}</a>
     </div>
   </div>
 
@@ -103,6 +124,8 @@ const dateFormat = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "lo
     stats={stats}
     reviewCount={reviewCount}
     poolSize={pool.length}
+    freeSkips={freeSkips.available}
+    locale={locale}
     runProfile={run?.profile ?? null}
     runDate={run ? dateFormat.format(new Date(run.createdAt)) : null}
     activeRunId={activeRun?.id ?? null}

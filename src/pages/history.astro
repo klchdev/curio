@@ -11,6 +11,8 @@ import {
   TIER_STYLE,
 } from "../lib/vocab";
 import AddGameNoteButton from "../components/AddGameNoteButton";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
@@ -22,31 +24,34 @@ if (!user) return Astro.redirect("/");
  */
 const timeline = await getHistory(user.id);
 
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
 const KIND_LABEL: Record<string, string> = {
-  first: "первое впечатление",
-  update: "дополнение",
-  verdict: "смена вердикта",
-  advisor: "совет ИИ",
+  first: s.pages.entryFirst,
+  update: s.pages.entryUpdate,
+  verdict: s.pages.entryVerdict,
+  advisor: s.pages.entryAdvisor,
 };
 
-const dateFormat = new Intl.DateTimeFormat("ru-RU", {
+const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
   day: "numeric",
   month: "short",
   year: "numeric",
 });
 ---
 
-<Layout title="Дневник">
+<Layout title={s.pages.diary}>
   <div class="mb-8 flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold">Дневник</h1>
-      <p class="text-sm text-gray-500">{timeline.length} записей</p>
+      <h1 class="text-2xl font-bold">{s.pages.diary}</h1>
+      <p class="text-sm text-gray-500">{s.pages.diaryCount(timeline.length)}</p>
     </div>
-    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; {s.pages.back}</a>
   </div>
 
   {timeline.length === 0 ? (
-    <p class="text-gray-500">Пока пусто. Крути рулетку!</p>
+    <p class="text-gray-500">{s.pages.diaryEmpty}</p>
   ) : (
     <ol class="relative space-y-4 border-l border-gray-800 pl-6">
       {timeline.map((entry) => (
@@ -70,7 +75,7 @@ const dateFormat = new Intl.DateTimeFormat("ru-RU", {
                       : "bg-gray-800 text-gray-400",
                   ]}
                 >
-                  {entry.reasonType === "shame" ? "стена стыда" : "пропуск"}
+                  {entry.reasonType === "shame" ? s.pages.shame : s.pages.skipped}
                 </span>
                 <span class="ml-auto text-xs text-gray-600">
                   {dateFormat.format(new Date(entry.date))}
@@ -130,6 +135,7 @@ const dateFormat = new Intl.DateTimeFormat("ru-RU", {
                 )}
                 <AddGameNoteButton
                   client:visible
+                  locale={locale}
                   gameId={entry.gameId}
                   gameTitle={entry.gameTitle}
                   currentPlaytime={entry.playtimeMinutes}

@@ -1,4 +1,6 @@
 import type { APIRoute } from "astro";
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
 import { getUserId } from "../../lib/auth";
 import { recordAdvisorResponse } from "../../lib/queries";
 
@@ -10,7 +12,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const { gameId, argument, accepted } = await request.json();
 
   if (!Number.isInteger(gameId) || typeof argument !== "string" || !argument.trim()) {
-    return new Response(JSON.stringify({ error: "Некорректный запрос" }), {
+    return new Response(JSON.stringify({ error: t(localeFrom(cookies, request)).errors.badRequest }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });

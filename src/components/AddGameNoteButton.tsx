@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import ImpressionSheet from "./ImpressionSheet";
+import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 interface Props {
   gameId: number;
@@ -10,6 +12,7 @@ interface Props {
   currentVerdict: string | null;
   currentRating: number | null;
   currentTier: string | null;
+  locale?: Locale;
 }
 
 export default function AddGameNoteButton({
@@ -20,8 +23,10 @@ export default function AddGameNoteButton({
   currentVerdict,
   currentRating,
   currentTier,
+  locale = DEFAULT_LOCALE,
 }: Props) {
   const [showModal, setShowModal] = useState(false);
+  const s = t(locale);
 
   return (
     <>
@@ -29,7 +34,7 @@ export default function AddGameNoteButton({
         onClick={() => setShowModal(true)}
         className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:border-indigo-500 hover:text-indigo-300"
       >
-        Дополнить отзыв
+        {s.pages.addNote}
       </button>
       {showModal &&
         createPortal(
@@ -42,6 +47,7 @@ export default function AddGameNoteButton({
             currentVerdict={currentVerdict}
             currentRating={currentRating}
             currentTier={currentTier}
+            locale={locale}
             onClose={() => setShowModal(false)}
           />,
           document.body

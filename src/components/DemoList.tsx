@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import ImpressionSheet from "./ImpressionSheet";
-
-type TierValue = "S" | "A" | "B" | "C" | "D" | "F";
+import {
+  TIER_STYLE,
+  VERDICT_STYLE,
+  verdictLabel,
+  worthLabel,
+  type Tier,
+  type Verdict,
+} from "../lib/vocab";
+import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 interface DemoReview {
   gameId: number;
@@ -16,40 +24,18 @@ interface DemoReview {
   createdAt: string;
 }
 
-const TIER_STYLE: Record<TierValue, string> = {
-  S: "bg-yellow-500 text-yellow-950",
-  A: "bg-emerald-500 text-emerald-950",
-  B: "bg-sky-500 text-sky-950",
-  C: "bg-orange-500 text-orange-950",
-  D: "bg-red-500 text-red-950",
-  F: "bg-rose-800 text-rose-100",
-};
-
-const VERDICT_LABEL: Record<string, { label: string; icon: string }> = {
-  finished: { label: "Прошёл", icon: "✅" },
-  playing: { label: "Жду релиз", icon: "🎮" },
-  dropped: { label: "Не зашло", icon: "❌" },
-  later: { label: "Под вопросом", icon: "⏸️" },
-};
-
-const WORTH_LABELS = [
-  "Зря потратил время",
-  "Скорее нет",
-  "Нормально",
-  "Скорее да",
-  "Рад что попробовал",
-];
-
 interface Props {
   reviews: DemoReview[];
+  locale?: Locale;
 }
 
-export default function DemoList({ reviews }: Props) {
+export default function DemoList({ reviews, locale = DEFAULT_LOCALE }: Props) {
+  const s = t(locale);
   const [showModal, setShowModal] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
 
   const handleDelete = async (gameId: number) => {
-    if (!confirm("Удалить отзыв на демку?")) return;
+    if (!confirm(s.pages.demoConfirm)) return;
     setDeleting(gameId);
     try {
       const res = await fetch("/api/demo-review", {
@@ -74,18 +60,23 @@ export default function DemoList({ reviews }: Props) {
           onClick={() => setShowModal(true)}
           className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium transition hover:bg-indigo-500"
         >
-          + Добавить отзыв на демку
+          {s.pages.demoAdd}
         </button>
       </div>
 
       {reviews.length === 0 ? (
         <p className="text-center text-gray-500">
-          Пока пусто. Поиграл в демку на Next Fest — добавь впечатление.
+          {s.pages.demosEmpty}
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {reviews.map((r) => {
-            const v = r.verdict ? VERDICT_LABEL[r.verdict] : null;
+            const v = r.verdict
+              ? {
+                  icon: VERDICT_STYLE[r.verdict as Verdict].icon,
+                  label: verdictLabel(r.verdict as Verdict, locale, { demo: true }),
+                }
+              : null;
             return (
               <div
                 key={r.gameId}
@@ -102,7 +93,7 @@ export default function DemoList({ reviews }: Props) {
                     {r.tier && (
                       <span
                         className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-lg font-black ${
-                          TIER_STYLE[r.tier as TierValue]
+                          `${TIER_STYLE[r.tier as Tier].bg} ${TIER_STYLE[r.tier as Tier].text}`
                         }`}
                       >
                         {r.tier}
@@ -118,7 +109,7 @@ export default function DemoList({ reviews }: Props) {
                       disabled={deleting === r.gameId}
                       className="shrink-0 text-xs text-gray-600 transition hover:text-red-400 disabled:opacity-50"
                     >
-                      Удалить
+                      {s.pages.demoDelete}
                     </button>
                   </div>
                   <div className="mb-2 flex flex-wrap gap-2 text-xs">
@@ -129,7 +120,7 @@ export default function DemoList({ reviews }: Props) {
                     )}
                     {r.rating != null && (
                       <span className="rounded-full bg-gray-800 px-2 py-0.5 text-gray-400">
-                        {WORTH_LABELS[r.rating - 1]}
+                        {worthLabel(r.rating, locale)}
                       </span>
                     )}
                   </div>
@@ -144,7 +135,7 @@ export default function DemoList({ reviews }: Props) {
                     rel="noopener noreferrer"
                     className="mt-2 inline-block text-xs text-gray-600 transition hover:text-indigo-400"
                   >
-                    Открыть в Steam ↗
+                    {s.pages.openInSteam}
                   </a>
                 </div>
               </div>
@@ -155,7 +146,12 @@ export default function DemoList({ reviews }: Props) {
 
       {showModal &&
         createPortal(
-          <ImpressionSheet mode="demo" gameTitle="Новая демка" onClose={() => setShowModal(false)} />,
+          <ImpressionSheet
+            mode="demo"
+            gameTitle={s.pages.demoNew}
+            locale={locale}
+            onClose={() => setShowModal(false)}
+          />,
           document.body
         )}
     </>

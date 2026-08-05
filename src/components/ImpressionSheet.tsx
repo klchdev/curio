@@ -10,6 +10,8 @@ import {
   type Tier,
   type Verdict,
 } from "../lib/vocab";
+import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
+import { t } from "../lib/strings";
 import Celebration from "./Celebration";
 
 interface Props {
@@ -24,6 +26,7 @@ interface Props {
   currentVerdict?: string | null;
   currentRating?: number | null;
   currentTier?: string | null;
+  locale?: Locale;
   onClose: () => void;
   onSaved?: () => void;
 }
@@ -44,10 +47,12 @@ export default function ImpressionSheet({
   currentVerdict,
   currentRating,
   currentTier,
+  locale = DEFAULT_LOCALE,
   onClose,
   onSaved,
 }: Props) {
   const rule = SHEET_RULES[mode];
+  const s = t(locale);
 
   const [note, setNote] = useState("");
   const [verdict, setVerdict] = useState<Verdict | null>((currentVerdict as Verdict) ?? null);
@@ -77,19 +82,19 @@ export default function ImpressionSheet({
 
   async function submit() {
     if (rule.noteRequired && !hasNote) {
-      setError(`Заметка минимум ${rule.minNote} символов`);
+      setError(s.sheet.minChars(rule.minNote));
       return;
     }
     if (note.length > 0 && !hasNote) {
-      setError(`Заметка минимум ${rule.minNote} символов`);
+      setError(s.sheet.minChars(rule.minNote));
       return;
     }
     if (rule.verdictRequired && !verdict) {
-      setError("Выбери вердикт");
+      setError(s.sheet.pickVerdict);
       return;
     }
     if (!canSubmit) {
-      setError("Нечего сохранять");
+      setError(s.sheet.nothingToSave);
       return;
     }
 
@@ -115,7 +120,7 @@ export default function ImpressionSheet({
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Не удалось сохранить");
+        setError(data.error ?? s.errors.saveFailed);
         return;
       }
 
@@ -125,7 +130,7 @@ export default function ImpressionSheet({
       }
       finish();
     } catch {
-      setError("Сеть не отвечает");
+      setError(s.errors.network);
     } finally {
       setLoading(false);
     }
@@ -160,14 +165,16 @@ export default function ImpressionSheet({
         >
           <header className="mb-5">
             <p className="text-xs tracking-[0.15em] text-gray-500 uppercase">
-              {rule.title.ru}
+              {rule.title[locale]}
             </p>
             <h2 className="mt-1 text-xl font-bold">{gameTitle}</h2>
             {currentPlaytime > 0 && (
               <p className="mt-1 text-sm text-gray-500">
-                Наиграно {formatPlaytime(currentPlaytime)}
+                {s.sheet.played(formatPlaytime(currentPlaytime, locale))}
                 {delta != null && delta > 0 && (
-                  <span className="text-indigo-400"> · +{formatPlaytime(delta)} с прошлой записи</span>
+                  <span className="text-indigo-400">
+                    {s.sheet.sinceLast(formatPlaytime(delta, locale))}
+                  </span>
                 )}
               </p>
             )}
@@ -179,7 +186,7 @@ export default function ImpressionSheet({
 
           {rule.showAppIdInput && (
             <label className="mb-5 block">
-              <span className="mb-1.5 block text-sm text-gray-400">Appid или ссылка на демку</span>
+              <span className="mb-1.5 block text-sm text-gray-400">{s.sheet.appId}</span>
               <input
                 value={appIdOrUrl}
                 onChange={(event) => setAppIdOrUrl(event.target.value)}
@@ -191,10 +198,11 @@ export default function ImpressionSheet({
 
           <div className="mb-5">
             <span className="mb-2 block text-sm text-gray-400">
-              Вердикт{rule.verdictRequired ? "" : " (если изменился)"}
+              {s.sheet.verdict}
+              {rule.verdictRequired ? "" : s.sheet.verdictOptional}
             </span>
             <div className="flex flex-wrap gap-2">
-              {verdicts(undefined, { demo: rule.demoLabels }).map((option) => (
+              {verdicts(locale, { demo: rule.demoLabels }).map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setVerdict(option.value)}
@@ -212,9 +220,9 @@ export default function ImpressionSheet({
 
           {rule.showRating && (
             <div className="mb-5">
-              <span className="mb-2 block text-sm text-gray-400">Стоило ли времени</span>
+              <span className="mb-2 block text-sm text-gray-400">{s.sheet.worth}</span>
               <div className="flex gap-1.5">
-                {worthLabels().map((label, index) => (
+                {worthLabels(locale).map((label, index) => (
                   <button
                     key={label}
                     title={label}
@@ -230,16 +238,16 @@ export default function ImpressionSheet({
                 ))}
               </div>
               <p className={`mt-1.5 text-sm ${WORTH_COLORS[rating - 1]}`}>
-                {worthLabels()[rating - 1]}
+                {worthLabels(locale)[rating - 1]}
               </p>
             </div>
           )}
 
           {rule.showTier && (
             <div className="mb-5">
-              <span className="mb-2 block text-sm text-gray-400">Тир</span>
+              <span className="mb-2 block text-sm text-gray-400">{s.sheet.tier}</span>
               <div className="flex flex-wrap gap-1.5">
-                {tiers().map((option) => (
+                {tiers(locale).map((option) => (
                   <button
                     key={option.value}
                     title={option.hint}
@@ -259,7 +267,10 @@ export default function ImpressionSheet({
 
           <label className="mb-5 block">
             <span className="mb-1.5 flex items-baseline justify-between text-sm text-gray-400">
-              <span>Впечатление{rule.noteRequired ? "" : " (необязательно)"}</span>
+              <span>
+                {s.sheet.impression}
+                {rule.noteRequired ? "" : s.sheet.optional}
+              </span>
               <span className={note.length >= rule.minNote ? "text-emerald-500" : "text-gray-600"}>
                 {note.length} / {rule.minNote}
               </span>
@@ -268,7 +279,7 @@ export default function ImpressionSheet({
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={5}
-              placeholder="Что зацепило, что раздражает, вернёшься ли"
+              placeholder={s.sheet.notePlaceholder}
               className="w-full resize-none rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm leading-relaxed outline-none focus:border-gray-500"
             />
           </label>
@@ -285,13 +296,13 @@ export default function ImpressionSheet({
               disabled={loading || !canSubmit}
               className="flex-1 rounded-xl bg-white py-3 font-medium text-gray-950 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {loading ? "Сохраняю…" : rule.submit.ru}
+              {loading ? s.sheet.saving : rule.submit[locale]}
             </button>
             <button
               onClick={close}
               className="rounded-xl border border-gray-700 px-5 py-3 text-gray-400 transition hover:bg-gray-800"
             >
-              Отмена
+              {s.sheet.cancel}
             </button>
           </div>
         </div>

@@ -4,6 +4,12 @@ import { getSessionUser } from "../lib/session";
 import { getDemoReviews } from "../lib/queries";
 import DemoList from "../components/DemoList.tsx";
 
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
@@ -15,14 +21,14 @@ const reviews = reviewsRaw.map((r) => ({
 }));
 ---
 
-<Layout title="Демки">
+<Layout title={s.pages.demos}>
   <div class="mb-8 flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold">Демки</h1>
-      <p class="text-sm text-gray-400">Впечатления с Next Fest и других демок</p>
+      <h1 class="text-2xl font-bold">{s.pages.demos}</h1>
+      <p class="text-sm text-gray-400">{s.pages.demosLede}</p>
     </div>
-    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; Назад</a>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; {s.pages.back}</a>
   </div>
 
-  <DemoList client:load reviews={reviews} />
+  <DemoList client:load reviews={reviews} locale={locale} />
 </Layout>

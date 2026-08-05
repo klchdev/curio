@@ -12,6 +12,9 @@ import {
   THRESHOLDS,
   type Tier,
 } from "../../lib/vocab";
+import { DEFAULT_LOCALE, type Locale } from "../../lib/i18n";
+import { t, type Dict } from "../../lib/strings";
+import SkipModal from "../SkipModal";
 
 export interface Pick {
   gameId: number;
@@ -71,9 +74,11 @@ export interface Props {
   stats: { totalGames: number; totalLibrary: number; streak: number; wallOfShame: string[] };
   reviewCount: number;
   poolSize: number;
+  freeSkips: number;
   runProfile: string | null;
   runDate: string | null;
   activeRunId: number | null;
+  locale: Locale;
 }
 
 type Zone = "choose" | "now" | "recap";
@@ -85,7 +90,8 @@ const ZONE_GLOW: Record<Zone, string> = {
 };
 
 export default function Hub(props: Props) {
-  const { picks, slots, queue, queueTotal, reviewCount, activeRunId } = props;
+  const { picks, slots, queueTotal, reviewCount, activeRunId, locale } = props;
+  const s = t(locale);
 
   const [zone, setZone] = useState<Zone>("choose");
   const [index, setIndex] = useState(0);
@@ -116,7 +122,7 @@ export default function Hub(props: Props) {
         const data = await res.json();
         if (data.status === "done") window.location.reload();
         if (data.status === "error") {
-          setError(data.error ?? "Генерация не удалась");
+          setError(data.error ?? s.errors.runFailed);
           setRunId(null);
         }
       } catch {
@@ -136,12 +142,12 @@ export default function Hub(props: Props) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Не получилось");
+        setError(data.error ?? s.errors.generic);
         return false;
       }
       return true;
     } catch {
-      setError("Сеть не отвечает");
+      setError(s.errors.network);
       return false;
     }
   }
@@ -199,21 +205,21 @@ export default function Hub(props: Props) {
           <DockTile
             active={zone === "choose"}
             onClick={() => setZone("choose")}
-            label="Выбрать"
-            hint={picks.length > 0 ? `${picks.length} советов · жребий` : "советы ИИ"}
+            label={s.dock.choose}
+            hint={s.dock.chooseHint(picks.length)}
           />
           <DockTile
             active={zone === "now"}
             onClick={() => setZone("now")}
-            label="Сейчас"
-            hint={`${slots.length} из 3 контрактов · ${queueTotal} разобрать`}
+            label={s.dock.now}
+            hint={s.dock.nowHint(slots.length, queueTotal)}
             accent={queueTotal > 0}
           />
           <DockTile
             active={zone === "recap"}
             onClick={() => setZone("recap")}
-            label="Итоги"
-            hint={`${reviewCount} отзывов · тиры · дневник`}
+            label={s.dock.recap}
+            hint={s.dock.recapHint(reviewCount)}
           />
         </div>
       </nav>
@@ -268,6 +274,7 @@ function ChooseZone({
   poolSize,
   runProfile,
   runDate,
+  locale,
   index,
   setIndex,
   busy,
@@ -281,6 +288,7 @@ function ChooseZone({
   runId: number | null;
   setRunId: (value: number | null) => void;
 }) {
+  const s = t(locale);
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
@@ -306,16 +314,26 @@ function ChooseZone({
   }
 
   const blindSpin = (
-    <BlindSpin poolSize={poolSize} busy={busy === "spin"} onSpin={spinBlind} disabled={slotsLeft <= 0} />
+    <BlindSpin
+      poolSize={poolSize}
+      busy={busy === "spin"}
+      onSpin={spinBlind}
+      disabled={slotsLeft <= 0}
+      s={s}
+    />
   );
 
-  if (runId !== null) return <RunProgress />;
+  if (runId !== null) return <RunProgress s={s} />;
   if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
-    return <GateCard reviewCount={reviewCount}>{blindSpin}</GateCard>;
+    return (
+      <GateCard reviewCount={reviewCount} s={s}>
+        {blindSpin}
+      </GateCard>
+    );
   }
   if (picks.length === 0) {
     return (
-      <EmptyCard reviewCount={reviewCount} onStart={startRun} busy={busy === "run"}>
+      <EmptyCard reviewCount={reviewCount} onStart={startRun} busy={busy === "run"} s={s}>
         {blindSpin}
       </EmptyCard>
     );
@@ -361,17 +379,17 @@ function ChooseZone({
     <>
       <Reveal>
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="text-sm tracking-[0.2em] text-gray-500 uppercase">Что играть дальше</h1>
+          <h1 className="text-sm tracking-[0.2em] text-gray-500 uppercase">{s.choose.eyebrow}</h1>
           <span className="text-xs text-gray-700">
             {index + 1} / {picks.length}
-            {runDate && ` · собрано ${runDate}`}
+            {runDate && s.choose.collected(runDate)}
           </span>
           <button
             onClick={startRun}
             disabled={busy === "run"}
             className="ml-auto rounded-full border border-gray-800 px-3 py-1 text-xs text-gray-500 transition hover:border-gray-600 hover:text-white disabled:opacity-40"
           >
-            Пересобрать советы
+            {s.choose.regenerate}
           </button>
         </div>
       </Reveal>
@@ -385,12 +403,10 @@ function ChooseZone({
                 disabled={slotsLeft <= 0}
                 className="rounded-full border border-gray-700 px-4 py-1.5 text-xs text-gray-400 transition hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                🎰 Не могу решить — брось жребий
+                {s.choose.diceIdle}
               </button>
               {slotsLeft <= 0 && (
-                <span className="ml-3 text-xs text-gray-600">
-                  все три контракта заняты — закрой один
-                </span>
+                <span className="ml-3 text-xs text-gray-600">{s.choose.slotsFull}</span>
               )}
             </>
           )}
@@ -398,13 +414,9 @@ function ChooseZone({
           {dice === "confirm" && (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-900/70 bg-amber-950/20 p-4">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-amber-200">Жребий сразу создаст контракт</p>
+                <p className="text-sm font-medium text-amber-200">{s.choose.diceTitle}</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-gray-400">
-                  Жребий бросается между {rollable.length} советами — игры из тира D в него не
-                  попадают. Выпавшую нельзя будет просто пролистать:{" "}
-                  {THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и первое впечатление, иначе придётся
-                  пропускать, а пропуск без причины идёт на стену стыда. Свободных контрактов:{" "}
-                  {slotsLeft}.
+                  {s.choose.diceText(rollable.length, slotsLeft)}
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -412,13 +424,13 @@ function ChooseZone({
                   onClick={roll}
                   className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 transition hover:bg-amber-400"
                 >
-                  Бросаю
+                  {s.choose.diceGo}
                 </button>
                 <button
                   onClick={() => setDice("idle")}
                   className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 transition hover:bg-gray-800"
                 >
-                  Передумал
+                  {s.choose.diceCancel}
                 </button>
               </div>
             </div>
@@ -427,7 +439,7 @@ function ChooseZone({
           {dice === "rolling" && (
             <div className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/50 p-4">
               <span className="animate-spin text-lg">🎰</span>
-              <span className="text-sm text-gray-400">Жребий брошен, выбираю…</span>
+              <span className="text-sm text-gray-400">{s.choose.diceRolling}</span>
             </div>
           )}
         </div>
@@ -448,9 +460,9 @@ function ChooseZone({
             <div className="mb-3 flex items-center gap-3">
               <span className={`text-5xl leading-none font-black ${tone.accent}`}>{pick.tier}</span>
               <span className="text-sm text-gray-500">
-                {advisorHint(pick.tier as any)}
+                {advisorHint(pick.tier as any, locale)}
                 <br />
-                {pick.hours > 0 ? `наиграно ${pick.hours}ч` : "ни разу не запускал"}
+                {pick.hours > 0 ? s.choose.playedHours(pick.hours) : s.choose.neverLaunched}
               </span>
             </div>
           </Reveal>
@@ -469,19 +481,16 @@ function ChooseZone({
                 disabled={busy !== null || slotsLeft <= 0}
                 className="rounded-xl bg-white px-6 py-3 font-medium text-gray-950 transition hover:scale-[1.02] disabled:opacity-40"
               >
-                {busy === `take-${pick.gameId}` ? "Беру…" : "Взять контракт"}
+                {busy === `take-${pick.gameId}` ? s.choose.taking : s.choose.take}
               </button>
               <button
                 onClick={() => setIndex((i) => (i + 1) % picks.length)}
                 className="text-sm text-gray-500 transition hover:text-white"
               >
-                Дальше
+                {s.choose.next}
               </button>
             </div>
-            <p className="mt-3 max-w-lg text-xs text-gray-600">
-              Контракт — обязательство сыграть минимум {THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и
-              записать первое впечатление. Одновременно их может быть {THRESHOLDS.MAX_ACTIVE_SLOTS}.
-            </p>
+            <p className="mt-3 max-w-lg text-xs text-gray-600">{s.choose.contractNote}</p>
           </Reveal>
         </div>
       </div>
@@ -514,7 +523,7 @@ function ChooseZone({
         <Reveal delay={560} className="mt-10">
           <details className="rounded-xl border border-gray-800 bg-gray-900/30 p-5">
             <summary className="cursor-pointer text-sm font-medium text-gray-300">
-              Что видно по твоим отзывам
+              {s.choose.profileSummary}
             </summary>
             <div className="mt-3 space-y-2">
               {runProfile
@@ -534,17 +543,14 @@ function ChooseZone({
   );
 }
 
-function RunProgress() {
+function RunProgress({ s }: { s: Dict }) {
   return (
     <Reveal>
       <div className="mx-auto max-w-xl py-16 text-center">
         <div className="mb-4 h-2 overflow-hidden rounded-full bg-gray-800">
           <div className="h-full w-1/3 animate-pulse rounded-full bg-emerald-600/70" />
         </div>
-        <p className="text-sm text-gray-400">
-          Читаю твои отзывы и раскладываю библиотеку по тирам. Занимает около минуты — можно уйти
-          со страницы.
-        </p>
+        <p className="text-sm text-gray-400">{s.choose.running}</p>
       </div>
     </Reveal>
   );
@@ -552,9 +558,11 @@ function RunProgress() {
 
 function GateCard({
   reviewCount,
+  s,
   children,
 }: {
   reviewCount: number;
+  s: Dict;
   children?: React.ReactNode;
 }) {
   const need = THRESHOLDS.MIN_REVIEWS_FOR_AI;
@@ -562,14 +570,9 @@ function GateCard({
   return (
     <Reveal>
       <div className="mx-auto max-w-xl py-10 text-center">
-        <p className="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">Что играть дальше</p>
-        <h2 className="mb-4 text-3xl leading-tight font-bold">
-          Ещё {left} {left === 1 ? "отзыв" : left < 5 ? "отзыва" : "отзывов"} — и я смогу советовать
-        </h2>
-        <p className="mb-8 leading-relaxed text-gray-400">
-          Советы строятся на твоих словах, а не на жанрах. Пока отзывов мало, модели не за что
-          зацепиться.
-        </p>
+        <p className="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">{s.choose.eyebrow}</p>
+        <h2 className="mb-4 text-3xl leading-tight font-bold">{s.choose.gateTitle(left)}</h2>
+        <p className="mb-8 leading-relaxed text-gray-400">{s.choose.gateText}</p>
         <div className="flex items-center gap-3">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-800">
             <div
@@ -593,25 +596,25 @@ function BlindSpin({
   busy,
   onSpin,
   disabled,
+  s,
 }: {
   poolSize: number;
   busy: boolean;
   onSpin: () => void;
   disabled: boolean;
+  s: Dict;
 }) {
   return (
     <div className="mt-10 border-t border-gray-800 pt-6">
-      <p className="mb-3 text-sm text-gray-500">
-        Пока советов нет, игру можно выбрать по-старому — жребием по всему пулу из {poolSize} игр.
-      </p>
+      <p className="mb-3 text-sm text-gray-500">{s.choose.blindText(poolSize)}</p>
       <button
         onClick={onSpin}
         disabled={busy || disabled}
         className="rounded-xl border border-gray-700 px-5 py-2.5 text-sm transition hover:border-emerald-600 hover:text-emerald-300 disabled:opacity-40"
       >
-        {busy ? "Кручу…" : "🎰 Крутить рулетку"}
+        {busy ? s.choose.blindBusy : s.choose.blindCta}
       </button>
-      {disabled && <p className="mt-2 text-xs text-gray-600">все три контракта заняты</p>}
+      {disabled && <p className="mt-2 text-xs text-gray-600">{s.choose.blindFull}</p>}
     </div>
   );
 }
@@ -620,32 +623,31 @@ function EmptyCard({
   reviewCount,
   onStart,
   busy,
+  s,
   children,
 }: {
   reviewCount: number;
   onStart: () => void;
   busy: boolean;
+  s: Dict;
   children?: React.ReactNode;
 }) {
   return (
     <Reveal>
       <div className="mx-auto max-w-xl py-10 text-center">
-        <p className="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">Что играть дальше</p>
+        <p className="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">{s.choose.eyebrow}</p>
         <h2 className="mb-4 text-4xl leading-tight font-bold text-balance">
-          Разберём твой вкус по {reviewCount} отзывам
+          {s.choose.emptyTitle(reviewCount)}
         </h2>
-        <p className="mb-8 leading-relaxed text-gray-400">
-          Модель прочитает всё, что ты написал, найдёт закономерности, которые ты сам не
-          проговаривал, и разложит непройденное по тирам — с объяснением, почему именно тебе.
-        </p>
+        <p className="mb-8 leading-relaxed text-gray-400">{s.choose.emptyText}</p>
         <button
           onClick={onStart}
           disabled={busy}
           className="rounded-xl bg-white px-7 py-3.5 font-medium text-gray-950 transition hover:scale-[1.02] disabled:opacity-40"
         >
-          {busy ? "Запускаю…" : "Собрать рекомендации"}
+          {busy ? s.choose.emptyBusy : s.choose.emptyCta}
         </button>
-        <p className="mt-4 text-xs text-gray-600">Занимает около минуты · можно уйти со страницы</p>
+        <p className="mt-4 text-xs text-gray-600">{s.choose.emptyHint}</p>
         {children}
       </div>
     </Reveal>
@@ -660,11 +662,15 @@ function NowZone({
   queueTotal,
   abandoned,
   poolSize,
+  freeSkips,
+  locale,
   busy,
   setBusy,
   post,
 }: ZoneProps & { onZone: (zone: Zone) => void }) {
+  const s = t(locale);
   const [sheet, setSheet] = useState<{ mode: "slot-first" | "retro"; item: any } | null>(null);
+  const [skipping, setSkipping] = useState<Slot | null>(null);
   const [done, setDone] = useState<number[]>([]);
   const [answered, setAnswered] = useState<number[]>([]);
 
@@ -696,6 +702,25 @@ function NowZone({
     }
   }
 
+  /*
+   * Наигранное время в базе двигает только этот запрос: остальное приложение
+   * читает сохранённое значение, чтобы не дёргать Steam на каждый чих. Без
+   * кнопки прогресс контракта стоял бы на месте вечно.
+   */
+  async function refresh(slotId: number) {
+    setBusy(`refresh-${slotId}`);
+    const ok = await post("/api/refresh-playtime", { slotId });
+    setBusy(null);
+    if (ok) window.location.reload();
+  }
+
+  async function sync() {
+    setBusy("sync");
+    const ok = await post("/api/sync-library");
+    setBusy(null);
+    if (ok) window.location.reload();
+  }
+
   const free = Math.max(0, THRESHOLDS.MAX_ACTIVE_SLOTS - slots.length);
   const pending = queue.filter((game) => !done.includes(game.gameId));
 
@@ -704,9 +729,9 @@ function NowZone({
       <section>
         <Reveal>
           <div className="mb-4 flex flex-wrap items-baseline gap-3">
-            <h2 className="text-2xl font-bold">Активные контракты</h2>
+            <h2 className="text-2xl font-bold">{s.now.contracts}</h2>
             <span className="text-sm text-gray-500">
-              {slots.length} из {THRESHOLDS.MAX_ACTIVE_SLOTS} · {poolSize} игр в пуле
+              {s.now.contractsCount(slots.length, poolSize)}
             </span>
           </div>
         </Reveal>
@@ -719,7 +744,7 @@ function NowZone({
                 <div className="p-4">
                   <p className="truncate font-medium">{slot.title}</p>
                   <p className="mt-1 text-xs text-gray-500">
-                    {formatPlaytime(slot.played)} из {THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} мин
+                    {s.now.playedOf(formatPlaytime(slot.played, locale))}
                   </p>
                   <div className="mt-3 h-1 overflow-hidden rounded-full bg-gray-800">
                     <div
@@ -733,8 +758,23 @@ function NowZone({
                     onClick={() => setSheet({ mode: "slot-first", item: slot })}
                     className="mt-3 w-full rounded-lg border border-gray-700 py-1.5 text-xs text-gray-300 transition hover:bg-gray-800"
                   >
-                    Записать впечатление
+                    {s.now.record}
                   </button>
+                  <div className="mt-2 flex gap-2 text-xs">
+                    <button
+                      onClick={() => refresh(slot.slotId)}
+                      disabled={busy !== null}
+                      className="flex-1 rounded-lg px-2 py-1 text-gray-500 transition hover:bg-gray-800 hover:text-gray-300 disabled:opacity-40"
+                    >
+                      {busy === `refresh-${slot.slotId}` ? s.now.refreshing : s.now.refresh}
+                    </button>
+                    <button
+                      onClick={() => setSkipping(slot)}
+                      className="rounded-lg px-2 py-1 text-gray-600 transition hover:bg-gray-800 hover:text-amber-300"
+                    >
+                      {s.now.skip}
+                    </button>
+                  </div>
                 </div>
               </article>
             </Reveal>
@@ -744,22 +784,28 @@ function NowZone({
             <Reveal key={`free-${i}`} delay={70 * (slots.length + i)} from="scale">
               <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-800 p-4 text-center">
                 <span className="text-2xl opacity-40">🎰</span>
-                <p className="text-sm text-gray-500">Свободный контракт</p>
-                <p className="text-xs text-gray-700">возьми из советов или брось жребий</p>
+                <p className="text-sm text-gray-500">{s.now.freeSlot}</p>
+                <p className="text-xs text-gray-700">{s.now.freeSlotHint}</p>
               </div>
             </Reveal>
           ))}
         </div>
+
+        <button
+          onClick={sync}
+          disabled={busy !== null}
+          className="mt-4 text-xs text-gray-600 transition hover:text-gray-300 disabled:opacity-40"
+        >
+          {busy === "sync" ? s.now.syncing : s.now.syncLibrary}
+        </button>
       </section>
 
       {pending.length > 0 && (
         <section>
           <Reveal delay={200}>
             <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <h2 className="text-2xl font-bold">Требует ответа</h2>
-              <span className="text-sm text-gray-500">
-                {queueTotal} игр сыграно, но вердикта нет
-              </span>
+              <h2 className="text-2xl font-bold">{s.now.queue}</h2>
+              <span className="text-sm text-gray-500">{s.now.queueCount(queueTotal)}</span>
             </div>
           </Reveal>
 
@@ -772,7 +818,9 @@ function NowZone({
                   )}
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{game.title}</p>
-                    <p className="text-xs text-gray-600">{formatPlaytime(game.playtimeMinutes)}</p>
+                    <p className="text-xs text-gray-600">
+                      {formatPlaytime(game.playtimeMinutes, locale)}
+                    </p>
                   </div>
                   <div className="ml-auto flex shrink-0 gap-1.5">
                     <button
@@ -780,20 +828,20 @@ function NowZone({
                       disabled={busy !== null}
                       className="rounded-lg border border-emerald-800 px-2.5 py-1 text-xs text-emerald-300 transition hover:bg-emerald-950/60 disabled:opacity-40"
                     >
-                      Прошёл
+                      {s.now.finished}
                     </button>
                     <button
                       onClick={() => verdict(game.gameId, "dropped", game.playtimeMinutes)}
                       disabled={busy !== null}
                       className="rounded-lg border border-red-900 px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-950/50 disabled:opacity-40"
                     >
-                      Бросил
+                      {s.now.dropped}
                     </button>
                     <button
                       onClick={() => setSheet({ mode: "retro", item: game })}
                       className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-400 transition hover:bg-gray-800"
                     >
-                      Отзыв
+                      {s.now.review}
                     </button>
                   </div>
                 </article>
@@ -807,8 +855,8 @@ function NowZone({
         <section>
           <Reveal delay={340}>
             <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <h2 className="text-2xl font-bold text-amber-300">Спор о брошенном</h2>
-              <span className="text-sm text-gray-500">модель не всегда с тобой согласна</span>
+              <h2 className="text-2xl font-bold text-amber-300">{s.now.dispute}</h2>
+              <span className="text-sm text-gray-500">{s.now.disputeHint}</span>
             </div>
           </Reveal>
 
@@ -825,7 +873,7 @@ function NowZone({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <p className="font-medium">{item.title}</p>
-                      <span className="text-xs text-gray-600">{item.hours}ч</span>
+                      <span className="text-xs text-gray-600">{s.choose.hoursShort(item.hours)}</span>
                     </div>
                     <p className="mt-1 text-sm leading-relaxed text-gray-400">
                       <RichText text={item.text} />
@@ -839,14 +887,14 @@ function NowZone({
                           disabled={busy !== null}
                           className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-amber-950 transition hover:bg-amber-400 disabled:opacity-40"
                         >
-                          Дам второй шанс
+                          {s.now.secondChance}
                         </button>
                         <button
                           onClick={() => answerAdvisor(item, false)}
                           disabled={busy !== null}
                           className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800 disabled:opacity-40"
                         >
-                          Нет, я прав
+                          {s.now.imRight}
                         </button>
                       </>
                     ) : (
@@ -855,7 +903,7 @@ function NowZone({
                         disabled={busy !== null}
                         className="rounded-lg border border-gray-800 px-3 py-1.5 text-xs text-gray-500 transition hover:bg-gray-800 disabled:opacity-40"
                       >
-                        Записать в дневник
+                        {s.now.toDiary}
                       </button>
                     )}
                   </div>
@@ -874,7 +922,18 @@ function NowZone({
           slotId={sheet.mode === "slot-first" ? sheet.item.slotId : undefined}
           gameId={sheet.mode === "retro" ? sheet.item.gameId : undefined}
           currentPlaytime={sheet.item.playtimeMinutes ?? sheet.item.played}
+          locale={locale}
           onClose={() => setSheet(null)}
+        />
+      )}
+
+      {skipping && (
+        <SkipModal
+          slotId={skipping.slotId}
+          gameTitle={skipping.title}
+          freeSkips={freeSkips}
+          locale={locale}
+          onClose={() => setSkipping(null)}
         />
       )}
     </div>
@@ -888,16 +947,18 @@ function RecapZone({
   tierGames,
   diary,
   demos,
+  locale,
   post,
 }: Props & { post: (url: string, body?: unknown) => Promise<boolean> }) {
+  const s = t(locale);
   return (
     <div className="space-y-12">
       <section className="grid gap-3 sm:grid-cols-4">
         {[
-          { value: stats.totalGames, label: "отзывов" },
-          { value: stats.totalLibrary, label: "игр в библиотеке" },
-          { value: stats.streak, label: "дней подряд" },
-          { value: stats.wallOfShame.length, label: "на стене стыда" },
+          { value: stats.totalGames, label: s.recap.statReviews },
+          { value: stats.totalLibrary, label: s.recap.statLibrary },
+          { value: stats.streak, label: s.recap.statStreak },
+          { value: stats.wallOfShame.length, label: s.recap.statShame },
         ].map((cell, i) => (
           <Reveal key={cell.label} delay={60 * i} from="scale">
             <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-5 text-center">
@@ -910,6 +971,7 @@ function RecapZone({
 
       <Reveal delay={200}>
         <TierBoard
+          locale={locale}
           games={tierGames}
           onChange={(gameId, tier) => post("/api/set-tier", { gameId, tier })}
         />
@@ -919,9 +981,9 @@ function RecapZone({
         <section>
           <Reveal delay={340}>
             <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <h2 className="text-2xl font-bold">Дневник впечатлений</h2>
+              <h2 className="text-2xl font-bold">{s.recap.diary}</h2>
               <a href="/history" className="text-sm text-gray-500 transition hover:text-white">
-                весь дневник &rarr;
+                {s.recap.allDiary} &rarr;
               </a>
             </div>
           </Reveal>
@@ -933,11 +995,11 @@ function RecapZone({
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span className="font-medium">{entry.title}</span>
                     <span className="text-xs text-gray-600">
-                      {formatPlaytime(entry.playtimeMinutes)}
+                      {formatPlaytime(entry.playtimeMinutes, locale)}
                     </span>
                     {entry.verdict && (
                       <span className="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
-                        {verdictLabel(entry.verdict as any)}
+                        {verdictLabel(entry.verdict as any, locale)}
                       </span>
                     )}
                     {entry.tier && (
@@ -960,9 +1022,9 @@ function RecapZone({
         <section>
           <Reveal delay={560}>
             <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <h2 className="text-2xl font-bold">Демки</h2>
+              <h2 className="text-2xl font-bold">{s.recap.demos}</h2>
               <a href="/demos" className="text-sm text-gray-500 transition hover:text-white">
-                все демки &rarr;
+                {s.recap.allDemos} &rarr;
               </a>
             </div>
           </Reveal>

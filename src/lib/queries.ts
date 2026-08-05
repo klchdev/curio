@@ -334,6 +334,12 @@ export async function getAttentionQueue(
   };
 }
 
+/**
+ * Метка бесплатного скипа в slot_skips. Это данные, а не текст интерфейса:
+ * по ней считаются потраченные скипы, поэтому она не переводится.
+ */
+export const FREE_SKIP_MARKER = "Бесплатный скип";
+
 export async function getFreeSkips(userId: number) {
   const reviewedCount = (await db
     .select({ count: sql<number>`COUNT(*)` })
@@ -349,7 +355,7 @@ export async function getFreeSkips(userId: number) {
       and(
         eq(slots.userId, userId),
         eq(slotSkips.reasonType, "legitimate"),
-        eq(slotSkips.reasonText, "Бесплатный скип")
+        eq(slotSkips.reasonText, FREE_SKIP_MARKER)
       )
     )
     .then((rows) => rows[0]))?.count ?? 0;

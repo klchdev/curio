@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { tierHint, type Tier } from "../lib/vocab";
+import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 interface Game {
   gameId: number;
@@ -10,15 +13,21 @@ interface Game {
 const ROWS = ["S", "A", "B", "C", "D", "F"] as const;
 type Row = (typeof ROWS)[number] | "unranked";
 
-const ROW_STYLE: Record<string, { chip: string; glow: string; hint: string }> = {
-  S: { chip: "bg-yellow-500 text-yellow-950", glow: "shadow-yellow-500/30", hint: "Шедевр" },
-  A: { chip: "bg-emerald-500 text-emerald-950", glow: "shadow-emerald-500/30", hint: "Крутая" },
-  B: { chip: "bg-sky-500 text-sky-950", glow: "shadow-sky-500/30", hint: "Хорошая" },
-  C: { chip: "bg-orange-500 text-orange-950", glow: "shadow-orange-500/30", hint: "Сойдёт" },
-  D: { chip: "bg-red-500 text-red-950", glow: "shadow-red-500/30", hint: "Не зашло" },
-  F: { chip: "bg-rose-800 text-rose-100", glow: "shadow-rose-800/30", hint: "Провал" },
-  unranked: { chip: "bg-gray-700 text-gray-200", glow: "shadow-gray-700/20", hint: "Без тира" },
+const ROW_STYLE: Record<string, { chip: string; glow: string }> = {
+  S: { chip: "bg-yellow-500 text-yellow-950", glow: "shadow-yellow-500/30" },
+  A: { chip: "bg-emerald-500 text-emerald-950", glow: "shadow-emerald-500/30" },
+  B: { chip: "bg-sky-500 text-sky-950", glow: "shadow-sky-500/30" },
+  C: { chip: "bg-orange-500 text-orange-950", glow: "shadow-orange-500/30" },
+  D: { chip: "bg-red-500 text-red-950", glow: "shadow-red-500/30" },
+  F: { chip: "bg-rose-800 text-rose-100", glow: "shadow-rose-800/30" },
+  unranked: { chip: "bg-gray-700 text-gray-200", glow: "shadow-gray-700/20" },
 };
+
+const UNRANKED_HINT: Record<Locale, string> = { ru: "Без тира", en: "No tier" };
+
+function rowHint(row: Row, locale: Locale): string {
+  return row === "unranked" ? UNRANKED_HINT[locale] : tierHint(row as Tier, locale);
+}
 
 /** Обложка с запасным вариантом: её может не быть в базе или она может не догрузиться. */
 function Cover({ title, image }: { title: string; image: string | null }) {
@@ -57,11 +66,14 @@ function Cover({ title, image }: { title: string; image: string | null }) {
 export default function TierBoard({
   games,
   onChange,
+  locale = DEFAULT_LOCALE,
 }: {
   games: Game[];
+  locale?: Locale;
   /** Перестановка сохраняется сразу; без обработчика доска остаётся демонстрационной. */
   onChange?: (gameId: number, tier: string | null) => void;
 }) {
+  const s = t(locale);
   const initial = useMemo(() => {
     const board: Record<Row, Game[]> = {
       S: [], A: [], B: [], C: [], D: [], F: [], unranked: [],
@@ -102,10 +114,8 @@ export default function TierBoard({
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-baseline gap-3">
-        <h2 className="text-2xl font-bold">Тир-лист</h2>
-        <span className="text-sm text-gray-500">
-          {total} игр расставлено · перетаскивай обложки между рядами
-        </span>
+        <h2 className="text-2xl font-bold">{s.board.title}</h2>
+        <span className="text-sm text-gray-500">{s.board.subtitle(total)}</span>
       </div>
 
       <div className="space-y-2">
@@ -131,6 +141,7 @@ export default function TierBoard({
             >
               <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1">
                 <span
+                  title={rowHint(row, locale)}
                   className={`flex h-9 w-9 items-center justify-center rounded-lg text-lg font-black transition-transform duration-300 ${style.chip} ${
                     over === row ? "scale-110" : ""
                   }`}
@@ -143,7 +154,7 @@ export default function TierBoard({
               <div className="flex min-h-14 flex-1 flex-wrap content-start gap-1.5">
                 {items.length === 0 && (
                   <span className="self-center text-xs text-gray-700">
-                    {over === row ? "отпусти здесь" : "пусто"}
+                    {over === row ? s.board.dropHere : s.board.empty}
                   </span>
                 )}
 

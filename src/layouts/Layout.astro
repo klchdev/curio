@@ -1,19 +1,29 @@
 ---
 import "../styles/global.css";
+import { LOCALES, localeFrom } from "../lib/i18n";
 
 interface Props {
   title: string;
 }
 
 const { title } = Astro.props;
+const locale = localeFrom(Astro.cookies, Astro.request);
+
+const description = {
+  ru: "BacklogRoulette — контракт с собой на прохождение Steam бэклога",
+  en: "BacklogRoulette — a contract with yourself to get through your Steam backlog",
+}[locale];
+
+// Возвращаемся туда же, где стоим: смена языка не должна сбрасывать на главную
+const back = Astro.url.pathname + Astro.url.search;
 ---
 
 <!doctype html>
-<html lang="ru">
+<html lang={locale}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="BacklogRoulette — контракт с собой на прохождение Steam бэклога" />
+    <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title} | BacklogRoulette</title>
   </head>
@@ -21,7 +31,20 @@ const { title } = Astro.props;
     <nav class="border-b border-gray-800 px-6 py-4">
       <div class="mx-auto flex max-w-5xl items-center justify-between">
         <a href="/" class="text-xl font-bold text-white">🎰 BacklogRoulette</a>
-        <div id="nav-user"></div>
+        <div class="flex items-center gap-1 text-xs">
+          {
+            LOCALES.map((code) => (
+              <a
+                href={`/api/lang?to=${code}&back=${encodeURIComponent(back)}`}
+                class={`rounded px-2 py-1 uppercase transition ${
+                  code === locale ? "bg-gray-800 text-white" : "text-gray-600 hover:text-gray-300"
+                }`}
+              >
+                {code}
+              </a>
+            ))
+          }
+        </div>
       </div>
     </nav>
     <main class="mx-auto max-w-5xl px-6 py-8">
