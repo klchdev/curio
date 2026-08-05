@@ -16,8 +16,6 @@ export const games = pgTable("games", {
   steamAppId: integer("steam_app_id").notNull().unique(),
   title: text("title").notNull(),
   headerImage: text("header_image"),
-  hltbMinutes: integer("hltb_minutes"),
-  excluded: boolean("excluded").notNull().default(false),
   isDemo: boolean("is_demo").notNull().default(false),
   createdAt: timestamp("created_at")
     .notNull()
@@ -36,8 +34,17 @@ export const userGames = pgTable(
       .references(() => games.id),
     playtimeMinutes: integer("playtime_minutes").notNull().default(0),
     lastPlayedAt: timestamp("last_played_at"),
+    /**
+     * Исключение из пула — решение конкретного игрока, а не свойство игры.
+     * Раньше флаг стоял на общем каталоге: скипнул «это не игра» один
+     * пользователь, а из пула она пропадала у всех.
+     */
+    excluded: boolean("excluded").notNull().default(false),
   },
-  (t) => [uniqueIndex("user_games_user_id_game_id_idx").on(t.userId, t.gameId)]
+  (t) => [
+    uniqueIndex("user_games_user_id_game_id_idx").on(t.userId, t.gameId),
+    index("user_games_playtime_idx").on(t.userId, t.playtimeMinutes),
+  ]
 );
 
 export const slots = pgTable("slots", {
@@ -55,7 +62,7 @@ export const slots = pgTable("slots", {
   startedAt: timestamp("started_at")
     .notNull()
     .$defaultFn(() => new Date()),
-});
+}, (t) => [index("slots_user_status_idx").on(t.userId, t.status)]);
 
 export const slotReviews = pgTable("slot_reviews", {
   id: serial("id").primaryKey(),

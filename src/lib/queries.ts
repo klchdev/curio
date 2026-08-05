@@ -45,7 +45,6 @@ export async function getActiveSlots(userId: number) {
         steamAppId: games.steamAppId,
         title: games.title,
         headerImage: games.headerImage,
-        hltbMinutes: games.hltbMinutes,
       },
       currentPlaytime: userGames.playtimeMinutes,
     })
@@ -71,14 +70,7 @@ export async function getUnplayedGames(userId: number) {
       .where(and(eq(slots.userId, userId), ne(slots.status, "skipped")))
   ).map((s) => s.gameId);
 
-  const excludedGameIds = (
-    await db
-      .select({ id: games.id })
-      .from(games)
-      .where(eq(games.excluded, true))
-  ).map((g) => g.id);
-
-  const blockedIds = [...new Set([...usedGameIds, ...excludedGameIds])];
+  const blockedIds = new Set(usedGameIds);
 
   const rows = await db
     .select({
@@ -86,7 +78,6 @@ export async function getUnplayedGames(userId: number) {
       steamAppId: games.steamAppId,
       title: games.title,
       headerImage: games.headerImage,
-      hltbMinutes: games.hltbMinutes,
     })
     .from(userGames)
     .innerJoin(games, eq(userGames.gameId, games.id))
@@ -94,11 +85,12 @@ export async function getUnplayedGames(userId: number) {
       and(
         eq(userGames.userId, userId),
         lte(userGames.playtimeMinutes, UNPLAYED_MAX_MINUTES),
+        eq(userGames.excluded, false),
         eq(games.isDemo, false)
       )
     );
 
-  return rows.filter((row) => !blockedIds.includes(row.id));
+  return rows.filter((row) => !blockedIds.has(row.id));
 }
 
 export async function spinRoulette(userId: number) {
@@ -347,9 +339,10 @@ export async function skipSlot(
     .values({ slotId, reasonType, reasonText, skippedAt: new Date() });
 
   if (reasonType === "legitimate" && reasonText !== "Бесплатный скип") {
-    await db.update(games)
+    await db
+      .update(userGames)
       .set({ excluded: true })
-      .where(eq(games.id, slot.gameId));
+      .where(and(eq(userGames.userId, userId), eq(userGames.gameId, slot.gameId)));
   }
 
   return { ok: true };
@@ -554,7 +547,7 @@ export async function deleteDemoReview(userId: number, gameId: number) {
 }
 
 export async function getStats(userId: number) {
-  const [records, shameSkips, libraryRow, activeRow, skippedRow] = await Promise.all([
+  const [records, shameSkips, libraryRow, activeRow, skippedRow, excludedRow] = await Promise.all([
     db
       .select({
         verdict: gameRecords.verdict,
@@ -587,6 +580,11 @@ export async function getStats(userId: number) {
       .select({ n: sql<number>`count(*)::int` })
       .from(slots)
       .where(and(eq(slots.userId, userId), eq(slots.status, "skipped"))),
+
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(userGames)
+      .where(and(eq(userGames.userId, userId), eq(userGames.excluded, true))),
   ]);
 
   const totalGames = records.length;
@@ -621,7 +619,7 @@ export async function getStats(userId: number) {
     wallOfShame: shameSkips.map((s) => s.gameTitle),
     totalLibrary: libraryRow[0]?.n ?? 0,
     poolSize: (await getUnplayedGames(userId)).length,
-    excludedCount: 0,
+    excludedCount: excludedRow[0]?.n ?? 0,
     activeCount: activeRow[0]?.n ?? 0,
     skippedCount: skippedRow[0]?.n ?? 0,
     finishedCount: byVerdict("finished"),
@@ -739,7 +737,7 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
       and(
         eq(userGames.userId, userId),
         eq(games.isDemo, false),
-        eq(games.excluded, false),
+        eq(userGames.excluded, false),
         lt(userGames.playtimeMinutes, CANDIDATE_MAX_MINUTES)
       )
     )
@@ -781,7 +779,7 @@ export async function getAbandonedGames(userId: number): Promise<CandidateGame[]
         eq(gameRecords.userId, userId),
         eq(gameRecords.verdict, "dropped"),
         eq(games.isDemo, false),
-        eq(games.excluded, false)
+        eq(userGames.excluded, false)
       )
     )
     .orderBy(desc(userGames.playtimeMinutes))

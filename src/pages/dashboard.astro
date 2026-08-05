@@ -23,7 +23,6 @@ const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
   slotId: slot.id,
   title: game.title,
   headerImage: game.headerImage,
-  hltbMinutes: game.hltbMinutes,
   startedAt: slot.startedAt instanceof Date ? slot.startedAt.toISOString() : String(slot.startedAt),
   playedMinutes: (currentPlaytime ?? 0) - slot.playtimeOnStart,
   freeSkips: freeSkipInfo.available,
