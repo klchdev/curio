@@ -598,6 +598,7 @@ function NowZone({
 }: ZoneProps & { onZone: (zone: Zone) => void }) {
   const [sheet, setSheet] = useState<{ mode: "slot-first" | "retro"; item: any } | null>(null);
   const [done, setDone] = useState<number[]>([]);
+  const [answered, setAnswered] = useState<number[]>([]);
 
   async function verdict(gameId: number, value: string, playtimeMinutes: number) {
     setBusy(`verdict-${gameId}`);
@@ -611,11 +612,20 @@ function NowZone({
     if (ok) setDone((prev) => [...prev, gameId]);
   }
 
-  async function secondChance(gameId: number) {
-    setBusy(`chance-${gameId}`);
-    const ok = await post("/api/contract", { gameId });
+  /* Оба ответа кладут аргумент модели в ленту игры — потом видно, чем кончилось. */
+  async function answerAdvisor(item: Abandoned, accepted: boolean) {
+    setBusy(`advisor-${item.gameId}`);
+    await post("/api/advisor-response", {
+      gameId: item.gameId,
+      argument: item.text,
+      accepted,
+    });
+    const ok = accepted ? await post("/api/contract", { gameId: item.gameId }) : true;
     setBusy(null);
-    if (ok) window.location.reload();
+    if (ok) {
+      if (accepted) window.location.reload();
+      else setAnswered((prev) => [...prev, item.gameId]);
+    }
   }
 
   const free = Math.max(0, THRESHOLDS.MAX_ACTIVE_SLOTS - slots.length);
@@ -735,7 +745,7 @@ function NowZone({
           </Reveal>
 
           <div className="space-y-2">
-            {abandoned.map((item, i) => (
+            {abandoned.filter((item) => !answered.includes(item.gameId)).map((item, i) => (
               <Reveal key={item.gameId} delay={360 + 40 * i} from="left">
                 <article
                   className={`flex flex-wrap items-start gap-4 rounded-xl border p-4 ${
@@ -753,15 +763,34 @@ function NowZone({
                       <RichText text={item.text} />
                     </p>
                   </div>
-                  {item.stance === "disagree" && (
-                    <button
-                      onClick={() => secondChance(item.gameId)}
-                      disabled={busy !== null}
-                      className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-amber-950 transition hover:bg-amber-400 disabled:opacity-40"
-                    >
-                      Дам второй шанс
-                    </button>
-                  )}
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {item.stance === "disagree" ? (
+                      <>
+                        <button
+                          onClick={() => answerAdvisor(item, true)}
+                          disabled={busy !== null}
+                          className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-amber-950 transition hover:bg-amber-400 disabled:opacity-40"
+                        >
+                          Дам второй шанс
+                        </button>
+                        <button
+                          onClick={() => answerAdvisor(item, false)}
+                          disabled={busy !== null}
+                          className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800 disabled:opacity-40"
+                        >
+                          Нет, я прав
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => answerAdvisor(item, false)}
+                        disabled={busy !== null}
+                        className="rounded-lg border border-gray-800 px-3 py-1.5 text-xs text-gray-500 transition hover:bg-gray-800 disabled:opacity-40"
+                      >
+                        Записать в дневник
+                      </button>
+                    )}
+                  </div>
                 </article>
               </Reveal>
             ))}

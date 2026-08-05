@@ -1295,6 +1295,37 @@ async function addEntry(
   });
 }
 
+/**
+ * Ответ на аргумент советчика. Сам аргумент ложится в ленту игры: потом
+ * видно, что модель звала вернуться, что ты решил и чем это кончилось.
+ */
+export async function recordAdvisorResponse(
+  userId: number,
+  gameId: number,
+  data: { argument: string; accepted: boolean }
+): Promise<SaveResult> {
+  const record = await db
+    .select({ id: gameRecords.id, playtime: gameRecords.playtimeAtLastEntry })
+    .from(gameRecords)
+    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!record) return { error: "Запись об игре не найдена" };
+
+  const decision = data.accepted
+    ? "Согласился дать второй шанс."
+    : "Не согласился: вердикт остаётся.";
+
+  await addEntry(record.id, {
+    kind: "advisor",
+    text: `${data.argument.trim()}\n\n— ${decision}`,
+    playtimeMinutes: record.playtime,
+  });
+
+  return { ok: true };
+}
+
 /** Лента впечатлений об одной игре. */
 export async function getGameTimeline(userId: number, gameId: number) {
   return db

@@ -1,29 +1,111 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
+import { THRESHOLDS } from "../lib/vocab";
 
 const user = await getSessionUser(Astro);
+if (user) return Astro.redirect("/dashboard");
 
-if (user) {
-  return Astro.redirect("/dashboard");
-}
+// Вход мог сорваться: раньше это молча возвращало на главную без объяснений
+const authFailed = Astro.url.searchParams.get("error") === "auth_failed";
+
+const STEPS = [
+  {
+    title: "Контракт вместо намерения",
+    text: `Берёшь игру — из совета или по жребию — и обязуешься сыграть минимум ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и записать первое впечатление. Одновременно контрактов ${THRESHOLDS.MAX_ACTIVE_SLOTS}. Сдаться можно, но это останется в дневнике.`,
+  },
+  {
+    title: "Впечатление слоями, а не снимком",
+    text: "Отзыв — не одна оценка на всю игру. Каждая запись помечена наигранным временем, и видно, как мнение менялось: что вытащило игру к десятому часу или что её убило.",
+  },
+  {
+    title: "Советы по твоим словам",
+    text: "Модель читает всё, что ты написал, и раскладывает непройденное по тирам — ссылаясь на твои же отзывы по названиям. Иногда спорит с твоими вердиктами и доказывает, что игру бросили зря.",
+  },
+];
 ---
 
 <Layout title="Главная">
-  <div class="flex flex-col items-center justify-center gap-8 py-20">
-    <h1 class="text-center text-5xl font-bold">
-      Хватит откладывать.<br />
-      <span class="text-indigo-400">Крути рулетку.</span>
-    </h1>
-    <p class="max-w-lg text-center text-lg text-gray-400">
-      BacklogRoulette выбирает случайную игру из твоего Steam бэклога и создаёт контракт —
-      ты играешь минимум 30 минут, пишешь заметку, ставишь оценку. Сдаться можно, но это будет записано.
-    </p>
-    <a
-      href="/auth/login"
-      class="rounded-lg bg-indigo-600 px-8 py-4 text-lg font-semibold text-white transition hover:bg-indigo-500"
+  <!-- Та же атмосфера, что и в приложении: свечение, гаснущее к краям -->
+  <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div
+      class="absolute top-[18%] left-1/2 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-emerald-500 opacity-[0.12] blur-[150px]"
     >
-      Войти через Steam
-    </a>
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-3xl py-16 sm:py-24">
+    {authFailed && (
+      <p class="reveal mb-8 rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+        Steam не подтвердил вход. Попробуй ещё раз — если повторится, напиши, посмотрю логи.
+      </p>
+    )}
+
+    <p class="reveal mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">
+      Backlog Roulette
+    </p>
+
+    <h1 class="reveal reveal-1 mb-6 text-5xl leading-[1.05] font-bold text-balance sm:text-6xl">
+      Библиотека на тысячу игр<br />
+      <span class="text-emerald-400">и нечего запустить</span>
+    </h1>
+
+    <p class="reveal reveal-2 mb-10 max-w-xl text-lg leading-relaxed text-gray-400">
+      Приложение превращает бэклог в обязательства и в дневник впечатлений — а потом
+      разбирает написанное и говорит, что играть дальше. Не по жанрам, а по твоим словам.
+    </p>
+
+    <div class="reveal reveal-3 mb-16">
+      <a
+        href="/auth/login"
+        class="inline-block rounded-xl bg-white px-7 py-3.5 font-medium text-gray-950 transition hover:scale-[1.02]"
+      >
+        Войти через Steam
+      </a>
+      <p class="mt-3 text-xs text-gray-600">
+        Нужен только открытый профиль — библиотека подтянется сама
+      </p>
+    </div>
+
+    <div class="grid gap-6 sm:grid-cols-3">
+      {STEPS.map((step, index) => (
+        <section class={`reveal reveal-${index + 4} border-t border-gray-800 pt-4`}>
+          <h2 class="mb-2 font-medium">{step.title}</h2>
+          <p class="text-sm leading-relaxed text-gray-500">{step.text}</p>
+        </section>
+      ))}
+    </div>
   </div>
 </Layout>
+
+<style>
+  /* Каскад как в приложении, но без React — странице хватает CSS */
+  .reveal {
+    animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .reveal-1 { animation-delay: 0.06s; }
+  .reveal-2 { animation-delay: 0.14s; }
+  .reveal-3 { animation-delay: 0.22s; }
+  .reveal-4 { animation-delay: 0.34s; }
+  .reveal-5 { animation-delay: 0.42s; }
+  .reveal-6 { animation-delay: 0.5s; }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      animation: none;
+    }
+  }
+</style>
