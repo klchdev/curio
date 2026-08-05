@@ -825,7 +825,7 @@ export async function createRetrospectiveReview(
   gameId: number,
   data: {
     verdict?: "finished" | "dropped" | "playing" | "later" | null;
-    tier?: "S" | "A" | "B" | "C" | "D" | null;
+    tier?: "S" | "A" | "B" | "C" | "D" | "F" | null;
     rating?: number | null;
     note?: string | null;
     playtimeMinutes?: number;
@@ -841,23 +841,49 @@ export async function createRetrospectiveReview(
   if (!ug) return { error: "Game not found" };
 
   const existing = await db
-    .select({ id: gameReviews.id, playtimeMinutes: gameReviews.playtimeMinutes })
+    .select({
+      id: gameReviews.id,
+      note: gameReviews.note,
+      playtimeMinutes: gameReviews.playtimeMinutes,
+    })
     .from(gameReviews)
     .where(and(eq(gameReviews.userId, userId), eq(gameReviews.gameId, gameId)))
     .limit(1)
     .then((rows) => rows[0]);
 
   if (existing) {
-    await db
-      .update(gameReviews)
-      .set({
-        verdict: data.verdict ?? null,
-        tier: data.tier ?? null,
-        rating: data.rating ?? null,
-        note: data.note ?? null,
+    /*
+     * Патч, а не полная замена. Раньше здесь стояло `data.tier ?? null`, и
+     * быстрый вердикт из триажа (он передаёт только verdict) обнулял игре
+     * тир, оценку и заметку. Явный null по-прежнему очищает поле —
+     * различаем «не передали» и «передали пустое».
+     */
+    const patch: Partial<typeof gameReviews.$inferInsert> = {};
+    if (data.verdict !== undefined) patch.verdict = data.verdict;
+    if (data.tier !== undefined) patch.tier = data.tier;
+    if (data.rating !== undefined) patch.rating = data.rating;
+    if (data.note !== undefined) patch.note = data.note;
+    if (data.playtimeMinutes !== undefined) patch.playtimeMinutes = data.playtimeMinutes;
+
+    if (Object.keys(patch).length > 0) {
+      await db.update(gameReviews).set(patch).where(eq(gameReviews.id, existing.id));
+    }
+
+    /*
+     * Дневник строится из slot_notes, а ветка update раньше туда не писала —
+     * поэтому дописанный отзыв пропадал из ленты. Пишем новую запись, только
+     * если текст действительно изменился.
+     */
+    const note = data.note;
+    if (note && note.length >= 10 && note !== existing.note) {
+      await db.insert(slotNotes).values({
+        userId,
+        gameId,
+        text: note,
         playtimeMinutes: data.playtimeMinutes ?? existing.playtimeMinutes,
-      })
-      .where(eq(gameReviews.id, existing.id));
+        createdAt: new Date(),
+      });
+    }
   } else {
     await db.insert(gameReviews).values({
       userId,
