@@ -1011,11 +1011,19 @@ function NowZone({
     if (ok) window.location.reload();
   }
 
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
   async function sync() {
     setBusy("sync");
-    const ok = await post("/api/sync-library");
-    setBusy(null);
-    if (ok) window.location.reload();
+    try {
+      const res = await fetch("/api/sync-library", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setSyncResult(s.now.synced(data.synced ?? 0));
+      setTimeout(() => window.location.reload(), 1200);
+    } finally {
+      setBusy(null);
+    }
   }
 
   const free = Math.max(0, THRESHOLDS.MAX_ACTIVE_SLOTS - slots.length);
@@ -1095,6 +1103,7 @@ function NowZone({
         >
           {busy === "sync" ? s.now.syncing : s.now.syncLibrary}
         </button>
+        {syncResult && <span className="ml-3 text-xs text-emerald-400">{syncResult}</span>}
       </section>
 
       {pending.length > 0 && (

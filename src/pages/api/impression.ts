@@ -38,6 +38,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   if (verdict != null && !isValidVerdict(verdict)) return json({ error: s.errors.badVerdict }, 400);
   if (tier != null && !isValidTier(tier)) return json({ error: s.errors.badTier }, 400);
+  // Клиент шлёт 1-5, но роут — публичный вход, и полагаться на него нельзя
+  if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
+    return json({ error: s.errors.badRating }, 400);
+  }
 
   // Демка — единственный режим, где игры может ещё не быть в базе
   if (mode === "demo") {

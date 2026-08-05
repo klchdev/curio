@@ -29,7 +29,6 @@ const RU = {
     demos: "Демки",
     profile: "Профиль",
     logout: "Выйти",
-    language: "Язык",
   },
 
   pages: {
@@ -126,8 +125,6 @@ const RU = {
     groundingDescription: "сужу по описанию из магазина",
     groundingGuess: "игру не знаю — догадка по жанру",
 
-    running:
-      "Читаю твои отзывы и раскладываю библиотеку по тирам. Занимает около минуты — можно уйти со страницы.",
     runStages: {
       collecting: "Собираю отзывы и кандидатов",
       thinking: "Читаю отзывы и раскладываю по тирам",
@@ -300,7 +297,6 @@ const EN: Dict = {
     demos: "Demos",
     profile: "Profile",
     logout: "Log out",
-    language: "Language",
   },
 
   pages: {
@@ -397,8 +393,6 @@ const EN: Dict = {
     groundingDescription: "judging by the store description",
     groundingGuess: "don't know this game — guessing from the genre",
 
-    running:
-      "Reading your reviews and sorting the library into tiers. Takes about a minute — feel free to leave the page.",
     runStages: {
       collecting: "Collecting reviews and candidates",
       thinking: "Reading your reviews and sorting into tiers",
