@@ -8,6 +8,7 @@ import {
   gameEntries,
   recommendationRuns,
   recommendations,
+  deepDives,
 } from "../db/schema";
 import { eq, and, or, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
 import {
@@ -1037,12 +1038,23 @@ export async function getLatestRecommendations(userId: number) {
       reason: recommendations.reason,
       grounding: recommendations.grounding,
       hours: userGames.playtimeMinutes,
+      /*
+       * Разбор, если он уже делался. Без него тир на карточке и вердикт
+       * разбора расходились бы до первого клика: первый проход судит по
+       * описанию, разбор — по механике из отзывов.
+       */
+      deepFit: deepDives.fit,
+      deepTier: deepDives.tier,
     })
     .from(recommendations)
     .innerJoin(games, eq(recommendations.gameId, games.id))
     .leftJoin(
       userGames,
       and(eq(userGames.gameId, recommendations.gameId), eq(userGames.userId, userId))
+    )
+    .leftJoin(
+      deepDives,
+      and(eq(deepDives.gameId, recommendations.gameId), eq(deepDives.userId, userId))
     )
     .where(eq(recommendations.runId, run.id))
     .orderBy(recommendations.rank);
@@ -1064,6 +1076,8 @@ export async function getLatestRecommendations(userId: number) {
         tier: item.tier!,
         reason: item.reason,
         grounding: item.grounding,
+        deepFit: item.deepFit,
+        deepTier: item.deepTier,
         hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
       })),
     abandoned: items

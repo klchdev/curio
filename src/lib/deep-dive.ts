@@ -3,6 +3,7 @@ import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { ReviewCorpusItem } from "./queries";
 import type { AppReviews } from "./steam";
 import { RECOMMENDATION_MODEL, errorCode } from "./recommendations";
+import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
 
 /**
  * Разбор одной игры: описание из магазина плюс отзывы других игроков,
@@ -37,6 +38,8 @@ complaints — на что жалуются вообще, 2-4 пункта фа�
 
 fit — итог: yes (стоит запускать), maybe (под настроение или с оговорками), no (не его игра).
 
+tier — пересмотренная оценка S/A/B/C/D. Первый проход выставлял тир, зная только жанр и рекламное описание; ты видишь, как игра устроена на самом деле. Если отзывы вскрыли механику, которая игроку поперёк (жёсткие лимиты времени, гринд, беготня), — понижай не стесняясь. Если игра оказалась глубже, чем выглядит по описанию, — повышай. Совпадение с первым проходом тоже нормальный исход, подгонять не надо.
+
 Обращайся на «ты». Не подстраивайся: если игра ему не подходит, скажи прямо.`;
 
 const OUTPUT_LANGUAGE: Record<Locale, string> = {
@@ -48,6 +51,11 @@ const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     fit: { type: Type.STRING, enum: ["yes", "maybe", "no"] },
+    tier: {
+      type: Type.STRING,
+      enum: ["S", "A", "B", "C", "D"],
+      description: "Пересмотренный тир после чтения отзывов",
+    },
     summary: { type: Type.STRING, description: "Что это за игра на самом деле, 1-2 предложения" },
     forYou: { type: Type.STRING, description: "Почему зайдёт именно этому игроку, со ссылками на его отзывы" },
     against: { type: Type.STRING, description: "Что оттолкнёт именно его" },
@@ -57,11 +65,13 @@ const RESPONSE_SCHEMA = {
       description: "2-4 факта о том, на что жалуются игроки",
     },
   },
-  required: ["fit", "summary", "forYou", "against", "complaints"],
+  required: ["fit", "tier", "summary", "forYou", "against", "complaints"],
 };
 
 export interface DeepDive {
   fit: "yes" | "maybe" | "no";
+  /** Тир после чтения отзывов — может разойтись с первым проходом. */
+  tier: AdvisorTier;
   summary: string;
   forYou: string;
   against: string;
@@ -146,6 +156,7 @@ export async function generateDeepDive(
       const parsed = JSON.parse(raw) as DeepDive;
       return {
         fit: parsed.fit === "yes" || parsed.fit === "no" ? parsed.fit : "maybe",
+        tier: ADVISOR_TIER_VALUES.includes(parsed.tier) ? parsed.tier : "C",
         summary: parsed.summary ?? "",
         forYou: parsed.forYou ?? "",
         against: parsed.against ?? "",

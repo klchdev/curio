@@ -56,6 +56,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (cached && !refresh) {
     return json({
       fit: cached.fit,
+      tier: cached.tier,
       summary: cached.summary,
       forYou: cached.forYou,
       against: cached.against,
@@ -89,6 +90,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         userId,
         gameId,
         fit: dive.fit,
+        tier: dive.tier,
         summary: dive.summary,
         forYou: dive.forYou,
         against: dive.against,
@@ -99,6 +101,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         target: [deepDives.userId, deepDives.gameId],
         set: {
           fit: dive.fit,
+          tier: dive.tier,
           summary: dive.summary,
           forYou: dive.forYou,
           against: dive.against,

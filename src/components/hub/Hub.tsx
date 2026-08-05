@@ -18,6 +18,9 @@ import SkipModal from "../SkipModal";
 
 export interface Pick {
   grounding?: "known" | "from-description" | "guess" | null;
+  /** Итог разбора, если он делался: он может спорить с тиром первого прохода. */
+  deepFit?: "yes" | "maybe" | "no" | null;
+  deepTier?: string | null;
   gameId: number;
   steamAppId: number;
   title: string;
@@ -433,7 +436,9 @@ function ChooseZone({
   }
 
   const pick = picks[index]!;
-  const tone = TIER_STYLE[pick.tier as Tier] ?? TIER_STYLE.B;
+  // Разбор видит механику, а не рекламу, поэтому его тир важнее
+  const shownTier = (pick.deepTier ?? pick.tier) as Tier;
+  const tone = TIER_STYLE[shownTier] ?? TIER_STYLE.B;
 
   async function take(gameId: number) {
     setBusy(`take-${gameId}`);
@@ -449,7 +454,7 @@ function ChooseZone({
    */
   const rollable = picks
     .map((item, i) => ({ item, i }))
-    .filter(({ item }) => item.tier !== "D");
+    .filter(({ item }) => (item.deepTier ?? item.tier) !== "D" && item.deepFit !== "no");
 
   function roll() {
     if (rollable.length === 0) return;
@@ -556,9 +561,9 @@ function ChooseZone({
         <div>
           <Reveal delay={80} from="left">
             <div className="mb-3 flex items-center gap-3">
-              <span className={`text-5xl leading-none font-black ${tone.accent}`}>{pick.tier}</span>
+              <span className={`text-5xl leading-none font-black ${tone.accent}`}>{shownTier}</span>
               <span className="text-sm text-gray-500">
-                {advisorHint(pick.tier as any, locale)}
+                {advisorHint(shownTier as any, locale)}
                 <br />
                 {pick.hours > 0 ? s.choose.playedHours(pick.hours) : s.choose.neverLaunched}
               </span>
@@ -572,6 +577,11 @@ function ChooseZone({
               <RichText text={pick.reason} />
             </p>
             {/* Тихая пометка, а не баннер: важно знать, но не пугать */}
+            {pick.deepTier && pick.deepTier !== pick.tier && (
+              <p className="mt-3 text-xs text-sky-400/80">
+                {s.deep.revised(pick.tier, pick.deepTier)}
+              </p>
+            )}
             {pick.grounding && pick.grounding !== "known" && (
               <p className="mt-3 text-xs text-gray-600">
                 ⚠ {pick.grounding === "guess" ? s.choose.groundingGuess : s.choose.groundingDescription}
@@ -630,7 +640,7 @@ function ChooseZone({
               )}
               <span
                 className={`absolute inset-x-0 bottom-0 h-0.5 origin-left transition-transform duration-500 ${
-                  TIER_STYLE[item.tier as Tier]?.bg
+                  TIER_STYLE[(item.deepTier ?? item.tier) as Tier]?.bg
                 } ${i === index ? "scale-x-100" : "scale-x-0"}`}
               />
             </button>
@@ -664,6 +674,7 @@ function ChooseZone({
 
 interface DeepDive {
   fit: "yes" | "maybe" | "no";
+  tier?: string | null;
   summary: string;
   forYou: string;
   against: string;

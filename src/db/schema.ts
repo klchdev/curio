@@ -232,6 +232,8 @@ export const deepDives = pgTable(
       .notNull()
       .references(() => games.id),
     fit: text("fit", { enum: ["yes", "maybe", "no"] }).notNull(),
+    /** Тир после разбора: первый проход судил по описанию, этот — по механике. */
+    tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
     summary: text("summary").notNull(),
     forYou: text("for_you").notNull(),
     against: text("against").notNull(),
