@@ -54,7 +54,14 @@ function Cover({ title, image }: { title: string; image: string | null }) {
   );
 }
 
-export default function TierBoard({ games }: { games: Game[] }) {
+export default function TierBoard({
+  games,
+  onChange,
+}: {
+  games: Game[];
+  /** Перестановка сохраняется сразу; без обработчика доска остаётся демонстрационной. */
+  onChange?: (gameId: number, tier: string | null) => void;
+}) {
   const initial = useMemo(() => {
     const board: Record<Row, Game[]> = {
       S: [], A: [], B: [], C: [], D: [], F: [], unranked: [],
@@ -86,6 +93,7 @@ export default function TierBoard({ games }: { games: Game[] }) {
 
     setLanded(dragged.game.gameId);
     setTimeout(() => setLanded(null), 700);
+    onChange?.(dragged.game.gameId, to === "unranked" ? null : to);
     setDragged(null);
   }
 
@@ -165,9 +173,11 @@ export default function TierBoard({ games }: { games: Game[] }) {
         })}
       </div>
 
-      <p className="mt-3 text-xs text-gray-600">
-        В макете перестановки не сохраняются — в боевой версии тир пишется сразу.
-      </p>
+      {!onChange && (
+        <p className="mt-3 text-xs text-gray-600">
+          Демонстрационный режим: перестановки не сохраняются.
+        </p>
+      )}
     </div>
   );
 }

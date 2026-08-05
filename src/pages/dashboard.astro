@@ -1,76 +1,110 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getActiveSlots, canSpin, getUnplayedGames, getAttentionQueue, getFreeSkips } from "../lib/queries";
-import SlotCard from "../components/SlotCard";
-import RouletteButton from "../components/RouletteButton";
-import SyncButton from "../components/SyncButton";
-import NeedsReviewList from "../components/NeedsReviewList";
+import {
+  getActiveSlots,
+  getUnplayedGames,
+  getAttentionQueue,
+  getLatestRecommendations,
+  getActiveRun,
+  getReviewCorpusSize,
+  getTierList,
+  getHistory,
+  getDemoReviews,
+  getStats,
+} from "../lib/queries";
+import Hub from "../components/hub/Hub";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
-const activeSlots = await getActiveSlots(user.id);
-const canSpinNow = await canSpin(user.id);
-const poolSize = (await getUnplayedGames(user.id)).length;
-const attention = await getAttentionQueue(user.id);
-const freeSkipInfo = await getFreeSkips(user.id);
+/*
+ * Хаб получает всё с сервера одним заходом: острову остаётся переключать
+ * зоны и отправлять действия, догружать он ничего не должен.
+ */
+const [activeSlots, pool, attention, run, activeRun, reviewCount, tierGames, history, demos, stats] =
+  await Promise.all([
+    getActiveSlots(user.id),
+    getUnplayedGames(user.id),
+    getAttentionQueue(user.id),
+    getLatestRecommendations(user.id),
+    getActiveRun(user.id),
+    getReviewCorpusSize(user.id),
+    getTierList(user.id),
+    getHistory(user.id),
+    getDemoReviews(user.id),
+    getStats(user.id),
+  ]);
 
-const navLink =
-  "whitespace-nowrap rounded-lg border border-gray-700 px-3 py-2 text-sm transition hover:bg-gray-800";
-
-const slotData = activeSlots.map(({ slot, game, currentPlaytime }) => ({
-  slotId: slot.id,
-  title: game.title,
-  headerImage: game.headerImage,
-  startedAt: slot.startedAt instanceof Date ? slot.startedAt.toISOString() : String(slot.startedAt),
-  playedMinutes: (currentPlaytime ?? 0) - slot.playtimeOnStart,
-  freeSkips: freeSkipInfo.available,
-}));
+const dateFormat = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 ---
 
-<Layout title="Дашборд">
-  <div class="mb-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
-    <div class="flex shrink-0 items-center gap-4">
-      {user.avatarUrl && (
-        <img src={user.avatarUrl} alt="" class="h-12 w-12 rounded-full" />
-      )}
-      <div>
-        <h1 class="text-2xl leading-tight font-bold">{user.username}</h1>
-        <p class="text-sm whitespace-nowrap text-gray-400">Игр в пуле: {poolSize}</p>
-      </div>
+<Layout title="BacklogRoulette">
+  <div class="mb-6 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      {user.avatarUrl && <img src={user.avatarUrl} alt="" class="h-9 w-9 rounded-full" />}
+      <span class="font-medium">{user.username}</span>
     </div>
-    <nav class="flex flex-wrap items-center gap-2">
-      <SyncButton client:idle />
-      <a href="/history" class={navLink}>Дневник</a>
-      <a href="/tier-list" class={navLink}>Тир лист</a>
-      <a href="/recommendations" class={navLink}>Рекомендации</a>
-      <a href="/demos" class={navLink}>Демки</a>
-      <a href="/profile" class={navLink}>Профиль</a>
-      <span class="mx-1 h-6 w-px bg-gray-800" aria-hidden="true"></span>
-      <a href="/auth/logout" class={`${navLink} text-red-400`}>Выйти</a>
-    </nav>
+    <div class="flex items-center gap-4 text-sm text-gray-500">
+      <a href="/history" class="transition hover:text-white">Дневник</a>
+      <a href="/demos" class="transition hover:text-white">Демки</a>
+      <a href="/profile" class="transition hover:text-white">Профиль</a>
+      <a href="/auth/logout" class="text-red-400/80 transition hover:text-red-300">Выйти</a>
+    </div>
   </div>
 
-  <section class="mb-10">
-    <h2 class="mb-4 text-center text-xl font-semibold">Активные слоты ({activeSlots.length}/3)</h2>
-    <div class="mx-auto grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-3">
-      {slotData.map((props) => (
-        <SlotCard client:idle {...props} />
-      ))}
-
-      {canSpinNow && poolSize > 0 && (
-        <RouletteButton client:idle />
-      )}
-    </div>
-
-    {!canSpinNow && (
-      <div class="mx-auto mt-6 max-w-4xl rounded-xl border border-gray-800 bg-gray-900/50 py-6 text-center text-gray-500">
-        <span class="text-2xl">🔒</span>
-        <p class="mt-2">Все слоты заняты. Закрой или пропусти игру, чтобы крутить снова.</p>
-      </div>
-    )}
-  </section>
-
-  <NeedsReviewList client:idle items={attention.items} triageTotal={attention.triageTotal} />
+  <Hub
+    client:load
+    picks={run?.items ?? []}
+    abandoned={run?.abandoned ?? []}
+    slots={activeSlots.map(({ slot, game, currentPlaytime }) => ({
+      slotId: slot.id,
+      gameId: game.id,
+      title: game.title,
+      image: game.headerImage,
+      played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
+    }))}
+    queue={attention.items
+      .filter((item) => item.reason === "triage")
+      .map((item) => ({
+        gameId: item.gameId,
+        title: item.title,
+        headerImage: item.headerImage,
+        playtimeMinutes: item.playtimeMinutes,
+      }))}
+    queueTotal={attention.triageTotal}
+    tierGames={tierGames.map((g) => ({
+      gameId: g.gameId,
+      title: g.gameTitle,
+      image: g.gameImage,
+      tier: g.tier,
+    }))}
+    diary={history
+      .filter((entry) => entry.type === "reviewed")
+      .slice(0, 6)
+      .map((entry) => ({
+        id: entry.entryId,
+        gameId: entry.gameId,
+        title: entry.gameTitle,
+        note: entry.note,
+        kind: entry.kind,
+        playtimeMinutes: entry.playtimeMinutes,
+        deltaMinutes: entry.deltaMinutes,
+        verdict: entry.verdict,
+        tier: entry.tier,
+      }))}
+    demos={demos.slice(0, 8).map((d) => ({
+      gameId: d.gameId,
+      title: d.title,
+      headerImage: d.headerImage,
+      tier: d.tier,
+      note: d.note,
+    }))}
+    stats={stats}
+    reviewCount={reviewCount}
+    poolSize={pool.length}
+    runProfile={run?.profile ?? null}
+    runDate={run ? dateFormat.format(new Date(run.createdAt)) : null}
+    activeRunId={activeRun?.id ?? null}
+  />
 </Layout>

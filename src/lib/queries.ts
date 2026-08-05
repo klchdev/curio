@@ -93,6 +93,48 @@ export async function getUnplayedGames(userId: number) {
   return rows.filter((row) => !blockedIds.has(row.id));
 }
 
+/**
+ * Контракт на конкретную игру. Рулетка выбирает вслепую, советчик — по
+ * вкусу, но обязательство одно и то же: 20 минут и первое впечатление.
+ */
+export async function takeContract(userId: number, gameId: number) {
+  if (!(await canSpin(userId))) {
+    return { error: "Все три контракта заняты" };
+  }
+
+  const owned = await db
+    .select({ playtimeMinutes: userGames.playtimeMinutes })
+    .from(userGames)
+    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!owned) return { error: "Игра не найдена в библиотеке" };
+
+  const active = await db
+    .select({ id: slots.id })
+    .from(slots)
+    .where(
+      and(eq(slots.userId, userId), eq(slots.gameId, gameId), eq(slots.status, "active"))
+    )
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (active) return { error: "Контракт на эту игру уже есть" };
+
+  const [slot] = await db
+    .insert(slots)
+    .values({
+      userId,
+      gameId,
+      playtimeOnStart: owned.playtimeMinutes,
+      startedAt: new Date(),
+    })
+    .returning({ id: slots.id });
+
+  return { ok: true as const, slotId: slot!.id };
+}
+
 export async function spinRoulette(userId: number) {
   if (!(await canSpin(userId))) return null;
 
