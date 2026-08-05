@@ -13,11 +13,19 @@ function getRelyingParty(returnUrl: string): openid.RelyingParty {
   );
 }
 
+/**
+ * Пакет отдаёт в колбэк не Error, а свой объект с одним полем message —
+ * поэтому наружу отдаём настоящий Error, чтобы стек и `instanceof` работали.
+ */
+function toError(err: openid.OpenIdError | null, fallback: string): Error {
+  return new Error(err?.message ?? fallback);
+}
+
 export function getAuthUrl(returnUrl: string): Promise<string> {
   const rp = getRelyingParty(returnUrl);
   return new Promise((resolve, reject) => {
-    rp.authenticate(STEAM_OPENID_URL, false, (err: Error | null, authUrl: string | null) => {
-      if (err || !authUrl) return reject(err || new Error("No auth URL"));
+    rp.authenticate(STEAM_OPENID_URL, false, (err, authUrl) => {
+      if (err || !authUrl) return reject(toError(err, "No auth URL"));
       resolve(authUrl);
     });
   });
@@ -29,12 +37,11 @@ export function verifyAssertion(
 ): Promise<string> {
   const rp = getRelyingParty(returnUrl);
   return new Promise((resolve, reject) => {
-    rp.verifyAssertion(requestUrl, (err: Error | null, result: openid.VerifyAssertionResult | null) => {
-      if (err || !result?.authenticated) {
-        return reject(err || new Error("Authentication failed"));
+    rp.verifyAssertion(requestUrl, (err, result) => {
+      if (err || !result?.authenticated || !result.claimedIdentifier) {
+        return reject(toError(err, "Authentication failed"));
       }
-      const claimedId = result.claimedIdentifier!;
-      const steamId = claimedId.replace(
+      const steamId = result.claimedIdentifier.replace(
         "https://steamcommunity.com/openid/id/",
         ""
       );

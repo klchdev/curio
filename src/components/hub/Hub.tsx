@@ -79,9 +79,11 @@ export interface Props {
   runDate: string | null;
   activeRunId: number | null;
   locale: Locale;
+  /** Зона из адреса: сюда приходят редиректы со старых страниц. */
+  initialZone: Zone;
 }
 
-type Zone = "choose" | "now" | "recap";
+export type Zone = "choose" | "now" | "recap";
 
 const ZONE_GLOW: Record<Zone, string> = {
   choose: "bg-emerald-500",
@@ -93,7 +95,16 @@ export default function Hub(props: Props) {
   const { picks, slots, queueTotal, reviewCount, activeRunId, locale } = props;
   const s = t(locale);
 
-  const [zone, setZone] = useState<Zone>("choose");
+  const [zone, setZone] = useState<Zone>(props.initialZone);
+
+  /* Адрес должен переживать перезагрузку: половина действий делает reload. */
+  function goTo(next: Zone) {
+    setZone(next);
+    const url = new URL(window.location.href);
+    if (next === "choose") url.searchParams.delete("zone");
+    else url.searchParams.set("zone", next);
+    window.history.replaceState(null, "", url);
+  }
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +206,7 @@ export default function Hub(props: Props) {
           />
         )}
         {zone === "now" && (
-          <NowZone {...props} busy={busy} setBusy={setBusy} post={post} onZone={setZone} />
+          <NowZone {...props} busy={busy} setBusy={setBusy} post={post} onZone={goTo} />
         )}
         {zone === "recap" && <RecapZone {...props} post={post} />}
       </div>
@@ -204,20 +215,20 @@ export default function Hub(props: Props) {
         <div className="mx-auto flex max-w-5xl gap-2 px-6 py-3">
           <DockTile
             active={zone === "choose"}
-            onClick={() => setZone("choose")}
+            onClick={() => goTo("choose")}
             label={s.dock.choose}
             hint={s.dock.chooseHint(picks.length)}
           />
           <DockTile
             active={zone === "now"}
-            onClick={() => setZone("now")}
+            onClick={() => goTo("now")}
             label={s.dock.now}
             hint={s.dock.nowHint(slots.length, queueTotal)}
             accent={queueTotal > 0}
           />
           <DockTile
             active={zone === "recap"}
-            onClick={() => setZone("recap")}
+            onClick={() => goTo("recap")}
             label={s.dock.recap}
             hint={s.dock.recapHint(reviewCount)}
           />

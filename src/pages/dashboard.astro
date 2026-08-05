@@ -14,7 +14,7 @@ import {
   getStats,
   getFreeSkips,
 } from "../lib/queries";
-import Hub from "../components/hub/Hub";
+import Hub, { type Zone } from "../components/hub/Hub";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
 
@@ -26,6 +26,11 @@ if (!user) return Astro.redirect("/");
  * зоны и отправлять действия, догружать он ничего не должен.
  */
 const locale = localeFrom(Astro.cookies, Astro.request);
+
+// Редиректы со старых страниц приходят с зоной — иначе тир-лист ведёт «не туда»
+const zoneParam = Astro.url.searchParams.get("zone");
+const initialZone: Zone =
+  zoneParam === "now" || zoneParam === "recap" ? zoneParam : "choose";
 const s = t(locale);
 
 const [
@@ -126,6 +131,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     poolSize={pool.length}
     freeSkips={freeSkips.available}
     locale={locale}
+    initialZone={initialZone}
     runProfile={run?.profile ?? null}
     runDate={run ? dateFormat.format(new Date(run.createdAt)) : null}
     activeRunId={activeRun?.id ?? null}
