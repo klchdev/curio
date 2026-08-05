@@ -158,6 +158,21 @@ const RU = {
     blindFull: "все три контракта заняты",
   },
 
+  deep: {
+    button: "Разобрать подробно",
+    loading: "Читаю отзывы игроков…",
+    hint: "Модель прочитает отзывы в Steam и сверит их с твоим вкусом",
+    summary: "Что это на самом деле",
+    forYou: "Почему тебе",
+    against: "Что может оттолкнуть",
+    complaints: "На что жалуются",
+    refresh: "Перечитать",
+    used: (n: number) => `по ${n} ${plural(n, "отзыву", "отзывам", "отзывам")} игроков`,
+    fitYes: "Стоит запускать",
+    fitMaybe: "Под настроение",
+    fitNo: "Не твоя игра",
+  },
+
   now: {
     contracts: "Активные контракты",
     contractsCount: (slots: number, pool: number) =>
@@ -403,6 +418,21 @@ const EN: Dict = {
     blindCta: "🎰 Spin the roulette",
     blindBusy: "Spinning…",
     blindFull: "all three contracts taken",
+  },
+
+  deep: {
+    button: "Dig deeper",
+    loading: "Reading player reviews…",
+    hint: "The model reads Steam reviews and checks them against your taste",
+    summary: "What it actually is",
+    forYou: "Why it's for you",
+    against: "What may put you off",
+    complaints: "What people complain about",
+    refresh: "Read again",
+    used: (n: number) => `from ${n} player ${n === 1 ? "review" : "reviews"}`,
+    fitYes: "Worth launching",
+    fitMaybe: "Depends on mood",
+    fitNo: "Not your game",
   },
 
   now: {

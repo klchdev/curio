@@ -195,3 +195,89 @@ export async function getRecentPlaytime(
   const game = games.find((g) => g.appid === appId);
   return game?.playtime_forever ?? 0;
 }
+
+
+/* ---------- Отзывы игроков ---------- */
+
+export interface SteamReview {
+  text: string;
+  positive: boolean;
+  votes: number;
+  /** Наиграно на момент отзыва — тот же штамп, на котором построена наша лента. */
+  hoursAtReview: number;
+}
+
+export interface AppReviews {
+  scoreLabel: string | null;
+  totalPositive: number;
+  totalNegative: number;
+  reviews: SteamReview[];
+}
+
+/** Короче — мем или «+rep», толку в разборе от них нет. */
+const MIN_REVIEW_LENGTH = 150;
+/** Длинные простыни режем: смысл в первых абзацах, а токены не бесплатны. */
+const MAX_REVIEW_LENGTH = 1200;
+
+async function fetchReviewPage(
+  appId: number,
+  reviewType: "positive" | "negative",
+  limit: number
+): Promise<{ summary: any; reviews: SteamReview[] }> {
+  const url =
+    `https://store.steampowered.com/appreviews/${appId}?json=1` +
+    `&filter=all&language=all&purchase_type=all&num_per_page=${limit}` +
+    `&review_type=${reviewType}&cursor=*`;
+
+  const res = await fetch(url);
+  if (!res.ok) return { summary: null, reviews: [] };
+
+  const data = await res.json();
+  if (!data?.success || !Array.isArray(data.reviews)) return { summary: null, reviews: [] };
+
+  const reviews: SteamReview[] = data.reviews
+    .filter((r: any) => typeof r.review === "string" && r.review.trim().length >= MIN_REVIEW_LENGTH)
+    .map((r: any) => ({
+      text: r.review.replace(/\[\/?[a-z=\]]+\]/gi, " ").replace(/\s+/g, " ").trim().slice(0, MAX_REVIEW_LENGTH),
+      positive: !!r.voted_up,
+      votes: r.votes_up ?? 0,
+      hoursAtReview: Math.round(((r.author?.playtime_at_review ?? 0) / 60) * 10) / 10,
+    }));
+
+  return { summary: data.query_summary, reviews };
+}
+
+/**
+ * Отзывы для разбора одной игры. Steam не сортирует выдачу по полезности и
+ * отдаёт плюс и минус в пропорции рейтинга — у хорошей игры на сотню отзывов
+ * приходит пять отрицательных. Поэтому тянем обе стороны отдельно и
+ * сортируем сами: для подбора под вкус отрицательные ценнее, в них
+ * конкретика, которая ложится на известные нелюбови игрока.
+ */
+export async function getAppReviews(
+  appId: number,
+  options?: { positive?: number; negative?: number }
+): Promise<AppReviews | null> {
+  const wantPositive = options?.positive ?? 12;
+  const wantNegative = options?.negative ?? 12;
+
+  const [pos, neg] = await Promise.all([
+    fetchReviewPage(appId, "positive", 50),
+    fetchReviewPage(appId, "negative", 50),
+  ]);
+
+  const summary = pos.summary ?? neg.summary;
+  if (!summary && pos.reviews.length === 0 && neg.reviews.length === 0) return null;
+
+  const byVotes = (a: SteamReview, b: SteamReview) => b.votes - a.votes;
+
+  return {
+    scoreLabel: summary?.review_score_desc ?? null,
+    totalPositive: summary?.total_positive ?? 0,
+    totalNegative: summary?.total_negative ?? 0,
+    reviews: [
+      ...pos.reviews.sort(byVotes).slice(0, wantPositive),
+      ...neg.reviews.sort(byVotes).slice(0, wantNegative),
+    ],
+  };
+}

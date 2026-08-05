@@ -333,6 +333,26 @@ function ChooseZone({
   const s = t(locale);
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
   const [runError, setRunError] = useState<string | null>(null);
+  const [dives, setDives] = useState<Record<number, DeepDive | "loading" | string>>({});
+
+  /* Разбор кэшируется на сервере по паре (игрок, игра) — второй клик бесплатен. */
+  async function deepDive(gameId: number, refresh = false) {
+    setDives((prev) => ({ ...prev, [gameId]: "loading" }));
+    try {
+      const res = await fetch("/api/deep-dive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId, refresh }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setDives((prev) => ({
+        ...prev,
+        [gameId]: res.ok ? (data as DeepDive) : (data.error ?? s.errors.generic),
+      }));
+    } catch {
+      setDives((prev) => ({ ...prev, [gameId]: s.errors.network }));
+    }
+  }
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
@@ -568,6 +588,13 @@ function ChooseZone({
                 {busy === `take-${pick.gameId}` ? s.choose.taking : s.choose.take}
               </button>
               <button
+                onClick={() => deepDive(pick.gameId)}
+                disabled={dives[pick.gameId] === "loading"}
+                className="rounded-xl border border-gray-700 px-5 py-3 text-sm text-gray-300 transition hover:border-sky-700 hover:text-sky-300 disabled:opacity-40"
+              >
+                {dives[pick.gameId] === "loading" ? s.deep.loading : `🔍 ${s.deep.button}`}
+              </button>
+              <button
                 onClick={() => setIndex((i) => (i + 1) % picks.length)}
                 className="text-sm text-gray-500 transition hover:text-white"
               >
@@ -578,6 +605,14 @@ function ChooseZone({
           </Reveal>
         </div>
       </div>
+
+      {dives[pick.gameId] && dives[pick.gameId] !== "loading" && (
+        <DeepDivePanel
+          value={dives[pick.gameId] as DeepDive | string}
+          s={s}
+          onRefresh={() => deepDive(pick.gameId, true)}
+        />
+      )}
 
       <Reveal delay={460} className="mt-12">
         <div className="-mx-6 flex snap-x gap-3 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -624,6 +659,98 @@ function ChooseZone({
         </Reveal>
       )}
     </>
+  );
+}
+
+interface DeepDive {
+  fit: "yes" | "maybe" | "no";
+  summary: string;
+  forYou: string;
+  against: string;
+  complaints: string[];
+  reviewsUsed?: number;
+}
+
+const FIT_STYLE: Record<DeepDive["fit"], string> = {
+  yes: "border-emerald-800 bg-emerald-950/20 text-emerald-300",
+  maybe: "border-amber-900/70 bg-amber-950/20 text-amber-300",
+  no: "border-red-900 bg-red-950/20 text-red-300",
+};
+
+function DeepDivePanel({
+  value,
+  s,
+  onRefresh,
+}: {
+  value: DeepDive | string;
+  s: Dict;
+  onRefresh: () => void;
+}) {
+  if (typeof value === "string") {
+    return (
+      <Reveal className="mt-8">
+        <p className="rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+          {value}
+        </p>
+      </Reveal>
+    );
+  }
+
+  const fitLabel =
+    value.fit === "yes" ? s.deep.fitYes : value.fit === "no" ? s.deep.fitNo : s.deep.fitMaybe;
+
+  return (
+    <Reveal className="mt-8" from="up">
+      <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <span className={`rounded-full border px-3 py-1 text-sm font-medium ${FIT_STYLE[value.fit]}`}>
+            {fitLabel}
+          </span>
+          {value.reviewsUsed ? (
+            <span className="text-xs text-gray-600">{s.deep.used(value.reviewsUsed)}</span>
+          ) : null}
+          <button
+            onClick={onRefresh}
+            className="ml-auto text-xs text-gray-600 transition hover:text-gray-300"
+          >
+            {s.deep.refresh}
+          </button>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <Section title={s.deep.summary} text={value.summary} />
+          <Section title={s.deep.forYou} text={value.forYou} accent="text-emerald-400" />
+          <Section title={s.deep.against} text={value.against} accent="text-amber-400" />
+
+          {value.complaints.length > 0 && (
+            <div>
+              <h3 className="mb-1.5 text-xs tracking-[0.15em] text-gray-500 uppercase">
+                {s.deep.complaints}
+              </h3>
+              <ul className="space-y-1">
+                {value.complaints.map((item, i) => (
+                  <li key={i} className="text-sm leading-relaxed text-gray-400">
+                    — {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+function Section({ title, text, accent }: { title: string; text: string; accent?: string }) {
+  if (!text) return null;
+  return (
+    <div>
+      <h3 className={`mb-1.5 text-xs tracking-[0.15em] uppercase ${accent ?? "text-gray-500"}`}>
+        {title}
+      </h3>
+      <p className="text-sm leading-relaxed text-gray-300">{text}</p>
+    </div>
   );
 }
 

@@ -215,3 +215,32 @@ export const slotSkips = pgTable("slot_skips", {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+/**
+ * Глубокий разбор одной игры: описание, отзывы других игроков и вкус
+ * конкретного человека. Кэшируется по паре (пользователь, игра) — разбор
+ * зависит от обоих, а стоит целого запроса к модели и двух к Steam.
+ */
+export const deepDives = pgTable(
+  "deep_dives",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    gameId: integer("game_id")
+      .notNull()
+      .references(() => games.id),
+    fit: text("fit", { enum: ["yes", "maybe", "no"] }).notNull(),
+    summary: text("summary").notNull(),
+    forYou: text("for_you").notNull(),
+    against: text("against").notNull(),
+    /** Жалобы построчно — массив ради одной колонки заводить не стоит. */
+    complaints: text("complaints"),
+    reviewsUsed: integer("reviews_used").notNull().default(0),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [uniqueIndex("deep_dives_user_id_game_id_idx").on(t.userId, t.gameId)]
+);
