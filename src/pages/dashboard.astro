@@ -147,6 +147,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     freeSkips={freeSkips.available}
     locale={locale}
     initialZone={initialZone}
+    lastSyncAt={user.lastLibrarySync ? new Date(user.lastLibrarySync).getTime() : null}
     runProfile={run?.profile ?? null}
     runDate={run ? dateFormat.format(new Date(run.createdAt)) : null}
     activeRunId={activeRun?.id ?? null}

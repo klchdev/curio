@@ -112,9 +112,21 @@ export interface Props {
   locale: Locale;
   /** Зона из адреса: сюда приходят редиректы со старых страниц. */
   initialZone: Zone;
+  /** Когда последний раз сверялись со Steam, в миллисекундах. */
+  lastSyncAt: number | null;
 }
 
 export type Zone = "choose" | "now" | "recap";
+
+/** «3 часа назад» на языке интерфейса — без своей таблицы склонений. */
+function ago(timestamp: number, locale: Locale): string {
+  const minutes = Math.round((timestamp - Date.now()) / 60000);
+  const rtf = new Intl.RelativeTimeFormat(locale === "en" ? "en" : "ru", { numeric: "auto" });
+  if (Math.abs(minutes) < 60) return rtf.format(Math.min(minutes, -1), "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+  return rtf.format(Math.round(hours / 24), "day");
+}
 
 const ZONE_GLOW: Record<Zone, string> = {
   choose: "bg-emerald-500",
@@ -148,6 +160,30 @@ export default function Hub(props: Props) {
    */
   const [taken, setTaken] = useState<Slot[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+
+  /*
+   * Синк живёт в оболочке, а не в зоне «Сейчас»: наигранное время трогает
+   * каждый экран, и человек ищет эту кнопку там, где заметил расхождение.
+   */
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  async function sync() {
+    setBusy("sync");
+    try {
+      const res = await fetch("/api/sync-library", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(s.errors.network);
+        return;
+      }
+      setSyncResult(s.dock.synced(data.synced ?? 0));
+      setTimeout(() => window.location.reload(), 1200);
+    } catch {
+      setError(s.errors.network);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     if (!toast) return;
@@ -242,6 +278,17 @@ export default function Hub(props: Props) {
       return false;
     }
   }
+
+  /*
+   * Считаем на клиенте после монтирования: на сервере «час назад» застынет
+   * в кэше страницы и будет врать тем сильнее, чем дольше вкладка открыта.
+   */
+  const [syncFreshness, setSyncFreshness] = useState<string>("");
+  useEffect(() => {
+    setSyncFreshness(
+      props.lastSyncAt === null ? s.dock.syncNever : s.dock.syncAgo(ago(props.lastSyncAt, locale))
+    );
+  }, [props.lastSyncAt, locale]);
 
   const backdrop = zone === "choose" ? pick?.headerImage : zone === "now" ? slots[0]?.image : null;
   const glow = zone === "choose" ? tone.bg : ZONE_GLOW[zone];
@@ -346,6 +393,18 @@ export default function Hub(props: Props) {
             label={s.dock.recap}
             hint={s.dock.recapHint(reviewCount)}
           />
+          <button
+            onClick={sync}
+            disabled={busy !== null}
+            className="shrink-0 rounded-xl border border-gray-800 px-4 py-2.5 text-left whitespace-nowrap transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
+          >
+            <span className="block text-sm font-medium text-gray-300">
+              {busy === "sync" ? s.dock.syncing : s.dock.sync}
+            </span>
+            <span className={`block text-xs ${syncResult ? "text-emerald-400" : "text-gray-600"}`}>
+              {syncResult ?? syncFreshness}
+            </span>
+          </button>
         </div>
       </nav>
     </div>
@@ -1407,21 +1466,6 @@ function NowZone({
     if (ok) window.location.reload();
   }
 
-  const [syncResult, setSyncResult] = useState<string | null>(null);
-
-  async function sync() {
-    setBusy("sync");
-    try {
-      const res = await fetch("/api/sync-library", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return;
-      setSyncResult(s.now.synced(data.synced ?? 0));
-      setTimeout(() => window.location.reload(), 1200);
-    } finally {
-      setBusy(null);
-    }
-  }
-
   const free = Math.max(0, THRESHOLDS.MAX_ACTIVE_SLOTS - slots.length);
   const pending = queue.filter((game) => !done.includes(game.gameId));
 
@@ -1492,14 +1536,6 @@ function NowZone({
           ))}
         </div>
 
-        <button
-          onClick={sync}
-          disabled={busy !== null}
-          className="mt-4 text-xs text-gray-600 transition hover:text-gray-300 disabled:opacity-40"
-        >
-          {busy === "sync" ? s.now.syncing : s.now.syncLibrary}
-        </button>
-        {syncResult && <span className="ml-3 text-xs text-emerald-400">{syncResult}</span>}
       </section>
 
       {updates.length > 0 && (

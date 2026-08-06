@@ -9,6 +9,7 @@ export interface SessionUser {
   steamId: string;
   username: string;
   avatarUrl: string | null;
+  lastLibrarySync: Date | null;
 }
 
 export async function getSessionUser(
@@ -23,6 +24,7 @@ export async function getSessionUser(
       steamId: users.steamId,
       username: users.username,
       avatarUrl: users.avatarUrl,
+      lastLibrarySync: users.lastLibrarySync,
     })
     .from(users)
     .where(eq(users.id, userId))

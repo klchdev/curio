@@ -98,6 +98,11 @@ const RU = {
     recap: "Итоги",
     recapHint: (reviews: number) =>
       `${reviews} ${plural(reviews, "отзыв", "отзыва", "отзывов")} · тиры · дневник`,
+    sync: "Обновить из Steam",
+    syncing: "Спрашиваю Steam…",
+    synced: (count: number) => `Готово: ${count} игр`,
+    syncAgo: (when: string) => `сверено ${when}`,
+    syncNever: "ни разу не сверялось",
   },
 
   choose: {
@@ -387,6 +392,11 @@ const EN: Dict = {
     recap: "Recap",
     recapHint: (reviews: number) =>
       `${reviews} ${reviews === 1 ? "review" : "reviews"} · tiers · diary`,
+    sync: "Refresh from Steam",
+    syncing: "Asking Steam…",
+    synced: (count: number) => `Done: ${count} games`,
+    syncAgo: (when: string) => `checked ${when}`,
+    syncNever: "never checked",
   },
 
   choose: {
