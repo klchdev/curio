@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
  * читался как сплошная подсветка: целое предложение выглядело названием.
  * Поэтому мысль — просто светлее и плотнее, а название — своим оттенком.
  */
-const TOKEN = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+const TOKEN = /(\*\*[^*]+\*\*|\*[^*]+\*|\[\[[^\]]+\]\])/g;
 
 export default function RichText({ text, className = "" }: { text: string; className?: string }) {
   return (
@@ -23,7 +23,8 @@ export default function RichText({ text, className = "" }: { text: string; class
           );
         }
 
-        const title = /^\*([^*]+)\*$/.exec(part);
+        // Модель иногда размечает названия по-викисловарному: [[Metro Exodus]]
+        const title = /^\*([^*]+)\*$/.exec(part) ?? /^\[\[([^\]]+)\]\]$/.exec(part);
         if (title) {
           return (
             <em key={index} className={`not-italic text-sky-200/90 ${className}`}>

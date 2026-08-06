@@ -525,8 +525,19 @@ function ChooseZone({
   }
 
   const pick = picks[index]!;
-  // Разбор видит механику, а не рекламу, поэтому его тир важнее
-  const shownTier = (pick.deepTier ?? pick.tier) as Tier;
+
+  /*
+   * Тир разбора важнее: он видит механику, а не рекламу. Свежий разбор из
+   * этой сессии — важнее сохранённого, иначе герой держит старую оценку до
+   * перезагрузки и спорит сам с собой: «S» сверху и «не твоя игра» снизу.
+   */
+  function tierOf(item: Pick): Tier {
+    const dive = dives[item.gameId];
+    const fresh = typeof dive === "object" && dive !== null ? dive.tier : null;
+    return (fresh ?? item.deepTier ?? item.tier) as Tier;
+  }
+
+  const shownTier = tierOf(pick);
   const tone = TIER_STYLE[shownTier] ?? TIER_STYLE.B;
 
   async function take(gameId: number, fallback?: { title: string; image: string | null }) {
@@ -566,7 +577,11 @@ function ChooseZone({
    */
   const rollable = picks
     .map((item, i) => ({ item, i }))
-    .filter(({ item }) => (item.deepTier ?? item.tier) !== "D" && item.deepFit !== "no");
+    .filter(({ item }) => {
+      const dive = dives[item.gameId];
+      const fit = typeof dive === "object" && dive !== null ? dive.fit : item.deepFit;
+      return tierOf(item) !== "D" && fit !== "no";
+    });
 
   function roll() {
     if (rollable.length === 0) return;
@@ -747,10 +762,8 @@ function ChooseZone({
               <RichText text={pick.reason} />
             </p>
             {/* Тихая пометка, а не баннер: важно знать, но не пугать */}
-            {pick.deepTier && pick.deepTier !== pick.tier && (
-              <p className="mt-3 text-xs text-sky-400/80">
-                {s.deep.revised(pick.tier, pick.deepTier)}
-              </p>
+            {shownTier !== pick.tier && (
+              <p className="mt-3 text-xs text-sky-400/80">{s.deep.revised(pick.tier, shownTier)}</p>
             )}
             {pick.grounding && pick.grounding !== "known" && (
               <p className="mt-3 text-xs text-gray-600">
@@ -815,7 +828,7 @@ function ChooseZone({
               )}
               <span
                 className={`absolute inset-x-0 bottom-0 h-0.5 origin-left transition-transform duration-500 ${
-                  TIER_STYLE[(item.deepTier ?? item.tier) as Tier]?.bg
+                  TIER_STYLE[tierOf(item)]?.bg
                 } ${i === index ? "scale-x-100" : "scale-x-0"}`}
               />
             </button>
@@ -1115,7 +1128,7 @@ function DeepDivePanel({
               <ul className="space-y-1">
                 {value.complaints.map((item, i) => (
                   <li key={i} className="text-sm leading-relaxed text-gray-400">
-                    — {item}
+                    — <RichText text={item} />
                   </li>
                 ))}
               </ul>
@@ -1134,7 +1147,9 @@ function Section({ title, text, accent }: { title: string; text: string; accent?
       <h3 className={`mb-1.5 text-xs tracking-[0.15em] uppercase ${accent ?? "text-gray-500"}`}>
         {title}
       </h3>
-      <p className="text-sm leading-relaxed text-gray-300">{text}</p>
+      <p className="text-sm leading-relaxed text-gray-300">
+        <RichText text={text} />
+      </p>
     </div>
   );
 }
