@@ -244,6 +244,8 @@ const RU = {
     importing: "Читаю профиль…",
     imported: (n: number) => `Перенесено ${n} ${plural(n, "отзыв", "отзыва", "отзывов")}`,
     importedNone: "Новых отзывов на профиле не нашлось",
+    redated: (n: number) =>
+      `У ${n} ${plural(n, "записи", "записей", "записей")} восстановлена дата из Steam`,
     importHint: "Отзывы с твоего профиля станут записями в дневнике — вердикт проставишь сам",
     diary: "Дневник впечатлений",
     allDiary: "весь дневник",
@@ -537,6 +539,7 @@ const EN: Dict = {
     importing: "Reading your profile…",
     imported: (n: number) => `Imported ${n} ${n === 1 ? "review" : "reviews"}`,
     importedNone: "No new reviews found on your profile",
+    redated: (n: number) => `Restored the Steam date on ${n} ${n === 1 ? "entry" : "entries"}`,
     importHint: "Reviews from your profile become diary entries — you set the verdict yourself",
     diary: "Impression diary",
     allDiary: "full diary",

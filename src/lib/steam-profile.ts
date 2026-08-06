@@ -17,9 +17,44 @@ export interface OwnReview {
   /** Наиграно на момент отзыва, минуты. */
   playtimeMinutes: number;
   text: string;
+  /** Когда отзыв написан в Steam. null — если дату не удалось разобрать. */
+  postedAt: Date | null;
 }
 
 const PAGE_LIMIT = 20;
+
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+/*
+ * Steam пишет дату по-английски и в двух видах: «15 March, 2024», а для
+ * отзывов этого года год опускает — «15 March». Год в таком случае текущий.
+ * Порядок «March 15» встречается на части страниц, поэтому ловим оба.
+ */
+export function parsePostedDate(raw: string, now = new Date()): Date | null {
+  const text = raw.toLowerCase();
+  const monthIndex = MONTHS.findIndex((month) => text.includes(month));
+  if (monthIndex < 0) return null;
+
+  const day = Number(text.match(/\b(\d{1,2})\b/)?.[1]);
+  if (!day) return null;
+
+  const year = Number(text.match(/\b(\d{4})\b/)?.[1] ?? now.getUTCFullYear());
+  const date = new Date(Date.UTC(year, monthIndex, day, 12));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 function decodeEntities(value: string): string {
   return value
@@ -50,11 +85,15 @@ export function parseReviewPage(html: string): { reviews: OwnReview[]; total: nu
     const body = decodeEntities(text);
     if (!body) continue;
 
+    // «Posted 28 July.» и «Posted 16 December, 2025.» — двоеточия Steam не ставит
+    const posted = block.match(/class="posted"[^>]*>\s*Posted:?\s*([^<]+)/i)?.[1];
+
     reviews.push({
       steamAppId: Number(appId),
       positive: block.includes("icon_thumbsUp"),
       playtimeMinutes: hours ? Math.round(Number(hours.replace(",", ".")) * 60) : 0,
       text: body,
+      postedAt: posted ? parsePostedDate(posted) : null,
     });
   }
 

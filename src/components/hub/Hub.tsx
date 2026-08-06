@@ -1833,9 +1833,18 @@ function RecapZone({
         setImportResult(data.error ?? s.errors.generic);
         return;
       }
-      if (data.imported > 0) {
-        setImportResult(s.recap.imported(data.imported));
-        setTimeout(() => window.location.reload(), 1200);
+      /*
+       * Перенос и починка дат — два разных исхода, и «ничего не нашлось»
+       * после того, как сотне записей вернули их дату, читалось бы враньём.
+       */
+      const parts = [
+        data.imported > 0 ? s.recap.imported(data.imported) : null,
+        data.redated > 0 ? s.recap.redated(data.redated) : null,
+      ].filter(Boolean);
+
+      if (parts.length > 0) {
+        setImportResult(parts.join(" · "));
+        setTimeout(() => window.location.reload(), 1600);
       } else {
         setImportResult(s.recap.importedNone);
       }

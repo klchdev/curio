@@ -10,7 +10,7 @@ import {
   recommendations,
   deepDives,
 } from "../db/schema";
-import { eq, and, or, sql, ne, lte, desc, gt, lt, inArray } from "drizzle-orm";
+import { eq, and, or, sql, ne, lte, desc, asc, gt, lt, inArray } from "drizzle-orm";
 import {
   THRESHOLDS,
   isValidVerdict,
@@ -1393,6 +1393,8 @@ interface RecordPatch {
   origin?: "roulette" | "retro" | "triage" | "demo" | "steam";
   slotId?: number | null;
   playtimeMinutes: number;
+  /** Дата записи, если она не «сейчас»: перенос из Steam датируется задним числом. */
+  at?: Date;
 }
 
 /**
@@ -1405,7 +1407,7 @@ async function upsertRecord(
   gameId: number,
   patch: RecordPatch
 ): Promise<number> {
-  const now = new Date();
+  const now = patch.at ?? new Date();
 
   const existing = await db
     .select({ id: gameRecords.id })
@@ -1416,7 +1418,8 @@ async function upsertRecord(
 
   if (existing) {
     const update: Record<string, unknown> = {
-      lastEntryAt: now,
+      // Запись задним числом не должна отматывать «последнюю» назад
+      lastEntryAt: sql`greatest(${gameRecords.lastEntryAt}, ${now})`,
       playtimeAtLastEntry: sql`greatest(${gameRecords.playtimeAtLastEntry}, ${patch.playtimeMinutes})`,
     };
     if (patch.verdict !== undefined) update.verdict = patch.verdict;
@@ -1458,6 +1461,8 @@ async function addEntry(
     verdict?: string | null;
     rating?: number | null;
     tier?: string | null;
+    /** Когда запись появилась на самом деле: у перенесённых из Steam это не «сейчас». */
+    at?: Date;
   }
 ): Promise<void> {
   const previous = await db
@@ -1477,7 +1482,7 @@ async function addEntry(
     verdictAt: data.verdict ?? null,
     ratingAt: data.rating ?? null,
     tierAt: data.tier ?? null,
-    createdAt: new Date(),
+    createdAt: data.at ?? new Date(),
   });
 }
 
@@ -1492,15 +1497,69 @@ async function addEntry(
  * Игры, по которым в приложении уже есть запись, не трогаем: написанное
  * здесь свежее и подробнее.
  */
+/**
+ * Ставит перенесённому отзыву дату, под которой он написан в Steam.
+ * Двигаем самую раннюю запись ленты — это и есть перенос; всё, что человек
+ * дописал в приложении, идёт после и остаётся на своих датах.
+ */
+async function redateSteamImport(recordId: number, postedAt: Date): Promise<boolean> {
+  const first = await db
+    .select({ id: gameEntries.id, createdAt: gameEntries.createdAt })
+    .from(gameEntries)
+    .where(eq(gameEntries.recordId, recordId))
+    .orderBy(asc(gameEntries.createdAt))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!first) return false;
+  // Повторный импорт не должен «чинить» уже починенное
+  if (new Date(first.createdAt).toDateString() === postedAt.toDateString()) return false;
+
+  await db
+    .update(gameEntries)
+    .set({ createdAt: postedAt })
+    .where(eq(gameEntries.id, first.id));
+
+  const span = await db
+    .select({
+      first: sql<Date>`min(${gameEntries.createdAt})`,
+      last: sql<Date>`max(${gameEntries.createdAt})`,
+    })
+    .from(gameEntries)
+    .where(eq(gameEntries.recordId, recordId))
+    .then((rows) => rows[0]);
+
+  if (span?.first) {
+    await db
+      .update(gameRecords)
+      .set({ firstEntryAt: new Date(span.first), lastEntryAt: new Date(span.last) })
+      .where(eq(gameRecords.id, recordId));
+  }
+
+  return true;
+}
+
 export async function importSteamReviews(
   userId: number,
-  reviews: { steamAppId: number; positive: boolean; playtimeMinutes: number; text: string }[]
-): Promise<{ imported: number; skippedExisting: number; notOwned: number }> {
-  if (reviews.length === 0) return { imported: 0, skippedExisting: 0, notOwned: 0 };
+  reviews: {
+    steamAppId: number;
+    positive: boolean;
+    playtimeMinutes: number;
+    text: string;
+    postedAt?: Date | null;
+  }[]
+): Promise<{ imported: number; skippedExisting: number; notOwned: number; redated: number }> {
+  if (reviews.length === 0)
+    return { imported: 0, skippedExisting: 0, notOwned: 0, redated: 0 };
 
   const appIds = reviews.map((r) => r.steamAppId);
   const owned = await db
-    .select({ gameId: games.id, steamAppId: games.steamAppId, recordId: gameRecords.id })
+    .select({
+      gameId: games.id,
+      steamAppId: games.steamAppId,
+      recordId: gameRecords.id,
+      origin: gameRecords.origin,
+    })
     .from(games)
     .innerJoin(
       userGames,
@@ -1517,6 +1576,7 @@ export async function importSteamReviews(
   let imported = 0;
   let skippedExisting = 0;
   let notOwned = 0;
+  let redated = 0;
 
   for (const review of reviews) {
     const target = byAppId.get(review.steamAppId);
@@ -1525,23 +1585,35 @@ export async function importSteamReviews(
       continue;
     }
     if (target.recordId !== null) {
-      skippedExisting += 1;
+      /*
+       * Первые импорты проставляли записям дату переноса, и весь профиль
+       * ложился в дневник одним сегодняшним днём. Повторный запуск чинит
+       * это на месте: свой текст не трогаем, двигаем только дату у того,
+       * что пришло из Steam.
+       */
+      if (target.origin === "steam" && review.postedAt) {
+        redated += (await redateSteamImport(target.recordId, review.postedAt)) ? 1 : 0;
+      } else {
+        skippedExisting += 1;
+      }
       continue;
     }
 
     const recordId = await upsertRecord(userId, target.gameId, {
       origin: "steam",
       playtimeMinutes: review.playtimeMinutes,
+      at: review.postedAt ?? undefined,
     });
     await addEntry(recordId, {
       kind: "first",
       text: review.text,
       playtimeMinutes: review.playtimeMinutes,
+      at: review.postedAt ?? undefined,
     });
     imported += 1;
   }
 
-  return { imported, skippedExisting, notOwned };
+  return { imported, skippedExisting, notOwned, redated };
 }
 
 /**
