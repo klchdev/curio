@@ -157,6 +157,10 @@ export default function Hub(props: Props) {
 
   const allSlots = taken.length > 0 ? [...slots, ...taken] : slots;
 
+  /* Взятая игра тут же уходит из советов: решение по ней принято. */
+  const takenIds = new Set(taken.map((slot) => slot.gameId));
+  const openPicks = takenIds.size > 0 ? picks.filter((p) => !takenIds.has(p.gameId)) : picks;
+
   function onTaken(slot: Slot) {
     setTaken((prev) => [...prev, slot]);
     setToast(slot.title);
@@ -272,6 +276,7 @@ export default function Hub(props: Props) {
         {zone === "choose" && (
           <ChooseZone
             {...props}
+            picks={openPicks}
             slots={allSlots}
             onTaken={onTaken}
             index={index}
@@ -524,7 +529,7 @@ function ChooseZone({
     );
   }
 
-  const pick = picks[index]!;
+  const pick = picks[Math.min(index, picks.length - 1)]!;
 
   /*
    * Тир разбора важнее: он видит механику, а не рекламу. Свежий разбор из

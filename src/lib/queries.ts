@@ -848,6 +848,16 @@ export async function searchLibrary(userId: number, query: string) {
 export async function getRecommendationCandidates(userId: number): Promise<CandidateGame[]> {
   const reviewedIds = await getReviewedGameIds(userId);
 
+  // Игра под активным контрактом уже выбрана — советовать её незачем
+  const underContract = new Set(
+    (
+      await db
+        .select({ gameId: slots.gameId })
+        .from(slots)
+        .where(and(eq(slots.userId, userId), eq(slots.status, "active")))
+    ).map((row) => row.gameId)
+  );
+
   const rows = await db
     .select({
       gameId: games.id,
@@ -874,7 +884,7 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
     .limit(CANDIDATE_LIMIT);
 
   return rows
-    .filter((row) => !reviewedIds.has(row.gameId))
+    .filter((row) => !reviewedIds.has(row.gameId) && !underContract.has(row.gameId))
     .map((row) => ({
       gameId: row.gameId,
       steamAppId: row.steamAppId,
@@ -1091,6 +1101,26 @@ export async function getLatestRecommendations(userId: number) {
 
   if (!run) return null;
 
+  /*
+   * Игры, по которым контракт уже взят или закрыт отзывом. Совет по ним
+   * бессмысленен: решение принято, а карточка продолжала звать «взять
+   * контракт» на то, что уже лежит в работе. Пропущенные не в счёт — к ним
+   * можно вернуться.
+   */
+  const decided = new Set(
+    (
+      await db
+        .select({ gameId: slots.gameId })
+        .from(slots)
+        .where(
+          and(
+            eq(slots.userId, userId),
+            or(eq(slots.status, "active"), eq(slots.status, "reviewed"))
+          )
+        )
+    ).map((row) => row.gameId)
+  );
+
   const items = await db
     .select({
       gameId: recommendations.gameId,
@@ -1132,7 +1162,7 @@ export async function getLatestRecommendations(userId: number) {
     candidatesUsed: run.candidatesUsed,
     createdAt: run.createdAt,
     items: items
-      .filter((item) => item.kind === "pick" && item.tier)
+      .filter((item) => item.kind === "pick" && item.tier && !decided.has(item.gameId))
       .map((item) => ({
         gameId: item.gameId,
         steamAppId: item.steamAppId,
