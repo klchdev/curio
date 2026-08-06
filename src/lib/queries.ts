@@ -844,6 +844,32 @@ export async function searchLibrary(userId: number, query: string) {
   }));
 }
 
+/**
+ * Что последний прогон сказал об этой игре. Разбор без этого судил с нуля,
+ * хотя инструкция велела ему считать первый проход точкой отсчёта.
+ */
+export async function getFirstPassPick(
+  userId: number,
+  gameId: number
+): Promise<{ tier: string; reason: string } | null> {
+  const row = await db
+    .select({ tier: recommendations.tier, reason: recommendations.reason })
+    .from(recommendations)
+    .innerJoin(recommendationRuns, eq(recommendationRuns.id, recommendations.runId))
+    .where(
+      and(
+        eq(recommendationRuns.userId, userId),
+        eq(recommendations.gameId, gameId),
+        eq(recommendations.kind, "pick")
+      )
+    )
+    .orderBy(desc(recommendationRuns.id))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  return row?.tier ? { tier: row.tier, reason: row.reason } : null;
+}
+
 /** Нетронутое и едва начатое: то, что имеет смысл советовать. */
 export async function getRecommendationCandidates(userId: number): Promise<CandidateGame[]> {
   const reviewedIds = await getReviewedGameIds(userId);

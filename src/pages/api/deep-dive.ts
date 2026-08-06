@@ -5,7 +5,7 @@ import { games, deepDives } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 import { getAppReviews } from "../../lib/steam";
 import { generateDeepDive } from "../../lib/deep-dive";
-import { getReviewCorpus } from "../../lib/queries";
+import { getReviewCorpus, getFirstPassPick } from "../../lib/queries";
 import { errorCode } from "../../lib/recommendations";
 import { GEMINI_API_KEY } from "astro:env/server";
 import { localeFrom } from "../../lib/i18n";
@@ -66,9 +66,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 
   try {
-    const [reviews, corpus] = await Promise.all([
+    const [reviews, corpus, firstPass] = await Promise.all([
       getAppReviews(game.steamAppId),
       getReviewCorpus(userId),
+      getFirstPassPick(userId, gameId),
     ]);
 
     const dive = await generateDeepDive(
@@ -79,6 +80,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         description: game.description,
         reviews,
         corpus,
+        firstPass,
       },
       GEMINI_API_KEY,
       localeFrom(cookies, request)
