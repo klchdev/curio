@@ -18,14 +18,80 @@ const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
 /*
- * Дневник стал плоской лентой: каждая запись — своя строка со штампом
- * наигранного времени. Раньше ретро-отзывы рисовались дважды: карточкой
- * в ленте и плиткой в отдельной секции внизу.
+ * Дневник собирается в треды по играм. Плоская лента разносила записи об
+ * одной игре по всей странице, и то, ради чего дневник вообще заведён —
+ * как менялось мнение — приходилось собирать глазами. Внутри треда записи
+ * идут снизу вверх по времени: сверху первое впечатление, дальше правки.
  */
 const timeline = await getHistory(user.id);
 
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
+
+type Item = (typeof timeline)[number];
+
+interface Thread {
+  gameId: number;
+  title: string;
+  image: string | null;
+  steamAppId: number | null;
+  items: Item[];
+  /** Последняя активность: по ней треды и выстраиваются. */
+  touchedAt: number;
+  playtimeMinutes: number;
+  verdict: string | null;
+  rating: number | null;
+  tier: string | null;
+}
+
+const threads = new Map<number, Thread>();
+
+for (const item of timeline) {
+  const existing = threads.get(item.gameId);
+  const at = new Date(item.date).getTime();
+
+  const thread =
+    existing ??
+    ({
+      gameId: item.gameId,
+      title: item.gameTitle,
+      image: item.gameImage,
+      steamAppId: null,
+      items: [],
+      touchedAt: at,
+      playtimeMinutes: 0,
+      verdict: null,
+      rating: null,
+      tier: null,
+    } satisfies Thread);
+
+  thread.items.push(item);
+  thread.touchedAt = Math.max(thread.touchedAt, at);
+
+  /*
+   * Итог игры берём из первой встреченной записи: лента приходит от новых
+   * к старым, значит это и есть текущее состояние карточки.
+   */
+  if (item.type === "reviewed") {
+    thread.steamAppId ??= item.steamAppId;
+    if (thread.playtimeMinutes === 0) {
+      thread.playtimeMinutes = item.playtimeMinutes;
+      thread.verdict = item.currentVerdict;
+      thread.rating = item.currentRating;
+      thread.tier = item.currentTier;
+    }
+  }
+
+  if (!existing) threads.set(item.gameId, thread);
+}
+
+const grouped = [...threads.values()]
+  .map((thread) => ({
+    ...thread,
+    // Внутри треда — от старого к новому: так читается развитие мнения
+    items: [...thread.items].reverse(),
+  }))
+  .sort((a, b) => b.touchedAt - a.touchedAt);
 
 const KIND_LABEL: Record<string, string> = {
   first: s.pages.entryFirst,
@@ -45,115 +111,169 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
   <div class="mb-8 flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-bold">{s.pages.diary}</h1>
-      <p class="text-sm text-gray-500">{s.pages.diaryCount(timeline.length)}</p>
+      <p class="text-sm text-gray-500">
+        {s.pages.diaryCount(timeline.length)} · {s.pages.diaryGames(grouped.length)}
+      </p>
     </div>
     <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; {s.pages.back}</a>
   </div>
 
-  {timeline.length === 0 ? (
+  {grouped.length === 0 ? (
     <p class="text-gray-500">{s.pages.diaryEmpty}</p>
   ) : (
-    <ol class="relative space-y-4 border-l border-gray-800 pl-6">
-      {timeline.map((entry) => (
-        <li class="relative">
-          <span
-            class:list={[
-              "absolute top-4 -left-[29px] h-2.5 w-2.5 rounded-full",
-              entry.type === "skipped" ? "bg-rose-700" : "bg-gray-600",
-            ]}
-          />
+    <div class="space-y-6">
+      {grouped.map((thread) => (
+        <section class="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/30">
+          <header class="flex flex-wrap items-center gap-4 border-b border-gray-800/80 bg-gray-900/40 p-4">
+            {thread.image && (
+              <img src={thread.image} alt="" class="header-art w-28 shrink-0 rounded-lg" />
+            )}
 
-          {entry.type === "skipped" ? (
-            <div class="rounded-xl border border-gray-800 bg-gray-900/30 p-4">
+            <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-baseline gap-2">
-                <span class="font-medium">{entry.gameTitle}</span>
-                <span
-                  class:list={[
-                    "rounded px-2 py-0.5 text-xs",
-                    entry.reasonType === "shame"
-                      ? "bg-rose-950/60 text-rose-300"
-                      : "bg-gray-800 text-gray-400",
-                  ]}
-                >
-                  {entry.reasonType === "shame" ? s.pages.shame : s.pages.skipped}
-                </span>
-                <span class="ml-auto text-xs text-gray-600">
-                  {dateFormat.format(new Date(entry.date))}
-                </span>
-              </div>
-              <p class="mt-1 text-sm text-gray-500">{entry.reasonText}</p>
-            </div>
-          ) : (
-            <article class="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-              <div class="flex flex-wrap items-baseline gap-2">
-                <a
-                  href={`https://store.steampowered.com/app/${entry.steamAppId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  class="font-medium transition hover:text-emerald-400"
-                >
-                  {entry.gameTitle}
-                </a>
-                <span class="text-xs text-gray-600">
-                  {formatPlaytime(entry.playtimeMinutes)}
-                  {entry.deltaMinutes > 0 && (
-                    <span class="text-indigo-400"> · +{formatPlaytime(entry.deltaMinutes)}</span>
-                  )}
-                </span>
-                <span class="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-500">
-                  {KIND_LABEL[entry.kind] ?? entry.kind}
-                </span>
-                {entry.origin === "steam" && (
-                  <span class="rounded border border-sky-900 px-1.5 py-0.5 text-[10px] text-sky-400/80">
-                    {s.pages.fromSteam}
-                  </span>
+                {thread.steamAppId ? (
+                  <a
+                    href={`https://store.steampowered.com/app/${thread.steamAppId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    class="text-lg font-semibold transition hover:text-emerald-400"
+                  >
+                    {thread.title}
+                  </a>
+                ) : (
+                  <span class="text-lg font-semibold">{thread.title}</span>
                 )}
-                <span class="ml-auto text-xs text-gray-600">
-                  {dateFormat.format(new Date(entry.date))}
-                </span>
+                {thread.playtimeMinutes > 0 && (
+                  <span class="text-xs text-gray-600">{formatPlaytime(thread.playtimeMinutes)}</span>
+                )}
               </div>
 
-              <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300">
-                {entry.note}
-              </p>
-
-              <div class="mt-3 flex flex-wrap items-center gap-3 text-xs">
-                {entry.verdict && (
+              <div class="mt-1 flex flex-wrap items-center gap-3 text-xs">
+                {thread.verdict && (
                   <span class="text-gray-400">
-                    {VERDICT_STYLE[entry.verdict as keyof typeof VERDICT_STYLE]?.icon}{" "}
-                    {verdictLabel(entry.verdict as keyof typeof VERDICT_STYLE)}
+                    {VERDICT_STYLE[thread.verdict as keyof typeof VERDICT_STYLE]?.icon}{" "}
+                    {verdictLabel(thread.verdict as keyof typeof VERDICT_STYLE)}
                   </span>
                 )}
-                {entry.rating && (
-                  <span class={WORTH_COLORS[entry.rating - 1]}>{worthLabel(entry.rating)}</span>
+                {thread.rating && (
+                  <span class={WORTH_COLORS[thread.rating - 1]}>{worthLabel(thread.rating)}</span>
                 )}
-                {entry.tier && (
+                {thread.tier && (
                   <span
                     class:list={[
                       "flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold",
-                      TIER_STYLE[entry.tier as keyof typeof TIER_STYLE]?.bg,
-                      TIER_STYLE[entry.tier as keyof typeof TIER_STYLE]?.text,
+                      TIER_STYLE[thread.tier as keyof typeof TIER_STYLE]?.bg,
+                      TIER_STYLE[thread.tier as keyof typeof TIER_STYLE]?.text,
                     ]}
                   >
-                    {entry.tier}
+                    {thread.tier}
                   </span>
                 )}
-                <AddGameNoteButton
-                  client:visible
-                  locale={locale}
-                  gameId={entry.gameId}
-                  gameTitle={entry.gameTitle}
-                  currentPlaytime={entry.playtimeMinutes}
-                  lastRecordedPlaytime={entry.playtimeMinutes}
-                  currentVerdict={entry.currentVerdict}
-                  currentRating={entry.currentRating}
-                  currentTier={entry.currentTier}
-                />
+                <span class="text-gray-600">
+                  {thread.items.length > 1
+                    ? `${s.pages.diaryThread(thread.items.length)} · ${s.pages.diarySince}`
+                    : s.pages.diaryThread(thread.items.length)}
+                </span>
               </div>
-            </article>
-          )}
-        </li>
+            </div>
+
+            <AddGameNoteButton
+              client:visible
+              locale={locale}
+              gameId={thread.gameId}
+              gameTitle={thread.title}
+              currentPlaytime={thread.playtimeMinutes}
+              lastRecordedPlaytime={thread.playtimeMinutes}
+              currentVerdict={thread.verdict}
+              currentRating={thread.rating}
+              currentTier={thread.tier}
+            />
+          </header>
+
+          <ol class="relative m-4 ml-7 space-y-4 border-l border-gray-800 pl-5">
+            {thread.items.map((entry) => (
+              <li class="relative">
+                <span
+                  class:list={[
+                    "absolute top-2 -left-[27px] h-2.5 w-2.5 rounded-full",
+                    entry.type === "skipped" ? "bg-rose-700" : "bg-gray-600",
+                  ]}
+                />
+
+                {entry.type === "skipped" ? (
+                  <div>
+                    <div class="flex flex-wrap items-baseline gap-2">
+                      <span
+                        class:list={[
+                          "rounded px-2 py-0.5 text-xs",
+                          entry.reasonType === "shame"
+                            ? "bg-rose-950/60 text-rose-300"
+                            : "bg-gray-800 text-gray-400",
+                        ]}
+                      >
+                        {entry.reasonType === "shame" ? s.pages.shame : s.pages.skipped}
+                      </span>
+                      <span class="ml-auto text-xs text-gray-600">
+                        {dateFormat.format(new Date(entry.date))}
+                      </span>
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">{entry.reasonText}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div class="flex flex-wrap items-baseline gap-2">
+                      <span class="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-500">
+                        {KIND_LABEL[entry.kind] ?? entry.kind}
+                      </span>
+                      <span class="text-xs text-gray-600">
+                        {formatPlaytime(entry.playtimeMinutes)}
+                        {entry.deltaMinutes > 0 && (
+                          <span class="text-indigo-400"> · +{formatPlaytime(entry.deltaMinutes)}</span>
+                        )}
+                      </span>
+                      {entry.origin === "steam" && (
+                        <span class="rounded border border-sky-900 px-1.5 py-0.5 text-[10px] text-sky-400/80">
+                          {s.pages.fromSteam}
+                        </span>
+                      )}
+                      <span class="ml-auto text-xs text-gray-600">
+                        {dateFormat.format(new Date(entry.date))}
+                      </span>
+                    </div>
+
+                    <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300">
+                      {entry.note}
+                    </p>
+
+                    <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                      {entry.verdict && (
+                        <span class="text-gray-400">
+                          {VERDICT_STYLE[entry.verdict as keyof typeof VERDICT_STYLE]?.icon}{" "}
+                          {verdictLabel(entry.verdict as keyof typeof VERDICT_STYLE)}
+                        </span>
+                      )}
+                      {entry.rating && (
+                        <span class={WORTH_COLORS[entry.rating - 1]}>{worthLabel(entry.rating)}</span>
+                      )}
+                      {entry.tier && (
+                        <span
+                          class:list={[
+                            "flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold",
+                            TIER_STYLE[entry.tier as keyof typeof TIER_STYLE]?.bg,
+                            TIER_STYLE[entry.tier as keyof typeof TIER_STYLE]?.text,
+                          ]}
+                        >
+                          {entry.tier}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
       ))}
-    </ol>
+    </div>
   )}
 </Layout>
