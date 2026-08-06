@@ -181,7 +181,7 @@ export default function ImpressionSheet({
           </header>
 
           {gameImage && (
-            <img src={gameImage} alt="" className="mb-5 h-28 w-full rounded-xl object-cover" />
+            <img src={gameImage} alt="" className="header-art mb-5 w-full rounded-xl" />
           )}
 
           {rule.showAppIdInput && (

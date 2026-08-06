@@ -888,7 +888,7 @@ function ChooseZone({
               }`}
             >
               {item.headerImage && (
-                <img src={item.headerImage} alt="" className="h-16 w-full object-cover transition duration-500 group-hover:scale-105" />
+                <img src={item.headerImage} alt="" className="header-art w-full transition duration-500 group-hover:scale-105" />
               )}
               <span
                 className={`absolute inset-x-0 bottom-0 h-0.5 origin-left transition-transform duration-500 ${
@@ -1035,7 +1035,7 @@ function AskAnyGame({
                 className="flex w-full items-center gap-3 rounded-lg px-1 py-1.5 text-left transition hover:bg-gray-800/60 disabled:opacity-40"
               >
                 {game.headerImage && (
-                  <img src={game.headerImage} alt="" className="h-8 w-16 shrink-0 rounded object-cover" />
+                  <img src={game.headerImage} alt="" className="header-art w-16 shrink-0 rounded" />
                 )}
                 <span className="min-w-0 flex-1 truncate text-sm">{game.title}</span>
                 <span className="shrink-0 text-xs text-gray-600">
@@ -1485,7 +1485,7 @@ function NowZone({
           {slots.map((slot, i) => (
             <Reveal key={slot.slotId} delay={70 * i} from="scale">
               <article className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50">
-                {slot.image && <img src={slot.image} alt="" className="h-24 w-full object-cover" />}
+                {slot.image && <img src={slot.image} alt="" className="header-art w-full" />}
                 <div className="p-4">
                   <p className="truncate font-medium">{slot.title}</p>
                   <p className="mt-1 text-xs text-gray-500">
@@ -1552,7 +1552,7 @@ function NowZone({
               <Reveal key={game.gameId} delay={170 + 40 * i} from="left">
                 <article className="flex items-center gap-3 rounded-xl border border-indigo-900/60 bg-indigo-950/20 p-2.5">
                   {game.headerImage && (
-                    <img src={game.headerImage} alt="" className="h-12 w-24 shrink-0 rounded object-cover" />
+                    <img src={game.headerImage} alt="" className="header-art w-24 shrink-0 rounded" />
                   )}
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{game.title}</p>
@@ -1749,7 +1749,7 @@ function QueueCard({
   return (
     <article className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/40 p-2.5">
       {game.headerImage && (
-        <img src={game.headerImage} alt="" className="h-12 w-24 shrink-0 rounded object-cover" />
+        <img src={game.headerImage} alt="" className="header-art w-24 shrink-0 rounded" />
       )}
 
       <div className="min-w-0 flex-1">
@@ -1959,7 +1959,7 @@ function RecapZone({
               <Reveal key={demo.gameId} delay={580 + 30 * i} from="scale">
                 <article className="w-52 shrink-0 overflow-hidden rounded-xl border border-gray-800 bg-gray-900/40">
                   {demo.headerImage && (
-                    <img src={demo.headerImage} alt="" className="h-20 w-full object-cover" />
+                    <img src={demo.headerImage} alt="" className="header-art w-full" />
                   )}
                   <div className="p-3">
                     <div className="mb-1 flex items-center gap-2">

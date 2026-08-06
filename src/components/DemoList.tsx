@@ -83,11 +83,11 @@ export default function DemoList({ reviews, locale = DEFAULT_LOCALE }: Props) {
                 className="group relative overflow-hidden rounded-2xl border border-gray-800 bg-gray-900"
               >
                 {r.headerImage && (
-                  <div className="relative h-28 overflow-hidden">
+                  <div className="relative overflow-hidden">
                     <img
                       src={r.headerImage}
                       alt=""
-                      className="h-full w-full object-cover"
+                      className="header-art w-full"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent" />
                     {r.tier && (
