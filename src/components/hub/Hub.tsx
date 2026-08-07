@@ -326,6 +326,7 @@ export default function Hub(props: Props) {
             picks={openPicks}
             slots={allSlots}
             onTaken={onTaken}
+            onZone={goTo}
             index={index}
             setIndex={setIndex}
             busy={busy}
@@ -378,13 +379,13 @@ export default function Hub(props: Props) {
             active={zone === "choose"}
             onClick={() => goTo("choose")}
             label={s.dock.choose}
-            hint={s.dock.chooseHint(picks.length)}
+            hint={s.dock.chooseHint(openPicks.length)}
           />
           <DockTile
             active={zone === "now"}
             onClick={() => goTo("now")}
             label={s.dock.now}
-            hint={s.dock.nowHint(slots.length, queueTotal)}
+            hint={s.dock.nowHint(allSlots.length, queueTotal)}
             accent={queueTotal > 0}
           />
           <DockTile
@@ -468,6 +469,7 @@ function ChooseZone({
   setRunId,
   progress,
   onTaken,
+  onZone,
 }: ZoneProps & {
   index: number;
   setIndex: (fn: (i: number) => number) => void;
@@ -475,6 +477,7 @@ function ChooseZone({
   setRunId: (value: number | null) => void;
   progress: RunProgressState | null;
   onTaken: (slot: Slot) => void;
+  onZone: (zone: Zone) => void;
 }) {
   const s = t(locale);
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
@@ -704,6 +707,7 @@ function ChooseZone({
               <button
                 onClick={() => setDice("confirm")}
                 disabled={slotsLeft <= 0}
+                title={slotsLeft <= 0 ? s.choose.slotsFull : undefined}
                 className="rounded-full border border-gray-700 px-4 py-1.5 text-xs text-gray-400 transition hover:border-emerald-600 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {s.choose.diceIdle}
@@ -840,7 +844,8 @@ function ChooseZone({
               <button
                 onClick={() => take(pick.gameId)}
                 disabled={busy !== null || slotsLeft <= 0}
-                className="rounded-xl bg-white px-6 py-3 font-medium text-gray-950 transition hover:scale-[1.02] disabled:opacity-40"
+                title={slotsLeft <= 0 ? s.choose.slotsFull : undefined}
+                className="rounded-xl bg-white px-6 py-3 font-medium text-gray-950 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {busy === `take-${pick.gameId}` ? s.choose.taking : s.choose.take}
               </button>
@@ -858,7 +863,23 @@ function ChooseZone({
                 {s.choose.next}
               </button>
             </div>
-            <p className="mt-3 max-w-lg text-xs text-gray-600">{s.choose.contractNote}</p>
+            {/*
+              Пока слоты свободны — правило игры. Когда заняты, правило уже
+              бесполезно: нужно сказать, почему кнопка мертва и куда идти.
+            */}
+            {slotsLeft <= 0 ? (
+              <p className="mt-3 max-w-lg text-xs text-amber-400/90">
+                {s.choose.slotsFull}{" "}
+                <button
+                  onClick={() => onZone("now")}
+                  className="underline underline-offset-2 transition hover:text-amber-300"
+                >
+                  {s.choose.takenGo}
+                </button>
+              </p>
+            ) : (
+              <p className="mt-3 max-w-lg text-xs text-gray-600">{s.choose.contractNote}</p>
+            )}
           </Reveal>
         </div>
       </div>
