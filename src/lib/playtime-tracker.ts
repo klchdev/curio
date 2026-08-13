@@ -245,7 +245,7 @@ async function sessionForGain(
  * `SESSION_GRACE_MS` считается выходом, даже если игра та же: между двумя
  * заходами в одну игру был перерыв, и склеивать их в один вечер неправильно.
  */
-export async function applyPresence(
+async function applyPresence(
   userId: number,
   playing: { appId: number; name: string } | null,
   at: Date
