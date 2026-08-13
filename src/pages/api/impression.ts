@@ -64,7 +64,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       rating: rating ?? null,
       note: String(note),
     });
-    return "error" in result ? json(result, 400) : json({ ok: true });
+    if ("error" in result) return json(result, 400);
+    if (result.entryId) queueEntryAnalysis(result.entryId);
+    return json({ ok: true });
   }
 
   // Для остальных режимов нужно наигранное время — от него считается дельта

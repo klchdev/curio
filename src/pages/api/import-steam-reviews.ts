@@ -5,6 +5,7 @@ import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { fetchOwnReviews } from "../../lib/steam-profile";
 import { importSteamReviews } from "../../lib/queries";
+import { queueEntryAnalysis } from "../../lib/entry-analysis";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
@@ -34,7 +35,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     // Ноль отзывов и закрытый профиль выглядят одинаково — Steam не различает
     if (reviews.length === 0) return json({ found: 0, imported: 0 });
 
-    const result = await importSteamReviews(userId, reviews);
+    const { entryIds, ...result } = await importSteamReviews(userId, reviews);
+    // Перенесённые отзывы — такой же текст дневника: упоминания в них тоже ищем
+    for (const entryId of entryIds) queueEntryAnalysis(entryId);
     return json({ found: reviews.length, ...result });
   } catch (err) {
     console.error("[import-steam-reviews]", err);

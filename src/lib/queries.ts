@@ -567,8 +567,9 @@ export async function createDemoReview(
     playtimeMinutes: 0,
   });
 
+  let entryId: number | undefined;
   if (data.note && data.note.trim().length > 0) {
-    await addEntry(recordId, {
+    entryId = await addEntry(recordId, {
       kind: "first",
       text: data.note.trim(),
       playtimeMinutes: 0,
@@ -578,7 +579,7 @@ export async function createDemoReview(
     });
   }
 
-  return { ok: true };
+  return { ok: true, entryId };
 }
 
 /**
@@ -1555,9 +1556,15 @@ export async function importSteamReviews(
     text: string;
     postedAt?: Date | null;
   }[]
-): Promise<{ imported: number; skippedExisting: number; notOwned: number; redated: number }> {
+): Promise<{
+  imported: number;
+  skippedExisting: number;
+  notOwned: number;
+  redated: number;
+  entryIds: number[];
+}> {
   if (reviews.length === 0)
-    return { imported: 0, skippedExisting: 0, notOwned: 0, redated: 0 };
+    return { imported: 0, skippedExisting: 0, notOwned: 0, redated: 0, entryIds: [] };
 
   const appIds = reviews.map((r) => r.steamAppId);
   const owned = await db
@@ -1581,6 +1588,8 @@ export async function importSteamReviews(
   const byAppId = new Map(owned.map((row) => [row.steamAppId, row]));
 
   let imported = 0;
+  /** Что завели — чтобы вызывающий отправил это на разбор. */
+  const entryIds: number[] = [];
   let skippedExisting = 0;
   let notOwned = 0;
   let redated = 0;
@@ -1611,16 +1620,18 @@ export async function importSteamReviews(
       playtimeMinutes: review.playtimeMinutes,
       at: review.postedAt ?? undefined,
     });
-    await addEntry(recordId, {
-      kind: "first",
-      text: review.text,
-      playtimeMinutes: review.playtimeMinutes,
-      at: review.postedAt ?? undefined,
-    });
+    entryIds.push(
+      await addEntry(recordId, {
+        kind: "first",
+        text: review.text,
+        playtimeMinutes: review.playtimeMinutes,
+        at: review.postedAt ?? undefined,
+      })
+    );
     imported += 1;
   }
 
-  return { imported, skippedExisting, notOwned, redated };
+  return { imported, skippedExisting, notOwned, redated, entryIds };
 }
 
 /**
