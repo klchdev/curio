@@ -1,7 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
-import { getTrackerData, getTrackerHeartbeat } from "../lib/playtime-stats";
+import { getPreTrackerHistory, getTrackerData, getTrackerHeartbeat } from "../lib/playtime-stats";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
 
@@ -11,10 +11,30 @@ if (!user) return Astro.redirect("/");
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
 
-const [data, heartbeat] = await Promise.all([
+const [data, heartbeat, before] = await Promise.all([
   getTrackerData(user.id),
   getTrackerHeartbeat(user.id),
+  getPreTrackerHistory(user.id),
 ]);
+
+const dateFormat = locale === "en" ? "en-GB" : "ru-RU";
+
+/** Часы для блока «до трекера»: там минуты не значат ничего, точность лишняя. */
+function hours(minutes: number): string {
+  return `${Math.round(minutes / 60)} ${locale === "en" ? "h" : "ч"}`;
+}
+
+function monthLabel(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  return new Date(Date.UTC(year!, month! - 1, 1)).toLocaleDateString(dateFormat, {
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
+const monthPeak = Math.max(...before.months.map((month) => month.minutes), 1);
+const gamePeak = Math.max(...before.games.map((game) => game.minutes), 1);
 
 /*
  * Раскладку по дням, часам и неделям делает браузер: границы суток зависят от
@@ -146,6 +166,81 @@ const sinceLabel = data.since
           <ol data-recent class="space-y-1.5 text-sm" />
         </section>
       </div>
+    )
+  }
+
+  {
+    /*
+     * Отдельным блоком, а не строчкой в общих итогах: восстановленные часы
+     * знают дату, но не час, и стоять рядом с тепловой картой им нельзя.
+     * Живёт вне ветки hasData — дневник старше трекера, и в первые дни этот
+     * блок будет единственным непустым на странице.
+     */
+    before.totalMinutes > 0 && (
+      <section class="mt-10 border-t border-gray-800 pt-8">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="text-sm font-semibold text-gray-300">{s.chrono.before}</h2>
+          <span class="text-xs text-gray-500">
+            {s.chrono.beforeTotal(hours(before.totalMinutes))}
+            {before.from && before.to && (
+              <span class="text-gray-600">
+                {" · "}
+                {s.chrono.beforePeriod(
+                  before.from.toLocaleDateString(dateFormat, { day: "numeric", month: "short" }),
+                  before.to.toLocaleDateString(dateFormat, { day: "numeric", month: "short", year: "numeric" })
+                )}
+              </span>
+            )}
+          </span>
+        </div>
+        <p class="mt-1 mb-4 max-w-2xl text-xs text-gray-600">{s.chrono.beforeHint}</p>
+
+        <div class="grid gap-6 lg:grid-cols-2">
+          <div>
+            <h3 class="mb-2 text-xs font-medium text-gray-500">{s.chrono.beforeMonths}</h3>
+            <div class="space-y-2">
+              {
+                before.months.map((month) => (
+                  <div class="flex items-center gap-3">
+                    <div class="w-16 shrink-0 text-xs text-gray-500">{monthLabel(month.key)}</div>
+                    <div class="h-4 flex-1 rounded-[4px] bg-gray-900">
+                      <div
+                        class="h-4 rounded-[4px] bg-sky-400/70"
+                        style={`width:${Math.max(2, (month.minutes / monthPeak) * 100)}%`}
+                      />
+                    </div>
+                    <div class="w-14 shrink-0 text-right text-xs tabular-nums text-gray-500">
+                      {hours(month.minutes)}
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+
+          <div>
+            <h3 class="mb-2 text-xs font-medium text-gray-500">{s.chrono.beforeGames}</h3>
+            <div class="space-y-2">
+              {
+                before.games.slice(0, 10).map((game) => (
+                  <div class="flex items-center gap-3">
+                    <div class="w-40 shrink-0 truncate text-sm text-gray-300">{game.title}</div>
+                    <div class="h-4 flex-1 rounded-[4px] bg-gray-900">
+                      <div
+                        class="h-4 rounded-[4px] bg-sky-400/70"
+                        style={`width:${Math.max(2, (game.minutes / gamePeak) * 100)}%`}
+                      />
+                    </div>
+                    <div class="w-14 shrink-0 text-right text-xs tabular-nums text-gray-500">
+                      {hours(game.minutes)}
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      </section>
     )
   }
 
