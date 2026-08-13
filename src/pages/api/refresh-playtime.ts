@@ -2,8 +2,9 @@ import type { APIRoute } from "astro";
 import { getUserId } from "../../lib/auth";
 import { getRecentPlaytime } from "../../lib/steam";
 import { db } from "../../db";
-import { users, slots, games, userGames } from "../../db/schema";
+import { users, slots, games } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
+import { recordPlaytime } from "../../lib/playtime-tracker";
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -30,7 +31,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 
   const game = await db
-    .select({ steamAppId: games.steamAppId, id: games.id })
+    .select({ steamAppId: games.steamAppId, id: games.id, title: games.title })
     .from(games)
     .where(eq(games.id, slot.gameId))
     .limit(1)
@@ -42,9 +43,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const currentPlaytime = await getRecentPlaytime(user.steamId, game.steamAppId, { fresh: true });
 
-  await db.update(userGames)
-    .set({ playtimeMinutes: currentPlaytime })
-    .where(and(eq(userGames.userId, userId), eq(userGames.gameId, game.id)));
+  /*
+   * Через трекер, а не прямым update: кнопку жмут ровно тогда, когда человек
+   * только что вышел из игры, — это самый точный замер за вечер, и терять его
+   * в истории было бы обидно.
+   */
+  await recordPlaytime(
+    userId,
+    [{ appId: game.steamAppId, name: game.title, playtimeMinutes: currentPlaytime }],
+    "poll"
+  );
 
   const played = currentPlaytime - slot.playtimeOnStart;
 

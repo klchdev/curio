@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { getHistory } from "../lib/queries";
-import { getDiaryMentions } from "../lib/entry-analysis";
+import { getDiaryMentions, getDiaryTags } from "../lib/entry-analysis";
 import {
   formatPlaytime,
   verdictLabel,
@@ -24,9 +24,10 @@ if (!user) return Astro.redirect("/");
  * как менялось мнение — приходилось собирать глазами. Внутри треда записи
  * идут снизу вверх по времени: сверху первое впечатление, дальше правки.
  */
-const [timeline, mentions] = await Promise.all([
+const [timeline, mentions, entryTags] = await Promise.all([
   getHistory(user.id),
   getDiaryMentions(user.id),
+  getDiaryTags(user.id),
 ]);
 
 const locale = localeFrom(Astro.cookies, Astro.request);
@@ -119,6 +120,13 @@ for (const mention of mentions) {
     if (ofGame) ofGame.push(mention);
     else mentionsOfGame.set(mention.targetGameId, [mention]);
   }
+}
+
+const tagsByEntry = new Map<number, (typeof entryTags)[number][]>();
+for (const tag of entryTags) {
+  const list = tagsByEntry.get(tag.entryId);
+  if (list) list.push(tag);
+  else tagsByEntry.set(tag.entryId, [tag]);
 }
 
 /** У игр с собственным тредом ссылка ведёт в дневник, у остальных — в магазин. */
@@ -356,6 +364,42 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
                       )}
                     </p>
 
+                    {/*
+                      Теги предложены разбором и правятся тапом: снять —
+                      крестик, добавить — плюс. Ни подтверждений, ни состояния
+                      «на рассмотрении»: неверный тег стоит одного движения, а
+                      необходимость подтверждать каждый стоила бы желания
+                      вообще писать.
+                    */}
+                    <div class="tag-row mt-2 flex flex-wrap items-center gap-1.5" data-entry={entry.entryId}>
+                      {(tagsByEntry.get(entry.entryId) ?? []).map((tag) => (
+                        <span
+                          class:list={[
+                            "group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
+                            tag.kind === "praise"
+                              ? "bg-emerald-950/50 text-emerald-300/80"
+                              : "bg-rose-950/40 text-rose-300/70",
+                          ]}
+                          data-tag={tag.tagId}
+                        >
+                          {tag.label}
+                          <button
+                            type="button"
+                            class="tag-drop cursor-pointer opacity-0 transition group-hover:opacity-60 hover:!opacity-100"
+                            aria-label={s.pages.tagRemove}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                      <button
+                        type="button"
+                        class="tag-add cursor-pointer rounded-full border border-dashed border-gray-700 px-2 py-0.5 text-[11px] text-gray-600 transition hover:border-gray-500 hover:text-gray-400"
+                      >
+                        + {s.pages.tagAdd}
+                      </button>
+                    </div>
+
                     <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
                       {entry.verdict && (
                         <span class="text-gray-400">
@@ -388,3 +432,115 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     </div>
   )}
 </Layout>
+
+<script>
+  /*
+   * Правка тегов делегированием, а не островом на каждую запись: записей в
+   * дневнике сотни, и триста реактивных островов ради двух кнопок — цена без
+   * выгоды. Разметку рисует сервер, здесь только клики.
+   */
+  const ENDPOINT = "/api/entry-tag";
+
+  function chip(tagId: number, label: string, kind: string): HTMLElement {
+    const span = document.createElement("span");
+    span.className =
+      "group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] " +
+      (kind === "praise"
+        ? "bg-emerald-950/50 text-emerald-300/80"
+        : "bg-rose-950/40 text-rose-300/70");
+    span.dataset.tag = String(tagId);
+    span.textContent = label;
+
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className =
+      "tag-drop cursor-pointer opacity-0 transition group-hover:opacity-60 hover:!opacity-100";
+    drop.textContent = "✕";
+    span.append(drop);
+    return span;
+  }
+
+  function openEditor(row: HTMLElement, addButton: HTMLElement) {
+    if (row.querySelector(".tag-editor")) return;
+
+    const editor = document.createElement("span");
+    editor.className = "tag-editor inline-flex items-center gap-1";
+
+    const input = document.createElement("input");
+    input.className =
+      "w-36 rounded-full border border-gray-700 bg-transparent px-2 py-0.5 text-[11px] text-gray-200 outline-none focus:border-gray-500";
+    input.maxLength = 60;
+
+    const close = () => {
+      editor.remove();
+      addButton.classList.remove("hidden");
+    };
+
+    const submit = async (kind: "complaint" | "praise") => {
+      const label = input.value.trim();
+      if (label.length < 2) return close();
+
+      const res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: Number(row.dataset.entry), label, kind }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.tag) row.insertBefore(chip(data.tag.id, data.tag.label, kind), editor);
+      close();
+    };
+
+    for (const [kind, text] of [
+      ["complaint", "\u2212"],
+      ["praise", "+"],
+    ] as const) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className =
+        "cursor-pointer rounded-full border border-gray-700 px-1.5 py-0.5 text-[11px] text-gray-400 hover:border-gray-500 hover:text-gray-200";
+      button.textContent = text;
+      button.title = kind === "praise" ? "хвалю" : "ругаю";
+      button.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        submit(kind);
+      });
+      editor.append(button);
+    }
+
+    editor.prepend(input);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") submit(event.shiftKey ? "praise" : "complaint");
+      if (event.key === "Escape") close();
+    });
+    input.addEventListener("blur", () => setTimeout(close, 120));
+
+    addButton.classList.add("hidden");
+    addButton.before(editor);
+    input.focus();
+  }
+
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const row = target.closest(".tag-row") as HTMLElement | null;
+    if (!row) return;
+
+    const drop = target.closest(".tag-drop");
+    if (drop) {
+      const tag = drop.closest("[data-tag]") as HTMLElement;
+      tag.remove();
+      fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove",
+          entryId: Number(row.dataset.entry),
+          tagId: Number(tag.dataset.tag),
+        }),
+      });
+      return;
+    }
+
+    const add = target.closest(".tag-add") as HTMLElement | null;
+    if (add) openEditor(row, add);
+  });
+</script>

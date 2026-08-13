@@ -197,6 +197,90 @@ export async function getRecentPlaytime(
 }
 
 
+/* ---------- Опрос для трекера ---------- */
+
+export interface RecentGame {
+  appid: number;
+  name: string;
+  playtime_forever: number;
+  playtime_2weeks: number;
+}
+
+/**
+ * Игры за последние две недели — тот же счётчик, что в библиотеке, но ответ
+ * весит килобайт вместо сотен. Библиотеку целиком опрашивать раз в полчаса
+ * нельзя: тысяча игр на каждый заход ради пяти изменившихся строк.
+ *
+ * Из-за этого у трекера слепое пятно: игра, заброшенная больше двух недель
+ * назад и запущенная снова, попадёт сюда только после первого же запуска —
+ * то есть с первым замером. Промахнуться можно лишь мимо той сессии, которая
+ * шла в момент опроса, и её всё равно поймает следующий.
+ */
+export async function getRecentlyPlayedGames(steamId: string): Promise<RecentGame[]> {
+  const url = `${STEAM_API_BASE}/IPlayerService/GetRecentlyPlayedGames/v0001/?key=${STEAM_API_KEY}&steamid=${steamId}&format=json`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Steam API error: ${res.status} ${res.statusText}`);
+  const data = await res.json();
+  const games = (data?.response?.games ?? []) as Partial<RecentGame>[];
+  return games
+    .filter((g): g is RecentGame => typeof g.appid === "number")
+    .map((g) => ({
+      appid: g.appid,
+      name: g.name ?? `App ${g.appid}`,
+      playtime_forever: g.playtime_forever ?? 0,
+      playtime_2weeks: g.playtime_2weeks ?? 0,
+    }));
+}
+
+export interface Presence {
+  steamId: string;
+  /** appid запущенной прямо сейчас игры; null — не играет либо статус скрыт. */
+  appId: number | null;
+  gameName: string | null;
+}
+
+/** Больше за раз Valve не отдаёт — на список игроков делим пачками. */
+const SUMMARIES_BATCH = 100;
+
+/**
+ * Кто во что играет прямо сейчас.
+ *
+ * Это единственный способ узнать настоящие границы сессии: счётчик времени
+ * фиксирует факт, а не момент. Ответ пустой, если профиль закрыт или игрок в
+ * невидимке — тогда сессий не будет, останутся только замеры счётчика.
+ *
+ * Один запрос покрывает до сотни игроков, поэтому частый опрос стоит дёшево
+ * даже когда пользователей станет много.
+ */
+export async function getPlayersPresence(steamIds: string[]): Promise<Presence[]> {
+  const out: Presence[] = [];
+
+  for (let i = 0; i < steamIds.length; i += SUMMARIES_BATCH) {
+    const batch = steamIds.slice(i, i + SUMMARIES_BATCH);
+    const url = `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${batch.join(",")}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Steam API error: ${res.status} ${res.statusText}`);
+    const data = await res.json();
+
+    for (const player of data?.response?.players ?? []) {
+      /*
+       * Ярлык на чужую игру даёт gameid далеко за пределами диапазона appid —
+       * такую «игру» в каталог тянуть некуда, и мы считаем, что игрок не в
+       * игре, а не выдумываем ей карточку.
+       */
+      const raw = Number(player.gameid);
+      const appId = Number.isSafeInteger(raw) && raw > 0 && raw < 100_000_000 ? raw : null;
+      out.push({
+        steamId: player.steamid as string,
+        appId,
+        gameName: (player.gameextrainfo as string) ?? null,
+      });
+    }
+  }
+
+  return out;
+}
+
 /* ---------- Отзывы игроков ---------- */
 
 export interface SteamReview {

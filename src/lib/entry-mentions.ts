@@ -1,16 +1,14 @@
-import { Type, ThinkingLevel } from "@google/genai";
-import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
 import { normalizeTitle } from "./titles";
 
 /**
- * Упоминания других игр внутри записи дневника.
+ * Привязка упоминаний к строкам каталога.
  *
  * Работа разделена надвое намеренно. Модель делает то, что кодом не сделать:
  * понимает, что «первый LiS», «вторая часть» и «RE4» — это игры, и называет
- * их полностью. Привязку к конкретной строке в базе делает код: у модели нет
- * каталога, и угадывать, какая именно Life is Strange из пяти имеется в виду,
- * она будет мимо. Поэтому модель отдаёт название, а сопоставление —
- * детерминированное, и промах в нём чинится правкой правил, а не промпта.
+ * их полностью (этим занят entry-reading.ts). Привязку к конкретной строке в
+ * базе делает код: у модели нет каталога, и угадывать, какая именно Life is
+ * Strange из пяти имеется в виду, она будет мимо. Промах в сопоставлении
+ * чинится правкой правил, а не промпта.
  *
  * Без импортов astro:env и db: модуль нужен и серверу, и разовому скрипту.
  */
@@ -36,80 +34,6 @@ export interface PlacedMention {
   startOffset: number;
   canonicalTitle: string;
 }
-
-const SYSTEM_INSTRUCTION = `Ты читаешь одну запись из игрового дневника и находишь в ней упоминания ДРУГИХ игр.
-
-Запись человек пишет для себя: вперемешку по-русски и по-английски, сокращениями и по памяти — «первый LiS», «вторая часть», «Ведьмак 3», «RE4», «True Colors».
-
-surface — точный кусок текста записи, скопированный посимвольно. Регистр, опечатки и раскладку не исправляй. Не получается скопировать дословно — пропусти упоминание.
-
-title — полное название игры так, как оно пишется в Steam, латиницей: «Life is Strange 2», «The Witcher 3: Wild Hunt», «Resident Evil 4». Номер части раскрывай по контексту: «первый LiS» в записи об игре серии Life is Strange — это «Life is Strange», «вторая часть» — «Life is Strange 2».
-
-Не упоминание:
-— игра, о которой сама запись; но другая часть той же серии — упоминание, её возвращай;
-— имена персонажей, студий, издателей, актёров;
-— фильмы, книги, сериалы, музыка;
-— жанры и общие обороты: «игры как эта», «такие сюжетки», «инди», «роглайки».
-
-Ничего не выдумывай. Не уверен, что это за игра, — не возвращай её вовсе. Пустой список — нормальный и частый ответ.`;
-
-const RESPONSE_SCHEMA = {
-  type: Type.ARRAY,
-  items: {
-    type: Type.OBJECT,
-    properties: {
-      surface: { type: Type.STRING, description: "Дословный кусок текста записи" },
-      title: { type: Type.STRING, description: "Полное название игры как в Steam" },
-    },
-    required: ["surface", "title"],
-  },
-};
-
-export async function extractMentions(
-  text: string,
-  aboutTitle: string,
-  keys: GeminiKeys
-): Promise<RawMention[]> {
-  if (text.trim().length < 20) return [];
-
-  const raw = await withGemini(keys, async (ai) => {
-    const res = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: `# Запись об игре: ${aboutTitle}\n\n${text}`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        /*
-         * Выписать названия из текста — работа механическая: обдумывать тут
-         * нечего, а размышление стоит и секунд, и токенов. На разборе всего
-         * дневника это разница между парой минут и полутора часами.
-         *
-         * Ниже LOW не опускаемся: MINIMAL эта модель отвергает с 400.
-         */
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      },
-    });
-
-    const answer = res.text ?? "";
-    if (!answer) throw new Error("Gemini вернул пустой ответ");
-    return answer;
-  });
-
-  const parsed = JSON.parse(raw) as unknown;
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed
-    .filter(
-      (item): item is RawMention =>
-        !!item &&
-        typeof (item as RawMention).surface === "string" &&
-        typeof (item as RawMention).title === "string"
-    )
-    .map((item) => ({ surface: item.surface.trim(), title: item.title.trim() }))
-    .filter((item) => item.surface.length > 0 && item.title.length > 0);
-}
-
 
 /**
  * Из двух игр с одинаковым названием выбирается та, о которой человек уже

@@ -145,6 +145,15 @@ export const gameEntries = pgTable(
      */
     playtimeTotalMinutes: integer("playtime_total_minutes").notNull(),
     playtimeDeltaMinutes: integer("playtime_delta_minutes").notNull().default(0),
+    /**
+     * Вопрос, на который эта запись отвечает.
+     *
+     * Ответ на вопрос советчика — такая же запись дневника, как любая другая:
+     * её писал человек, и в ленте она стоит на своём месте по времени. Но без
+     * вопроса рядом она читается обрывком разговора, у которого потеряна
+     * первая реплика.
+     */
+    promptedBy: text("prompted_by"),
     /** Снимок мнения на момент записи — из него видно эволюцию. */
     verdictAt: text("verdict_at"),
     ratingAt: integer("rating_at"),
@@ -177,12 +186,85 @@ export const entryAnalyses = pgTable(
       .default("pending"),
     model: text("model").notNull(),
     error: text("error"),
+    /**
+     * Температура текста от −2 до 2 — не оценка игры, а то, как звучит
+     * запись. Оценку человек ставит руками и часто забывает подвинуть;
+     * тон меняется сам собой, и расхождение между ними как раз и видно.
+     */
+    tone: integer("tone"),
     createdAt: timestamp("created_at")
       .notNull()
       .$defaultFn(() => new Date()),
     finishedAt: timestamp("finished_at"),
   },
   (t) => [uniqueIndex("entry_analyses_entry_idx").on(t.entryId)]
+);
+
+/**
+ * Словарь претензий и похвал — свой у каждого человека.
+ *
+ * Растёт из его же записей, поэтому нормализованная форма хранится рядом:
+ * без неё «рециклинг локаций», «повторяющиеся локации» и «мало локаций»
+ * станут тремя разными тегами, и профиль вкуса рассыплется на синонимы.
+ */
+export const tags = pgTable(
+  "tags",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind", { enum: ["complaint", "praise"] }).notNull(),
+    label: text("label").notNull(),
+    normalized: text("normalized").notNull(),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [uniqueIndex("tags_user_normalized_idx").on(t.userId, t.normalized)]
+);
+
+export const entryTags = pgTable(
+  "entry_tags",
+  {
+    id: serial("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => gameEntries.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+    /** Поставленное руками переживает повторный разбор, предложенное — нет. */
+    source: text("source", { enum: ["model", "user"] })
+      .notNull()
+      .default("model"),
+  },
+  (t) => [
+    uniqueIndex("entry_tags_entry_tag_idx").on(t.entryId, t.tagId),
+    index("entry_tags_tag_idx").on(t.tagId),
+  ]
+);
+
+/**
+ * Ставка на будущее, оставленная в записи: «надеюсь, станет интереснее»,
+ * «моя теория, что Макс из параллельной вселенной».
+ *
+ * Размечать их руками никто не станет, поэтому их достаёт тот же проход. Со
+ * временем ставку можно предъявить обратно — и вот тогда она чего-то стоит.
+ */
+export const entryClaims = pgTable(
+  "entry_claims",
+  {
+    id: serial("id").primaryKey(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references(() => gameEntries.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    /** Пока null — ставку ещё не предъявляли. */
+    outcome: text("outcome", { enum: ["hit", "miss", "unclear"] }),
+    askedAt: timestamp("asked_at"),
+  },
+  (t) => [index("entry_claims_entry_idx").on(t.entryId)]
 );
 
 /**
@@ -331,7 +413,15 @@ export const playtimeSnapshots = pgTable(
     gameId: integer("game_id")
       .notNull()
       .references(() => games.id),
-    takenAt: timestamp("taken_at").notNull(),
+    /*
+     * С поясом, в отличие от остальных таблиц. `timestamp without time zone`
+     * драйвер разбирает по поясу процесса: один и тот же ряд читается как
+     * разное время сервером в UTC и машиной разработчика, и «во сколько ты
+     * играешь» уезжает на несколько часов. Для трекера «когда» — это и есть
+     * содержание, поэтому здесь хранится момент, а не показания настенных
+     * часов неизвестно чьей стены.
+     */
+    takenAt: timestamp("taken_at", { withTimezone: true }).notNull(),
     /** Абсолют на момент замера — по нему чинится история, если опрос упал. */
     playtimeMinutes: integer("playtime_minutes").notNull(),
     /** Прирост с прошлого замера: то, ради чего таблица и заведена. */
@@ -344,6 +434,13 @@ export const playtimeSnapshots = pgTable(
     source: text("source", { enum: ["sync", "poll"] })
       .notNull()
       .default("poll"),
+    /*
+     * Сессия, которой этот прирост принадлежит. Пустая — время наиграно в
+     * обход опроса статуса: закрытый профиль, режим невидимки, лежавшее
+     * приложение. Без этой колонки такой прирост и прирост уже посчитанной
+     * сессии в статистике неразличимы, и часы удваиваются.
+     */
+    sessionId: integer("session_id").references(() => playSessions.id),
   },
   (t) => [
     index("playtime_snapshots_user_taken_idx").on(t.userId, t.takenAt),
@@ -377,10 +474,11 @@ export const playSessions = pgTable(
     gameId: integer("game_id")
       .notNull()
       .references(() => games.id),
-    startedAt: timestamp("started_at").notNull(),
+    /** С поясом — по той же причине, что и у замеров. */
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     /** Последний опрос, заставший игрока в игре. Он же станет концом сессии. */
-    lastSeenAt: timestamp("last_seen_at").notNull(),
-    endedAt: timestamp("ended_at"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
     minutes: integer("minutes").notNull().default(0),
     playtimeGainMinutes: integer("playtime_gain_minutes").notNull().default(0),
   },

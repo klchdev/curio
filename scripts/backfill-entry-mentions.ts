@@ -10,9 +10,11 @@
  * Без --apply только показывает, что нашлось, и ничего не пишет.
  */
 import { Client } from "pg";
-import { extractMentions, placeMentions, type CatalogGame } from "../src/lib/entry-mentions";
+import { placeMentions, type CatalogGame } from "../src/lib/entry-mentions";
+import { readEntry } from "../src/lib/entry-reading";
 import { GEMINI_MODEL, type GeminiKeys } from "../src/lib/gemini";
 import { findStoreGame } from "../src/lib/store-search";
+import { normalizeTitle } from "../src/lib/titles";
 
 const apply = process.argv.includes("--apply");
 const limit = Number(process.argv.find((arg) => /^\d+$/.test(arg)) ?? 0);
@@ -119,6 +121,35 @@ async function resolveUnknown(client: Client) {
   console.log(`\nЗаведено карточек: ${adopted} из ${rows.length}`);
 }
 
+/** Словарь тегов человека — модель должна брать своё, а не плодить синонимы. */
+async function vocabularyOf(client: Client, userId: number) {
+  const { rows } = await client.query(`select kind, label from tags where user_id = $1`, [userId]);
+  return {
+    complaints: rows.filter((r) => r.kind === "complaint").map((r) => r.label),
+    praises: rows.filter((r) => r.kind === "praise").map((r) => r.label),
+  };
+}
+
+/** Заводит тег при необходимости и возвращает его id. */
+async function upsertTag(
+  client: Client,
+  userId: number,
+  kind: "complaint" | "praise",
+  label: string
+): Promise<number | null> {
+  const normalized = normalizeTitle(label);
+  if (!normalized) return null;
+
+  const { rows } = await client.query(
+    `insert into tags (user_id, kind, label, normalized, created_at)
+          values ($1, $2, $3, $4, now())
+     on conflict (user_id, normalized) do update set label = tags.label
+     returning id`,
+    [userId, kind, label, normalized]
+  );
+  return rows[0]?.id ?? null;
+}
+
 async function main() {
   const free = process.env.GEMINI_API_KEY;
   if (!free) throw new Error("Нужен GEMINI_API_KEY");
@@ -153,8 +184,11 @@ async function main() {
 
     const startedAt = Date.now();
     try {
-      const raw = await extractMentions(entry.text, entry.title, keys);
-      const placed = placeMentions(entry.text, raw, catalog, entry.game_id);
+      const reading = await readEntry(
+        { text: entry.text, aboutTitle: entry.title, vocabulary: await vocabularyOf(client, entry.user_id) },
+        keys
+      );
+      const placed = placeMentions(entry.text, reading.mentions, catalog, entry.game_id);
 
       // Названия, которых нет в каталоге, заводим карточками — но только
       // когда пишем: сухой прогон ничего в базе менять не должен
@@ -170,13 +204,15 @@ async function main() {
       if (placed.length > 0) {
         withMentions += 1;
         total += placed.length;
-        const shown = placed
-          .map((m) => `«${m.surface}» → ${m.canonicalTitle}${m.gameId ? "" : " (нет в базе)"}`)
-          .join(", ");
-        console.log(`[${done}/${targets.length}] ${spent}с #${entry.id} ${entry.title}: ${shown}`);
-      } else {
-        console.log(`[${done}/${targets.length}] ${spent}с #${entry.id} ${entry.title}: —`);
       }
+      const shown = placed
+        .map((m) => `«${m.surface}» → ${m.canonicalTitle}${m.gameId ? "" : " (нет в базе)"}`)
+        .join(", ");
+      console.log(`[${done}/${targets.length}] ${spent}с #${entry.id} ${entry.title} · тон ${reading.tone}`);
+      if (shown) console.log(`      игры: ${shown}`);
+      if (reading.complaints.length) console.log(`      ругает: ${reading.complaints.join(", ")}`);
+      if (reading.praises.length) console.log(`      хвалит: ${reading.praises.join(", ")}`);
+      for (const claim of reading.claims) console.log(`      ставка: ${claim}`);
 
       if (!apply) continue;
 
@@ -197,6 +233,39 @@ async function main() {
           [entry.id, mention.gameId, mention.surface, mention.startOffset, mention.canonicalTitle]
         );
       }
+      await client.query(`update entry_analyses set tone = $2 where entry_id = $1`, [
+        entry.id,
+        reading.tone,
+      ]);
+
+      // Снимаем только предложенное моделью: руками поставленное — не её дело
+      await client.query(
+        `delete from entry_tags where entry_id = $1 and source = 'model'`,
+        [entry.id]
+      );
+      for (const [kind, labels] of [
+        ["complaint", reading.complaints],
+        ["praise", reading.praises],
+      ] as const) {
+        for (const label of labels) {
+          const tagId = await upsertTag(client, entry.user_id, kind, label);
+          if (!tagId) continue;
+          await client.query(
+            `insert into entry_tags (entry_id, tag_id, source) values ($1, $2, 'model')
+             on conflict (entry_id, tag_id) do nothing`,
+            [entry.id, tagId]
+          );
+        }
+      }
+
+      await client.query("delete from entry_claims where entry_id = $1", [entry.id]);
+      for (const claim of reading.claims) {
+        await client.query(`insert into entry_claims (entry_id, text) values ($1, $2)`, [
+          entry.id,
+          claim,
+        ]);
+      }
+
       await client.query("commit");
     } catch (err) {
       await client.query("rollback").catch(() => {});

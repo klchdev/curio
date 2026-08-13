@@ -1,0 +1,488 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getSessionUser } from "../lib/session";
+import { getTrackerData, getTrackerHeartbeat } from "../lib/playtime-stats";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+const [data, heartbeat] = await Promise.all([
+  getTrackerData(user.id),
+  getTrackerHeartbeat(user.id),
+]);
+
+/*
+ * Раскладку по дням, часам и неделям делает браузер: границы суток зависят от
+ * часового пояса игрока, а сервер живёт в UTC и знал бы их неправильно.
+ * Отсюда и форма выгрузки — плоский список событий с абсолютным временем.
+ */
+const payload = {
+  since: data.since?.toISOString() ?? null,
+  sessions: data.sessions.map((session) => ({
+    g: session.gameId,
+    s: session.startedAt.toISOString(),
+    e: session.endedAt?.toISOString() ?? null,
+    m: session.minutes,
+    gain: session.gainMinutes,
+  })),
+  gains: data.gains.map((gain) => ({
+    g: gain.gameId,
+    t: gain.takenAt.toISOString(),
+    m: gain.minutes,
+  })),
+  games: Object.fromEntries(
+    data.games.map((game) => [game.id, { title: game.title, image: game.image, app: game.steamAppId }])
+  ),
+};
+
+/*
+ * Название игры приходит из Steam и попадает в <script> как есть. Закрывающий
+ * тег внутри строки закрыл бы блок, а всё за ним браузер прочитал бы как
+ * разметку — поэтому угловая скобка уезжает в escape-последовательность,
+ * которую JSON понимает, а разборщик html уже нет.
+ */
+function json(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+const hasData = data.sessions.length > 0 || data.gains.length > 0;
+
+// Сутки молчания при живом опросе означают поломку, а не отдых от игр
+const silent =
+  hasData && heartbeat !== null && Date.now() - heartbeat.getTime() > 24 * 60 * 60 * 1000;
+
+const sinceLabel = data.since
+  ? data.since.toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  : null;
+---
+
+<Layout title={s.chrono.title}>
+  <div class="mb-8 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">{s.chrono.title}</h1>
+      <p class="text-sm text-gray-500">{s.chrono.lede}</p>
+    </div>
+    <a href="/dashboard" class="text-sm text-gray-400 transition hover:text-white">&larr; {s.pages.back}</a>
+  </div>
+
+  {
+    !hasData ? (
+      <div class="rounded-2xl border border-gray-800 bg-gray-900/30 p-8 text-center">
+        <p class="text-gray-400">{s.chrono.empty}</p>
+      </div>
+    ) : (
+      <div class="space-y-8" data-chrono>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="text-xs text-gray-600">
+            {sinceLabel && <span>{s.chrono.since(sinceLabel)}</span>}
+            {silent && <span class="ml-2 text-amber-500">· {s.chrono.silent}</span>}
+          </div>
+          <div class="flex gap-1 text-xs" data-ranges>
+            <button data-range="30" class="rounded px-2 py-1 text-gray-500 transition hover:text-gray-200">
+              {s.chrono.range30}
+            </button>
+            <button data-range="90" class="rounded px-2 py-1 text-gray-500 transition hover:text-gray-200">
+              {s.chrono.range90}
+            </button>
+            <button data-range="0" class="rounded px-2 py-1 text-gray-500 transition hover:text-gray-200">
+              {s.chrono.rangeAll}
+            </button>
+          </div>
+        </div>
+
+        <div data-now class="hidden rounded-xl border border-emerald-900/60 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-300" />
+
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {
+            [
+              ["hours", s.chrono.totalHours],
+              ["sessions", s.chrono.sessions],
+              ["average", s.chrono.average],
+              ["longest", s.chrono.longest],
+              ["streak", s.chrono.streak],
+              ["nights", s.chrono.nights],
+            ].map(([key, label]) => (
+              <div class="rounded-xl border border-gray-800 bg-gray-900/30 px-4 py-3">
+                <div class="text-xl font-semibold tabular-nums" data-tile={key}>
+                  —
+                </div>
+                <div class="mt-0.5 text-xs text-gray-500">{label}</div>
+              </div>
+            ))
+          }
+        </div>
+
+        <section>
+          <h2 class="text-sm font-semibold text-gray-300">{s.chrono.heatmap}</h2>
+          <p class="mb-3 text-xs text-gray-600">{s.chrono.heatmapHint}</p>
+          <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
+            <div data-heatmap class="inline-block" />
+          </div>
+        </section>
+
+        <section>
+          <h2 class="mb-3 text-sm font-semibold text-gray-300">{s.chrono.daily}</h2>
+          <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
+            <div data-daily class="flex h-40 items-end gap-[2px]" />
+          </div>
+        </section>
+
+        <section>
+          <h2 class="mb-3 text-sm font-semibold text-gray-300">{s.chrono.top}</h2>
+          <div data-top class="space-y-2" />
+        </section>
+
+        <section>
+          <h2 class="mb-3 text-sm font-semibold text-gray-300">{s.chrono.recent}</h2>
+          <ol data-recent class="space-y-1.5 text-sm" />
+        </section>
+      </div>
+    )
+  }
+
+  <script is:inline type="application/json" data-chrono-payload set:html={json(payload)} />
+  <script is:inline type="application/json" data-chrono-strings set:html={json(s.chrono)} />
+  <script is:inline type="application/json" data-chrono-locale set:html={json(locale)} />
+</Layout>
+
+<script>
+  /*
+   * Вся раскладка по времени — здесь, потому что здесь известен часовой пояс.
+   *
+   * Минуты сессии считаются по счётчику Steam, если он успел их подтвердить, и
+   * по часам на стене, если нет: смешивать в одном графике две меры нельзя, а
+   * подтверждённая точнее. Растягиваются они по часам пропорционально длине
+   * сессии — внутри вечера Steam всё равно не знает, когда именно шла игра.
+   */
+  const root = document.querySelector<HTMLElement>("[data-chrono]");
+  const payloadTag = document.querySelector("[data-chrono-payload]");
+  if (root && payloadTag) render(root, payloadTag.textContent!);
+
+  interface Session { g: number; s: string; e: string | null; m: number; gain: number }
+  interface Gain { g: number; t: string; m: number }
+  interface Game { title: string; image: string | null; app: number }
+  interface Block { game: number; from: number; to: number; minutes: number; live: boolean }
+
+  function render(root: HTMLElement, raw: string) {
+    const data = JSON.parse(raw) as {
+      since: string | null;
+      sessions: Session[];
+      gains: Gain[];
+      games: Record<string, Game>;
+    };
+    const s = JSON.parse(
+      document.querySelector("[data-chrono-strings]")!.textContent!
+    ) as Record<string, any>;
+    const locale = JSON.parse(
+      document.querySelector("[data-chrono-locale]")!.textContent!
+    ) as string;
+    const tag = locale === "en" ? "en-GB" : "ru-RU";
+
+    const HOUR = 3600_000;
+    const DAY = 24 * HOUR;
+
+    /** Отрезок реального времени с приписанными ему минутами. */
+    const blocks: Block[] = [];
+
+    for (const session of data.sessions) {
+      const from = new Date(session.s).getTime();
+      const live = session.e === null;
+      const to = live ? Math.max(from + session.m * 60_000, Date.now()) : new Date(session.e!).getTime();
+      const minutes = session.gain > 0 ? session.gain : session.m;
+      if (minutes <= 0 && !live) continue;
+      blocks.push({ game: session.g, from, to: Math.max(to, from + 60_000), minutes, live });
+    }
+
+    /*
+     * Прирост без сессии границ не имеет: Steam досчитал минуты, а кто и когда
+     * сидел в игре, опрос не видел. Кладём их назад от момента замера на их
+     * собственную длину — это ближе к правде, чем свалить всё в одну минуту.
+     */
+    for (const gain of data.gains) {
+      const to = new Date(gain.t).getTime();
+      blocks.push({ game: gain.g, from: to - gain.m * 60_000, to, minutes: gain.m, live: false });
+    }
+
+    blocks.sort((a, b) => a.from - b.from);
+
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-ranges] button")];
+    let range = 30;
+
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        range = Number(button.dataset.range);
+        draw();
+      });
+    }
+
+    draw();
+
+    function draw() {
+      for (const button of buttons) {
+        const active = Number(button.dataset.range) === range;
+        button.className = `rounded px-2 py-1 transition ${
+          active ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-200"
+        }`;
+      }
+
+      const now = Date.now();
+      const from = range === 0 ? 0 : startOfDay(new Date(now - (range - 1) * DAY)).getTime();
+      const shown = blocks.filter((block) => block.to >= from);
+
+      tiles(shown, from, now);
+      heatmap(shown);
+      daily(shown, from, now);
+      top(shown);
+      recent();
+      playingNow();
+    }
+
+    function startOfDay(date: Date): Date {
+      const copy = new Date(date);
+      copy.setHours(0, 0, 0, 0);
+      return copy;
+    }
+
+    function dayKey(ms: number): string {
+      const date = new Date(ms);
+      return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    }
+
+    /** Минуты блока по часам местного времени: длинный вечер делится честно. */
+    function spread(block: Block, onto: (at: number, minutes: number) => void) {
+      const span = Math.max(block.to - block.from, 60_000);
+      const rate = block.minutes / span;
+      let cursor = block.from;
+      while (cursor < block.to) {
+        const edge = Math.min(new Date(cursor).setMinutes(60, 0, 0), block.to);
+        onto(cursor, (edge - cursor) * rate);
+        cursor = edge;
+      }
+    }
+
+    function human(minutes: number): string {
+      const total = Math.round(minutes);
+      const m = locale === "en" ? "min" : "мин";
+      const h = locale === "en" ? "h" : "ч";
+      if (total < 60) return `${total} ${m}`;
+      const hours = Math.floor(total / 60);
+      const rest = total % 60;
+      return rest === 0 ? `${hours} ${h}` : `${hours} ${h} ${rest} ${m}`;
+    }
+
+    function tiles(shown: Block[], from: number, now: number) {
+      const total = shown.reduce((sum, block) => sum + block.minutes, 0);
+      const longest = shown.reduce((max, block) => Math.max(max, block.minutes), 0);
+      const nights = shown.reduce((sum, block) => {
+        let night = 0;
+        spread(block, (at, minutes) => {
+          const hour = new Date(at).getHours();
+          if (hour < 6) night += minutes;
+        });
+        return sum + night;
+      }, 0);
+
+      const days = new Set<string>();
+      for (const block of shown) spread(block, (at) => days.add(dayKey(at)));
+
+      let streak = 0;
+      for (let cursor = startOfDay(new Date(now)).getTime(); ; cursor -= DAY) {
+        if (days.has(dayKey(cursor))) streak += 1;
+        // Сегодняшний день ещё не прожит: пустой сегодня серию не рвёт
+        else if (cursor !== startOfDay(new Date(now)).getTime()) break;
+        if (cursor < from) break;
+      }
+
+      set("hours", human(total));
+      set("sessions", String(shown.length));
+      set("average", shown.length ? human(total / shown.length) : "—");
+      set("longest", longest ? human(longest) : "—");
+      set("streak", String(streak));
+      set("nights", human(nights));
+    }
+
+    function set(key: string, value: string) {
+      const node = root.querySelector(`[data-tile="${key}"]`);
+      if (node) node.textContent = value;
+    }
+
+    function heatmap(shown: Block[]) {
+      // Понедельник первым: воскресный ноль getDay() уезжает в конец недели
+      const grid: number[][] = Array.from({ length: 24 }, () => Array(7).fill(0));
+      for (const block of shown) {
+        spread(block, (at, minutes) => {
+          const date = new Date(at);
+          grid[date.getHours()][(date.getDay() + 6) % 7] += minutes;
+        });
+      }
+
+      const peak = Math.max(...grid.flat(), 1);
+      const box = root.querySelector<HTMLElement>("[data-heatmap]")!;
+      box.innerHTML = "";
+
+      const table = document.createElement("div");
+      table.className = "grid gap-[2px]";
+      table.style.gridTemplateColumns = "2.5rem repeat(7, 1.5rem)";
+
+      table.appendChild(cell(""));
+      for (const name of s.weekdays as string[]) table.appendChild(cell(name, "text-center"));
+
+      for (let hour = 0; hour < 24; hour += 1) {
+        table.appendChild(cell(hour % 3 === 0 ? `${hour}:00` : "", "text-right pr-1"));
+        for (let day = 0; day < 7; day += 1) {
+          const minutes = grid[hour][day];
+          const tile = document.createElement("div");
+          tile.className = "h-5 rounded-[3px]";
+          tile.style.background = shade(minutes / peak);
+          tile.title = `${s.weekdays[day]} ${hour}:00 — ${human(minutes)}`;
+          table.appendChild(tile);
+        }
+      }
+
+      box.appendChild(table);
+      box.appendChild(scale());
+    }
+
+    /** Одна шкала одного тона: чем темнее, тем меньше. Радуга тут врёт. */
+    function shade(ratio: number): string {
+      if (ratio <= 0) return "rgb(31 41 55 / 0.45)";
+      const alpha = 0.18 + Math.min(1, Math.sqrt(ratio)) * 0.82;
+      return `rgb(52 211 153 / ${alpha.toFixed(2)})`;
+    }
+
+    function cell(text: string, extra = ""): HTMLElement {
+      const node = document.createElement("div");
+      node.className = `text-[10px] leading-5 text-gray-600 ${extra}`;
+      node.textContent = text;
+      return node;
+    }
+
+    function scale(): HTMLElement {
+      const row = document.createElement("div");
+      row.className = "mt-3 flex items-center gap-1 text-[10px] text-gray-600";
+      row.appendChild(label(locale === "en" ? "less" : "меньше"));
+      for (const ratio of [0, 0.15, 0.4, 0.7, 1]) {
+        const tile = document.createElement("div");
+        tile.className = "h-3 w-3 rounded-[3px]";
+        tile.style.background = shade(ratio);
+        row.appendChild(tile);
+      }
+      row.appendChild(label(locale === "en" ? "more" : "больше"));
+      return row;
+    }
+
+    function label(text: string): HTMLElement {
+      const node = document.createElement("span");
+      node.textContent = text;
+      return node;
+    }
+
+    function daily(shown: Block[], from: number, now: number) {
+      const byDay = new Map<string, number>();
+      for (const block of shown) {
+        spread(block, (at, minutes) => {
+          const key = dayKey(at);
+          byDay.set(key, (byDay.get(key) ?? 0) + minutes);
+        });
+      }
+
+      const first = range === 0 ? Math.min(...shown.map((block) => block.from), now) : Math.max(from, 0);
+      const days: { at: number; minutes: number }[] = [];
+      for (let cursor = startOfDay(new Date(first)).getTime(); cursor <= now; cursor += DAY) {
+        days.push({ at: cursor, minutes: byDay.get(dayKey(cursor)) ?? 0 });
+      }
+
+      const peak = Math.max(...days.map((day) => day.minutes), 1);
+      const box = root.querySelector<HTMLElement>("[data-daily]")!;
+      box.innerHTML = "";
+
+      for (const day of days) {
+        const bar = document.createElement("div");
+        bar.className = "min-w-[6px] flex-1 rounded-t-[4px] bg-emerald-400/80";
+        // Пустой день оставляет след линией: провал должен быть виден
+        bar.style.height = day.minutes > 0 ? `${Math.max(3, (day.minutes / peak) * 100)}%` : "2px";
+        if (day.minutes === 0) bar.className = "min-w-[6px] flex-1 rounded-t-[4px] bg-gray-800";
+        bar.title = `${new Date(day.at).toLocaleDateString(tag, { day: "numeric", month: "short" })} — ${human(day.minutes)}`;
+        box.appendChild(bar);
+      }
+    }
+
+    function top(shown: Block[]) {
+      const byGame = new Map<number, number>();
+      for (const block of shown) byGame.set(block.game, (byGame.get(block.game) ?? 0) + block.minutes);
+
+      const rows = [...byGame].sort((a, b) => b[1] - a[1]).slice(0, 10);
+      const peak = rows[0]?.[1] ?? 1;
+      const box = root.querySelector<HTMLElement>("[data-top]")!;
+      box.innerHTML = "";
+
+      for (const [gameId, minutes] of rows) {
+        const game = data.games[gameId];
+        const row = document.createElement("div");
+        row.className = "flex items-center gap-3";
+        row.innerHTML = `
+          <div class="w-40 shrink-0 truncate text-sm text-gray-300">${escape(game?.title ?? `#${gameId}`)}</div>
+          <div class="h-4 flex-1 rounded-[4px] bg-gray-900">
+            <div class="h-4 rounded-[4px] bg-emerald-400/80" style="width:${Math.max(2, (minutes / peak) * 100)}%"></div>
+          </div>
+          <div class="w-20 shrink-0 text-right text-xs tabular-nums text-gray-500">${human(minutes)}</div>`;
+        box.appendChild(row);
+      }
+    }
+
+    function recent() {
+      const box = root.querySelector<HTMLElement>("[data-recent]")!;
+      box.innerHTML = "";
+
+      const list = [...data.sessions].reverse().slice(0, 12);
+      if (list.length === 0) {
+        box.innerHTML = `<li class="text-xs text-gray-600">${escape(s.untrackedHint)}</li>`;
+        return;
+      }
+
+      for (const session of list) {
+        const start = new Date(session.s);
+        const end = session.e ? new Date(session.e) : null;
+        const minutes = session.gain > 0 ? session.gain : session.m;
+        const game = data.games[session.g];
+        const item = document.createElement("li");
+        item.className = "flex items-baseline gap-2 text-gray-400";
+        item.innerHTML = `
+          <span class="w-32 shrink-0 text-xs text-gray-600">${start.toLocaleDateString(tag, { day: "numeric", month: "short" })} ${clock(start)}${end ? `–${clock(end)}` : ""}</span>
+          <span class="min-w-0 flex-1 truncate">${escape(game?.title ?? `#${session.g}`)}</span>
+          <span class="shrink-0 text-xs tabular-nums ${end ? "text-gray-500" : "text-emerald-400"}">${end ? human(minutes) : escape(s.ongoing)}</span>`;
+        box.appendChild(item);
+      }
+    }
+
+    function playingNow() {
+      const open = data.sessions.find((session) => session.e === null);
+      const box = root.querySelector<HTMLElement>("[data-now]")!;
+      if (!open) {
+        box.classList.add("hidden");
+        return;
+      }
+      box.classList.remove("hidden");
+      box.textContent = `${s.playingNow}: ${data.games[open.g]?.title ?? `#${open.g}`}`;
+    }
+
+    function clock(date: Date): string {
+      return date.toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function escape(text: string): string {
+      return text.replace(/[&<>"]/g, (char) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char] ?? char
+      );
+    }
+  }
+</script>

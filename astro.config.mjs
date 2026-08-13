@@ -26,6 +26,12 @@ export default defineConfig({
         access: "secret",
         optional: true,
       }),
+      // Пароль к /api/cron/poll. Без него трекер наигранного времени не работает
+      CRON_SECRET: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+      }),
     },
   },
 

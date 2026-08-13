@@ -10,7 +10,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "start": "node dist/server/entry.mjs",
+    "start": "node scripts/start.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "check": "astro check"
