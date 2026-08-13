@@ -20,6 +20,12 @@ export default defineConfig({
       SESSION_SECRET: envField.string({ context: "server", access: "secret" }),
       DATABASE_URL: envField.string({ context: "server", access: "secret" }),
       GEMINI_API_KEY: envField.string({ context: "server", access: "secret" }),
+      // Запасной ключ: на него уходят запросы, когда бесплатный упирается в частоту
+      GEMINI_API_KEY_PAID: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+      }),
     },
   },
 

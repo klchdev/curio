@@ -1,8 +1,8 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { ReviewCorpusItem } from "./queries";
 import type { AppReviews } from "./steam";
-import { RECOMMENDATION_MODEL, errorCode } from "./recommendations";
+import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
 
 /**
@@ -146,11 +146,9 @@ function formatOthers(reviews: AppReviews | null): string {
 
 export async function generateDeepDive(
   input: DeepDiveInput,
-  apiKey: string,
+  keys: GeminiKeys,
   locale: Locale = DEFAULT_LOCALE
 ): Promise<DeepDive> {
-  const ai = new GoogleGenAI({ apiKey });
-
   const prompt = [
     `# Игра: ${input.title}`,
     [input.genres, input.releaseDate].filter(Boolean).join(" · "),
@@ -169,36 +167,29 @@ export async function generateDeepDive(
     "Разбери, стоит ли этому игроку запускать эту игру.",
   ].join("\n");
 
-  const RETRY_DELAYS_MS = [2000, 6000];
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      const res = await ai.models.generateContent({
-        model: RECOMMENDATION_MODEL,
-        contents: prompt,
-        config: {
-          systemInstruction: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      });
+  const raw = await withGemini(keys, async (ai) => {
+    const res = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
+      config: {
+        systemInstruction: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
+        responseMimeType: "application/json",
+        responseSchema: RESPONSE_SCHEMA,
+      },
+    });
 
-      const raw = res.text ?? "";
-      if (!raw) throw new Error("Gemini вернул пустой ответ");
+    const text = res.text ?? "";
+    if (!text) throw new Error("Gemini вернул пустой ответ");
+    return text;
+  });
 
-      const parsed = JSON.parse(raw) as DeepDive;
-      return {
-        fit: parsed.fit === "yes" || parsed.fit === "no" ? parsed.fit : "maybe",
-        tier: ADVISOR_TIER_VALUES.includes(parsed.tier) ? parsed.tier : "C",
-        summary: parsed.summary ?? "",
-        forYou: parsed.forYou ?? "",
-        against: parsed.against ?? "",
-        complaints: Array.isArray(parsed.complaints) ? parsed.complaints.slice(0, 6) : [],
-      };
-    } catch (err) {
-      const code = errorCode(err);
-      const retriable = code === 429 || code === 500 || code === 503 || code === 504;
-      if (!retriable || attempt >= RETRY_DELAYS_MS.length) throw err;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
-    }
-  }
+  const parsed = JSON.parse(raw) as DeepDive;
+  return {
+    fit: parsed.fit === "yes" || parsed.fit === "no" ? parsed.fit : "maybe",
+    tier: ADVISOR_TIER_VALUES.includes(parsed.tier) ? parsed.tier : "C",
+    summary: parsed.summary ?? "",
+    forYou: parsed.forYou ?? "",
+    against: parsed.against ?? "",
+    complaints: Array.isArray(parsed.complaints) ? parsed.complaints.slice(0, 6) : [],
+  };
 }

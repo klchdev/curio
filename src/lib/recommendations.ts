@@ -1,30 +1,16 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { CandidateGame, ReviewCorpusItem } from "./queries";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
-
-export const RECOMMENDATION_MODEL = "gemini-3.6-flash";
+import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
 
 export const MAX_PICKS = 40;
 
 export const GROUNDING_VALUES = ["known", "from-description", "guess"] as const;
 export type Grounding = (typeof GROUNDING_VALUES)[number];
 
-const RETRIES = 3;
-const RETRY_DELAYS_MS = [2000, 6000, 15000];
-
-/** Код ошибки прячется в JSON внутри message — SDK не выносит его наружу. */
-export function errorCode(err: unknown): number | null {
-  const message = err instanceof Error ? err.message : String(err);
-  try {
-    const parsed = JSON.parse(message);
-    const code = parsed?.error?.code;
-    return typeof code === "number" ? code : null;
-  } catch {
-    const match = message.match(/\b(429|500|503|504)\b/);
-    return match ? Number(match[1]) : null;
-  }
-}
+/** Совет по всей библиотеке идёт потоком и до минуты — обычного срока мало. */
+const STREAM_TIMEOUT_MS = 300_000;
 
 const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по его собственным отзывам и советуешь, что запустить из его библиотеки Steam.
 
@@ -196,12 +182,10 @@ export async function generateRecommendations(
   reviews: ReviewCorpusItem[],
   candidates: CandidateGame[],
   abandonedGames: CandidateGame[],
-  apiKey: string,
+  keys: GeminiKeys,
   locale: Locale = DEFAULT_LOCALE,
   onProgress?: (picksReady: number) => void
 ): Promise<GeneratedRecommendations> {
-  const ai = new GoogleGenAI({ apiKey });
-
   const prompt = [
     `# Отзывы игрока (${reviews.length})`,
     formatReviews(reviews),
@@ -217,18 +201,11 @@ export async function generateRecommendations(
     "Разбери вкус, раздай тиры кандидатам и вынеси вердикт по брошенному.",
   ].join("\n");
 
-  /*
-   * 503 «high demand» у flash-моделей — обычное дело в пиковые часы и проходит
-   * само за секунды. Раньше такой ответ убивал весь прогон, хотя достаточно
-   * подождать. Ретраим только временные коды: на 400 и 403 повтор бессмысленен.
-   */
-  let raw = "";
-  let lastReported = 0;
-
-  for (let attempt = 0; ; attempt += 1) {
-    try {
+  const raw = await withGemini(
+    keys,
+    async (ai) => {
       const stream = await ai.models.generateContentStream({
-        model: RECOMMENDATION_MODEL,
+        model: GEMINI_MODEL,
         contents: prompt,
         config: {
           systemInstruction: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
@@ -237,24 +214,22 @@ export async function generateRecommendations(
         },
       });
 
-      raw = "";
-      lastReported = 0;
+      // Счётчик готовых советов живёт внутри попытки: оборвался поток —
+      // прогресс начинается заново, иначе он поедет вверх на повторе
+      let text = "";
+      let lastReported = 0;
       for await (const chunk of stream) {
-        raw += chunk.text ?? "";
-        const ready = countReadyPicks(raw);
+        text += chunk.text ?? "";
+        const ready = countReadyPicks(text);
         if (onProgress && ready > lastReported) {
           lastReported = ready;
           onProgress(ready);
         }
       }
-      break;
-    } catch (err) {
-      const code = errorCode(err);
-      const retriable = code === 429 || code === 500 || code === 503 || code === 504;
-      if (!retriable || attempt >= RETRIES) throw err;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
-    }
-  }
+      return text;
+    },
+    { timeoutMs: STREAM_TIMEOUT_MS }
+  );
 
   if (!raw) throw new Error("Gemini вернул пустой ответ");
 

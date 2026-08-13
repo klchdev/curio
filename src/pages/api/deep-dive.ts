@@ -6,8 +6,8 @@ import { eq, and } from "drizzle-orm";
 import { getAppReviews } from "../../lib/steam";
 import { generateDeepDive } from "../../lib/deep-dive";
 import { getReviewCorpus, getFirstPassPick } from "../../lib/queries";
-import { errorCode } from "../../lib/recommendations";
-import { GEMINI_API_KEY } from "astro:env/server";
+import { errorCode } from "../../lib/gemini";
+import { GEMINI_KEYS } from "../../lib/gemini-env";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
@@ -82,7 +82,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         corpus,
         firstPass,
       },
-      GEMINI_API_KEY,
+      GEMINI_KEYS,
       localeFrom(cookies, request)
     );
 

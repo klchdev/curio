@@ -11,8 +11,9 @@ import {
   failRecommendationRun,
   hasActiveRun,
 } from "../../lib/queries";
-import { generateRecommendations, RECOMMENDATION_MODEL, errorCode } from "../../lib/recommendations";
-import { GEMINI_API_KEY } from "astro:env/server";
+import { generateRecommendations } from "../../lib/recommendations";
+import { GEMINI_MODEL, errorCode } from "../../lib/gemini";
+import { GEMINI_KEYS } from "../../lib/gemini-env";
 import { THRESHOLDS } from "../../lib/vocab";
 import { localeFrom, type Locale } from "../../lib/i18n";
 import { t } from "../../lib/strings";
@@ -45,7 +46,7 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
       reviews,
       candidates,
       abandonedGames,
-      GEMINI_API_KEY,
+      GEMINI_KEYS,
       locale,
       (picksReady) => {
         const now = Date.now();
@@ -121,7 +122,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: s.errors.noCandidates }, 400);
   }
 
-  const runId = await createRecommendationRun(userId, RECOMMENDATION_MODEL);
+  const runId = await createRecommendationRun(userId, GEMINI_MODEL);
 
   // Намеренно не ждём: ответ уходит сразу, работа продолжается в процессе.
   void runInBackground(runId, userId, locale);
