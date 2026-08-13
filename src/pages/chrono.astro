@@ -159,7 +159,7 @@ const sinceLabel = data.since
 
           <section>
             <h2 class="text-sm font-semibold text-gray-300">{s.chrono.top}</h2>
-            <p class="mb-3 text-xs text-gray-600">&nbsp;</p>
+            <p class="mb-3 text-xs text-gray-600">{s.chrono.topHint}</p>
             <div class="rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
               <div data-top class="space-y-2" />
             </div>
@@ -572,11 +572,11 @@ const sinceLabel = data.since
         const row = document.createElement("div");
         row.className = "flex items-center gap-3";
         row.innerHTML = `
-          <div class="w-40 shrink-0 truncate text-sm text-gray-300">${escape(game?.title ?? `#${gameId}`)}</div>
+          <div class="w-32 shrink-0 truncate text-sm text-gray-300" title="${escape(game?.title ?? "")}">${escape(game?.title ?? `#${gameId}`)}</div>
           <div class="h-4 flex-1 rounded-[4px] bg-gray-900">
             <div class="h-4 rounded-[4px] bg-emerald-400/80" style="width:${Math.max(2, (minutes / peak) * 100)}%"></div>
           </div>
-          <div class="w-20 shrink-0 text-right text-xs tabular-nums text-gray-500">${human(minutes)}</div>`;
+          <div class="w-16 shrink-0 text-right text-xs tabular-nums text-gray-500">${human(minutes)}</div>`;
         box.appendChild(row);
       }
     }

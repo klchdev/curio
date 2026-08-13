@@ -336,6 +336,7 @@ const RU = {
     heatmapHint: "Час дня по горизонтали, день недели по вертикали — по твоему часовому поясу",
     daily: "По дням",
     top: "Во что",
+    topHint: "Минуты по счётчику Steam, где он успел подтвердить, иначе по часам сессии",
     recent: "Последние сессии",
     untracked: "Без сессии",
     untrackedHint:
@@ -694,6 +695,7 @@ const EN: Dict = {
     heatmapHint: "Hour of day across, weekday down — in your own timezone",
     daily: "By day",
     top: "What you played",
+    topHint: "Minutes from the Steam counter where it confirmed them, otherwise from the session clock",
     recent: "Recent sessions",
     untracked: "Outside sessions",
     untrackedHint:
