@@ -306,7 +306,18 @@ const sinceLabel = data.since
       const to = live ? Math.max(from + session.m * 60_000, Date.now()) : new Date(session.e!).getTime();
       const minutes = session.gain > 0 ? session.gain : session.m;
       if (minutes <= 0 && !live) continue;
-      blocks.push({ game: session.g, from, to: Math.max(to, from + 60_000), minutes, live });
+      /*
+       * Отрезок не короче тех минут, что за ним числятся: опрос мог застать
+       * сессию один раз, и по часам она нулевая, а играли четыре минуты — их
+       * надо разложить по времени, а не сваливать в одну точку.
+       */
+      blocks.push({
+        game: session.g,
+        from,
+        to: Math.max(to, from + Math.max(minutes, 1) * 60_000),
+        minutes,
+        live,
+      });
     }
 
     /*
@@ -596,12 +607,24 @@ const sinceLabel = data.since
         const end = session.e ? new Date(session.e) : null;
         const minutes = session.gain > 0 ? session.gain : session.m;
         const game = data.games[session.g];
+
+        /*
+         * Диапазон рисуем, только если конец действительно видели. Опрос раз в
+         * три минуты застаёт короткую сессию один раз, и по часам она выходит
+         * нулевой длины — а счётчик Steam при этом насчитал четыре минуты.
+         * «00:36–00:36, 4 мин» — это сложение двух разных источников в одной
+         * строке; честнее показать момент начала и длительность отдельно.
+         */
+        const observed = end !== null && session.m > 0;
+        const when = observed ? `${clock(start)}–${clock(end!)}` : clock(start);
+        const source = session.gain > 0 ? s.byCounter : s.byClock;
+
         const item = document.createElement("li");
         item.className = "flex items-baseline gap-2 text-gray-400";
         item.innerHTML = `
-          <span class="w-32 shrink-0 text-xs text-gray-600">${start.toLocaleDateString(tag, { day: "numeric", month: "short" })} ${clock(start)}${end ? `–${clock(end)}` : ""}</span>
+          <span class="w-32 shrink-0 text-xs text-gray-600">${start.toLocaleDateString(tag, { day: "numeric", month: "short" })} ${when}</span>
           <span class="min-w-0 flex-1 truncate">${escape(game?.title ?? `#${session.g}`)}</span>
-          <span class="shrink-0 text-xs tabular-nums ${end ? "text-gray-500" : "text-emerald-400"}">${end ? human(minutes) : escape(s.ongoing)}</span>`;
+          <span class="shrink-0 text-xs tabular-nums ${end ? "text-gray-500" : "text-emerald-400"}" title="${escape(source)}">${end ? human(minutes) : escape(s.ongoing)}</span>`;
         box.appendChild(item);
       }
     }
