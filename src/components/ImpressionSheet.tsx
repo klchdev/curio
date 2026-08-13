@@ -14,6 +14,9 @@ import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
 import { t } from "../lib/strings";
 import Celebration from "./Celebration";
 
+/** Вердикты, после которых отзыв считается закрытым. */
+const CLOSING_VERDICTS = new Set(["finished", "dropped", "endless"]);
+
 interface Props {
   mode: ImpressionMode;
   gameTitle: string;
@@ -64,9 +67,41 @@ export default function ImpressionSheet({
   const [celebrating, setCelebrating] = useState(false);
   const [error, setError] = useState("");
 
+  /*
+   * Свои же прошлые слова об этой игре и расхождение оценки с тоном последних
+   * записей. И то и другое — про уже написанное, поэтому подтягивается один
+   * раз при открытии и ничего не блокирует: не ответил сервер — лист работает
+   * как раньше.
+   */
+  const [quotes, setQuotes] = useState<Array<{ playtimeMinutes: number; text: string }>>([]);
+  const [drift, setDrift] = useState<{ rating: number; suggested: number; entries: number } | null>(
+    null
+  );
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [answer, setAnswer] = useState("");
+
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
   }, []);
+
+  useEffect(() => {
+    if (!gameId || mode === "demo" || mode === "slot-first") return;
+
+    let alive = true;
+    fetch(`/api/entry-context?gameId=${gameId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!alive || !data) return;
+        setQuotes(data.quotes ?? []);
+        setDrift(data.drift ?? null);
+      })
+      .catch(() => {});
+
+    return () => {
+      alive = false;
+    };
+  }, [gameId, mode]);
 
   function close() {
     setVisible(false);
@@ -124,11 +159,54 @@ export default function ImpressionSheet({
         return;
       }
 
+      /*
+       * Закрыли игру — самое время спросить про то, чего в отзыве нет: она
+       * ещё в голове. Вопросы приходят из фона, и если их нет или модель не
+       * ответила, лист просто закрывается, как раньше.
+       */
+      if (gameId && verdict && CLOSING_VERDICTS.has(verdict)) {
+        const asked = await fetch("/api/entry-questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameId }),
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+
+        if (asked?.questions?.length) {
+          setQuestions(asked.questions);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (rule.celebrate) {
         setCelebrating(true);
         return;
       }
       finish();
+    } catch {
+      setError(s.errors.network);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Ответ на вопрос — обычная запись дневника, только с вопросом рядом. */
+  async function submitAnswer(question: string) {
+    const text = answer.trim();
+    if (text.length < rule.minNote) return;
+
+    setLoading(true);
+    try {
+      await fetch("/api/impression", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "entry", gameId, note: text, promptedBy: question }),
+      });
+      setQuestions((rest) => rest.filter((item) => item !== question));
+      setAnswering(null);
+      setAnswer("");
     } catch {
       setError(s.errors.network);
     } finally {
@@ -184,6 +262,63 @@ export default function ImpressionSheet({
             <img src={gameImage} alt="" className="header-art mb-5 w-full rounded-xl" />
           )}
 
+          {questions.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-400">{s.sheet.questionsLede}</p>
+
+              {questions.map((question) => (
+                <div key={question} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3">
+                  <p className="text-sm leading-relaxed text-gray-200">{question}</p>
+
+                  {answering === question ? (
+                    <div className="mt-2">
+                      <textarea
+                        autoFocus
+                        value={answer}
+                        onChange={(event) => setAnswer(event.target.value)}
+                        rows={3}
+                        className="w-full resize-none rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm outline-none focus:border-gray-500"
+                      />
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => submitAnswer(question)}
+                          disabled={loading || answer.trim().length < rule.minNote}
+                          className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-black transition disabled:opacity-40"
+                        >
+                          {s.sheet.answerSave}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setAnswering(null);
+                            setAnswer("");
+                          }}
+                          className="rounded-lg px-3 py-1.5 text-sm text-gray-500 transition hover:text-gray-300"
+                        >
+                          {s.sheet.answerSkip}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAnswering(question)}
+                      className="mt-2 text-xs text-gray-500 transition hover:text-gray-300"
+                    >
+                      {s.sheet.answerOpen}
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                onClick={() => (rule.celebrate ? setCelebrating(true) : finish())}
+                className="w-full rounded-lg border border-gray-800 py-2 text-sm text-gray-400 transition hover:bg-gray-900"
+              >
+                {s.sheet.questionsDone}
+              </button>
+            </div>
+          ) : (
+          <>
+
           {rule.showAppIdInput && (
             <label className="mb-5 block">
               <span className="mb-1.5 block text-sm text-gray-400">{s.sheet.appId}</span>
@@ -194,6 +329,27 @@ export default function ImpressionSheet({
                 className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm outline-none focus:border-gray-500"
               />
             </label>
+          )}
+
+          {quotes.length > 1 && (
+            /*
+             * Не черновик, а свои же слова со штампом времени: финал перестаёт
+             * писаться по памяти и дублировать сказанное в середине. Готовых
+             * формулировок тут нет намеренно — текст должен остаться его.
+             */
+            <div className="mb-5 rounded-xl border border-gray-800/70 bg-gray-900/30 p-3">
+              <p className="mb-2 text-xs text-gray-500">{s.sheet.quotesLede}</p>
+              <ol className="space-y-1.5">
+                {quotes.map((quote, index) => (
+                  <li key={index} className="text-xs leading-relaxed text-gray-400">
+                    <span className="text-gray-600">
+                      [{formatPlaytime(quote.playtimeMinutes, locale)}]
+                    </span>{" "}
+                    {quote.text}
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
 
           <div className="mb-5">
@@ -240,6 +396,23 @@ export default function ImpressionSheet({
               <p className={`mt-1.5 text-sm ${WORTH_COLORS[rating - 1]}`}>
                 {worthLabels(locale)[rating - 1]}
               </p>
+
+              {drift && rating === drift.rating && (
+                /*
+                 * Не баннер и не модалка: строка под самой оценкой, в момент,
+                 * когда человек и так решает, что ставить. Один тап — и она
+                 * исчезает вместе с вопросом.
+                 */
+                <p className="mt-2 text-xs leading-relaxed text-amber-300/70">
+                  {s.sheet.driftHint(drift.rating, drift.suggested, drift.entries)}{" "}
+                  <button
+                    onClick={() => setRating(drift.suggested)}
+                    className="text-amber-200 underline underline-offset-2 transition hover:text-amber-100"
+                  >
+                    {s.sheet.driftApply(drift.suggested)}
+                  </button>
+                </p>
+              )}
             </div>
           )}
 
@@ -305,6 +478,8 @@ export default function ImpressionSheet({
               {s.sheet.cancel}
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </>

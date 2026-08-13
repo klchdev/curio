@@ -434,6 +434,7 @@ export async function getHistory(userId: number) {
         gameImage: games.headerImage,
         kind: gameEntries.kind,
         note: gameEntries.text,
+        promptedBy: gameEntries.promptedBy,
         playtimeMinutes: gameEntries.playtimeTotalMinutes,
         deltaMinutes: gameEntries.playtimeDeltaMinutes,
         verdict: gameEntries.verdictAt,
@@ -1250,6 +1251,8 @@ export interface ImpressionInput {
   tier?: Tier | null;
   rating?: number | null;
   note?: string | null;
+  /** Вопрос советчика, если запись пишется в ответ на него. */
+  promptedBy?: string | null;
   /** Абсолютное наигранное время: слот считает дельту от начала контракта. */
   currentPlaytime: number;
   /** Что было в записи до правки — чтобы отличить «не трогали» от «сбросили». */
@@ -1386,6 +1389,7 @@ export async function saveImpression(
       verdict: input.verdict,
       rating: input.rating,
       tier: input.tier,
+      promptedBy: input.promptedBy,
     });
 
     return { ok: true, entryId };
@@ -1472,6 +1476,7 @@ async function addEntry(
     verdict?: string | null;
     rating?: number | null;
     tier?: string | null;
+    promptedBy?: string | null;
     /** Когда запись появилась на самом деле: у перенесённых из Steam это не «сейчас». */
     at?: Date;
   }
@@ -1490,6 +1495,7 @@ async function addEntry(
       recordId,
       kind: data.kind,
       text: data.text,
+      promptedBy: data.promptedBy ?? null,
       playtimeTotalMinutes: data.playtimeMinutes,
       playtimeDeltaMinutes: Math.max(0, data.playtimeMinutes - (previous?.total ?? 0)),
       verdictAt: data.verdict ?? null,

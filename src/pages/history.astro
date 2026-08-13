@@ -348,6 +348,12 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
                       </span>
                     </div>
 
+                    {entry.promptedBy && (
+                      <p class="mt-2 border-l-2 border-gray-800 pl-3 text-xs leading-relaxed text-gray-500 italic">
+                        {entry.promptedBy}
+                      </p>
+                    )}
+
                     <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300">
                       {splitNote(entry.note, mentionsByEntry.get(entry.entryId) ?? []).map((part) =>
                         part.href ? (

@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const rule = SHEET_RULES[mode];
   if (!rule) return json({ error: s.errors.unknownMode }, 400);
 
-  const { slotId, gameId, verdict, tier, rating, note, appIdOrUrl, previous } = body;
+  const { slotId, gameId, verdict, tier, rating, note, appIdOrUrl, previous, promptedBy } = body;
 
   if (verdict != null && !isValidVerdict(verdict)) return json({ error: s.errors.badVerdict }, 400);
   if (tier != null && !isValidTier(tier)) return json({ error: s.errors.badTier }, 400);
@@ -116,6 +116,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     tier: tier ?? undefined,
     rating: rating ?? undefined,
     note: note ?? undefined,
+    promptedBy: typeof promptedBy === "string" ? promptedBy.slice(0, 300) : undefined,
     currentPlaytime,
     previous,
   });

@@ -297,6 +297,15 @@ const RU = {
     minChars: (n: number) => `Заметка минимум ${n} символов`,
     pickVerdict: "Выбери вердикт",
     nothingToSave: "Нечего сохранять",
+    questionsLede: "Пара вопросов про то, чего в отзыве нет. Отвечать необязательно.",
+    answerOpen: "Ответить",
+    answerSave: "В дневник",
+    answerSkip: "Пропустить",
+    questionsDone: "Готово",
+    quotesLede: "Как ты говорил об этой игре раньше",
+    driftHint: (rating: number, suggested: number, entries: number) =>
+      `Оценка ${rating} стоит уже ${entries} ${plural(entries, "запись", "записи", "записей")}, а последние звучат ${suggested < rating ? "холоднее" : "теплее"}. Поставить ${suggested}?`,
+    driftApply: (suggested: number) => `Ставлю ${suggested}`,
   },
 
   chrono: {
@@ -634,6 +643,15 @@ const EN: Dict = {
     minChars: (n: number) => `The note needs at least ${n} characters`,
     pickVerdict: "Pick a verdict",
     nothingToSave: "Nothing to save",
+    questionsLede: "A couple of questions about what the review leaves out. Answering is optional.",
+    answerOpen: "Answer",
+    answerSave: "To the diary",
+    answerSkip: "Skip",
+    questionsDone: "Done",
+    quotesLede: "How you talked about this game before",
+    driftHint: (rating: number, suggested: number, entries: number) =>
+      `${rating} has been standing for ${entries} ${entries === 1 ? "entry" : "entries"}, and the latest ones read ${suggested < rating ? "colder" : "warmer"}. Make it ${suggested}?`,
+    driftApply: (suggested: number) => `Make it ${suggested}`,
   },
 
   chrono: {
