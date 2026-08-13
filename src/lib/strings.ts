@@ -330,7 +330,7 @@ const RU = {
     nights: "Ночных часов",
 
     heatmap: "Когда ты играешь",
-    heatmapHint: "Час дня по вертикали, день недели по горизонтали — по твоему часовому поясу",
+    heatmapHint: "Час дня по горизонтали, день недели по вертикали — по твоему часовому поясу",
     daily: "По дням",
     top: "Во что",
     recent: "Последние сессии",
@@ -685,7 +685,7 @@ const EN: Dict = {
     nights: "Night hours",
 
     heatmap: "When you play",
-    heatmapHint: "Hour of day down, weekday across — in your own timezone",
+    heatmapHint: "Hour of day across, weekday down — in your own timezone",
     daily: "By day",
     top: "What you played",
     recent: "Recent sessions",

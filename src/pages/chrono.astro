@@ -152,7 +152,7 @@ const sinceLabel = data.since
         <section>
           <h2 class="mb-3 text-sm font-semibold text-gray-300">{s.chrono.daily}</h2>
           <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
-            <div data-daily class="flex h-40 items-end gap-[2px]" />
+            <div data-daily class="flex h-44 items-stretch gap-[2px]" />
           </div>
         </section>
 
@@ -424,16 +424,23 @@ const sinceLabel = data.since
       const box = root.querySelector<HTMLElement>("[data-heatmap]")!;
       box.innerHTML = "";
 
+      /*
+       * Часы по горизонтали, дни недели по вертикали. Наоборот получалась
+       * узкая полоса в двадцать четыре ряда: неделя читается слева направо, а
+       * сутки — это ось, вдоль которой ищут вечерний горб.
+       */
       const table = document.createElement("div");
       table.className = "grid gap-[2px]";
-      table.style.gridTemplateColumns = "2.5rem repeat(7, 1.5rem)";
+      table.style.gridTemplateColumns = "2rem repeat(24, minmax(1rem, 1fr))";
 
       table.appendChild(cell(""));
-      for (const name of s.weekdays as string[]) table.appendChild(cell(name, "text-center"));
-
       for (let hour = 0; hour < 24; hour += 1) {
-        table.appendChild(cell(hour % 3 === 0 ? `${hour}:00` : "", "text-right pr-1"));
-        for (let day = 0; day < 7; day += 1) {
+        table.appendChild(cell(hour % 3 === 0 ? String(hour) : "", "text-center"));
+      }
+
+      for (let day = 0; day < 7; day += 1) {
+        table.appendChild(cell(s.weekdays[day], "text-right pr-1"));
+        for (let hour = 0; hour < 24; hour += 1) {
           const minutes = grid[hour][day];
           const tile = document.createElement("div");
           tile.className = "h-5 rounded-[3px]";
@@ -500,15 +507,41 @@ const sinceLabel = data.since
       const box = root.querySelector<HTMLElement>("[data-daily]")!;
       box.innerHTML = "";
 
-      for (const day of days) {
+      /*
+       * Подписи ставим не на каждый столбец — не влезут, — а редко и считая с
+       * конца: последний день подписан всегда, потому что именно от него глаз
+       * и отсчитывает «это было позавчера».
+       */
+      const step = Math.max(1, Math.ceil(days.length / 8));
+
+      days.forEach((day, index) => {
+        const column = document.createElement("div");
+        column.className = "flex min-w-[6px] flex-1 flex-col items-center";
+
+        const plot = document.createElement("div");
+        plot.className = "flex w-full flex-1 items-end";
+
         const bar = document.createElement("div");
-        bar.className = "min-w-[6px] flex-1 rounded-t-[4px] bg-emerald-400/80";
         // Пустой день оставляет след линией: провал должен быть виден
+        bar.className =
+          day.minutes > 0
+            ? "w-full rounded-t-[4px] bg-emerald-400/80"
+            : "w-full rounded-t-[4px] bg-gray-800";
         bar.style.height = day.minutes > 0 ? `${Math.max(3, (day.minutes / peak) * 100)}%` : "2px";
-        if (day.minutes === 0) bar.className = "min-w-[6px] flex-1 rounded-t-[4px] bg-gray-800";
-        bar.title = `${new Date(day.at).toLocaleDateString(tag, { day: "numeric", month: "short" })} — ${human(day.minutes)}`;
-        box.appendChild(bar);
-      }
+        bar.title = `${new Date(day.at).toLocaleDateString(tag, { day: "numeric", month: "long" })} — ${human(day.minutes)}`;
+        plot.appendChild(bar);
+
+        const label = document.createElement("div");
+        label.className = "mt-1 h-3 text-[10px] leading-3 text-gray-600";
+        if ((days.length - 1 - index) % step === 0) {
+          const date = new Date(day.at);
+          label.textContent = `${date.getDate()}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+        }
+
+        column.appendChild(plot);
+        column.appendChild(label);
+        box.appendChild(column);
+      });
     }
 
     function top(shown: Block[]) {
