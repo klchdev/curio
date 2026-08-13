@@ -12,6 +12,7 @@
 import { Client } from "pg";
 import { extractMentions, placeMentions, type CatalogGame } from "../src/lib/entry-mentions";
 import { GEMINI_MODEL, type GeminiKeys } from "../src/lib/gemini";
+import { findStoreGame } from "../src/lib/store-search";
 
 const apply = process.argv.includes("--apply");
 const limit = Number(process.argv.find((arg) => /^\d+$/.test(arg)) ?? 0);
@@ -64,6 +65,60 @@ async function loadCatalog(client: Client, userId: number): Promise<CatalogGame[
   }));
 }
 
+/**
+ * Заводит карточку игры, которой нет в каталоге, и возвращает её id.
+ * В user_games не пишет: каталог общий, библиотека личная.
+ */
+async function adoptGame(client: Client, title: string): Promise<number | null> {
+  const hit = await findStoreGame(title);
+  if (!hit) return null;
+
+  const { rows } = await client.query(
+    `insert into games (steam_app_id, title, header_image, created_at)
+          values ($1, $2, $3, now())
+     on conflict (steam_app_id) do update set title = games.title
+     returning id`,
+    [hit.appId, hit.title, hit.headerImage]
+  );
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Проходит по упоминаниям без игры и пытается завести им карточку.
+ * Отдельный режим, потому что чинит уже записанное: разбор текста повторять
+ * незачем, названия у этих строк уже есть.
+ */
+async function resolveUnknown(client: Client) {
+  const { rows } = await client.query(
+    `select canonical_title, count(*)::int as n
+       from entry_mentions where game_id is null
+      group by canonical_title order by n desc`
+  );
+  console.log(`Названий без карточки: ${rows.length}${apply ? "" : " (сухой прогон)"}\n`);
+
+  let adopted = 0;
+  for (const row of rows) {
+    const hit = await findStoreGame(row.canonical_title);
+    if (!hit) {
+      console.log(`  — ${row.canonical_title} (×${row.n}): в магазине точного совпадения нет`);
+      continue;
+    }
+    console.log(`  + ${row.canonical_title} (×${row.n}) → appid ${hit.appId}`);
+    if (!apply) continue;
+
+    const gameId = await adoptGame(client, row.canonical_title);
+    if (!gameId) continue;
+    await client.query(
+      `update entry_mentions set game_id = $1 where game_id is null and canonical_title = $2`,
+      [gameId, row.canonical_title]
+    );
+    adopted += 1;
+    await wait(400);
+  }
+
+  console.log(`\nЗаведено карточек: ${adopted} из ${rows.length}`);
+}
+
 async function main() {
   const free = process.env.GEMINI_API_KEY;
   if (!free) throw new Error("Нужен GEMINI_API_KEY");
@@ -71,6 +126,12 @@ async function main() {
 
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
+
+  if (process.argv.includes("--resolve-unknown")) {
+    await resolveUnknown(client);
+    await client.end();
+    return;
+  }
 
   const { rows: entries } = await client.query(PENDING, [ids?.length ? ids : null]);
   const targets = limit > 0 ? entries.slice(0, limit) : entries;
@@ -94,6 +155,14 @@ async function main() {
     try {
       const raw = await extractMentions(entry.text, entry.title, keys);
       const placed = placeMentions(entry.text, raw, catalog, entry.game_id);
+
+      // Названия, которых нет в каталоге, заводим карточками — но только
+      // когда пишем: сухой прогон ничего в базе менять не должен
+      if (apply) {
+        for (const mention of placed) {
+          if (mention.gameId === null) mention.gameId = await adoptGame(client, mention.canonicalTitle);
+        }
+      }
 
       // Строка на каждую запись, а не только на находки: иначе долгий ответ
       // модели и повисший прогон выглядят из терминала одинаково

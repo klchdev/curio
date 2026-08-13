@@ -11,7 +11,13 @@ import {
   entryMentions,
 } from "../db/schema";
 import { GEMINI_MODEL } from "./gemini";
-import { extractMentions, placeMentions, type CatalogGame } from "./entry-mentions";
+import {
+  extractMentions,
+  placeMentions,
+  type CatalogGame,
+  type PlacedMention,
+} from "./entry-mentions";
+import { findStoreGame } from "./store-search";
 
 /**
  * Фоновый разбор записи дневника.
@@ -46,6 +52,53 @@ async function getCatalog(userId: number): Promise<CatalogGame[]> {
   }));
 }
 
+/**
+ * Заводит карточку игры, которой ещё нет в каталоге.
+ *
+ * В `user_games` она не попадает: каталог общий, а библиотека — личная.
+ * Детали (жанры, описание, тип) подтянет `scripts/fetch-app-details.ts` —
+ * он ходит по строкам без деталей и для того и написан.
+ */
+async function adoptGame(title: string): Promise<number | null> {
+  const hit = await findStoreGame(title);
+  if (!hit) return null;
+
+  const [created] = await db
+    .insert(games)
+    .values({ steamAppId: hit.appId, title: hit.title, headerImage: hit.headerImage })
+    .onConflictDoNothing({ target: games.steamAppId })
+    .returning({ id: games.id });
+
+  if (created) return created.id;
+
+  // Карточка уже была — либо завелась параллельным разбором
+  const existing = await db
+    .select({ id: games.id })
+    .from(games)
+    .where(eq(games.steamAppId, hit.appId))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  return existing?.id ?? null;
+}
+
+/** Упоминания, не нашедшие игру в каталоге, получают её из магазина. */
+async function adoptUnknown(placed: PlacedMention[]): Promise<PlacedMention[]> {
+  const seen = new Map<string, number | null>();
+
+  for (const mention of placed) {
+    if (mention.gameId !== null) continue;
+
+    const key = mention.canonicalTitle.toLowerCase();
+    if (!seen.has(key)) seen.set(key, await adoptGame(mention.canonicalTitle));
+
+    const found = seen.get(key);
+    if (found) mention.gameId = found;
+  }
+
+  return placed;
+}
+
 export async function analyzeEntry(entryId: number): Promise<void> {
   const entry = await db
     .select({
@@ -74,7 +127,7 @@ export async function analyzeEntry(entryId: number): Promise<void> {
   try {
     const catalog = await getCatalog(entry.userId);
     const raw = await extractMentions(entry.text, entry.gameTitle, GEMINI_KEYS);
-    const placed = placeMentions(entry.text, raw, catalog, entry.gameId);
+    const placed = await adoptUnknown(placeMentions(entry.text, raw, catalog, entry.gameId));
 
     // Разбор повторяемый: старая разметка снимается целиком, иначе правка
     // промпта оставит в тексте следы предыдущего прохода
