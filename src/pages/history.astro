@@ -264,6 +264,21 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
               </div>
             </div>
 
+            {/*
+              Конец у игры редко бывает явным: её бросают молча, держат в
+              «продолжаю» месяцами или проходят, забыв переставить вердикт.
+              Ждать закрывающего вердикта значило бы не сказать ничего почти
+              никогда — поэтому спросить можно в любой момент.
+            */}
+            <button
+              type="button"
+              class="take-ask cursor-pointer rounded-lg border border-indigo-900/60 px-3 py-1.5 text-xs text-indigo-300/80 transition hover:border-indigo-700 hover:text-indigo-200 disabled:opacity-40"
+              data-game={thread.gameId}
+              data-busy={s.pages.askCurioBusy}
+            >
+              {s.pages.askCurio}
+            </button>
+
             <AddGameNoteButton
               client:visible
               locale={locale}
@@ -525,8 +540,22 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     input.focus();
   }
 
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
+
+    const ask = target.closest(".take-ask") as HTMLButtonElement | null;
+    if (ask) {
+      ask.disabled = true;
+      ask.textContent = ask.dataset.busy ?? "…";
+      await fetch("/api/entry-closing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId: Number(ask.dataset.game) }),
+      }).catch(() => {});
+      window.location.reload();
+      return;
+    }
+
     const row = target.closest(".tag-row") as HTMLElement | null;
     if (!row) return;
 

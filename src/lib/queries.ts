@@ -1649,6 +1649,34 @@ export async function importSteamReviews(
 }
 
 /**
+ * Вердикт Curio по закрытой игре — записью в ленту этой игры.
+ *
+ * Это его слова, поэтому вид записи «совет ИИ»: разбору она не отдаётся, в
+ * цитаты человеку обратно не попадает и в его собственный корпус мнений не
+ * засчитывается.
+ */
+export async function saveCurioTake(
+  userId: number,
+  gameId: number,
+  text: string
+): Promise<void> {
+  const record = await db
+    .select({ id: gameRecords.id, playtime: gameRecords.playtimeAtLastEntry })
+    .from(gameRecords)
+    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!record) return;
+
+  await addEntry(record.id, {
+    kind: "advisor",
+    text,
+    playtimeMinutes: record.playtime,
+  });
+}
+
+/**
  * Ответ на аргумент советчика. Сам аргумент ложится в ленту игры: потом
  * видно, что модель звала вернуться, что ты решил и чем это кончилось.
  */

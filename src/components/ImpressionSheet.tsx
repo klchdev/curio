@@ -13,6 +13,8 @@ import {
 import { DEFAULT_LOCALE, type Locale } from "../lib/i18n";
 import { t } from "../lib/strings";
 import Celebration from "./Celebration";
+import CurioMark from "./CurioMark";
+import RichText from "./RichText";
 
 /** Вердикты, после которых отзыв считается закрытым. */
 const CLOSING_VERDICTS = new Set(["finished", "dropped", "endless"]);
@@ -78,6 +80,7 @@ export default function ImpressionSheet({
     null
   );
   const [questions, setQuestions] = useState<string[]>([]);
+  const [take, setTake] = useState("");
   const [answering, setAnswering] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
 
@@ -165,7 +168,7 @@ export default function ImpressionSheet({
        * ответила, лист просто закрывается, как раньше.
        */
       if (gameId && verdict && CLOSING_VERDICTS.has(verdict)) {
-        const asked = await fetch("/api/entry-questions", {
+        const closing = await fetch("/api/entry-closing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ gameId }),
@@ -173,8 +176,9 @@ export default function ImpressionSheet({
           .then((res) => (res.ok ? res.json() : null))
           .catch(() => null);
 
-        if (asked?.questions?.length) {
-          setQuestions(asked.questions);
+        if (closing?.take || closing?.questions?.length) {
+          setTake(closing.take ?? "");
+          setQuestions(closing.questions ?? []);
           setLoading(false);
           return;
         }
@@ -262,9 +266,23 @@ export default function ImpressionSheet({
             <img src={gameImage} alt="" className="header-art mb-5 w-full rounded-xl" />
           )}
 
-          {questions.length > 0 ? (
+          {take || questions.length > 0 ? (
             <div className="space-y-3">
-              <p className="text-sm text-gray-400">{s.sheet.questionsLede}</p>
+              {take && (
+                <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-3">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-xs text-indigo-300/70">
+                    <CurioMark className="h-3.5 w-3.5" />
+                    {s.sheet.takeLede}
+                  </p>
+                  <p className="text-sm leading-relaxed text-gray-200">
+                    <RichText text={take} />
+                  </p>
+                </div>
+              )}
+
+              {questions.length > 0 && (
+                <p className="pt-1 text-sm text-gray-400">{s.sheet.questionsLede}</p>
+              )}
 
               {questions.map((question) => (
                 <div key={question} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3">
