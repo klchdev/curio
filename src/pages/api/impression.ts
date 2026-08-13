@@ -8,6 +8,7 @@ import {
   getStoredPlaytime,
 } from "../../lib/queries";
 import { getRecentPlaytime, parseAppId, getStoreAppDetails } from "../../lib/steam";
+import { queueEntryAnalysis } from "../../lib/entry-analysis";
 import { SHEET_RULES, isValidTier, isValidVerdict, type ImpressionMode } from "../../lib/vocab";
 import { db } from "../../db";
 import { users, slots, games } from "../../db/schema";
@@ -117,5 +118,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     previous,
   });
 
-  return "error" in result ? json(result, 400) : json({ ok: true });
+  if ("error" in result) return json(result, 400);
+
+  // Разбор текста идёт в фоне: ответ на сохранение он задерживать не должен
+  if (result.entryId) queueEntryAnalysis(result.entryId);
+
+  return json({ ok: true });
 };

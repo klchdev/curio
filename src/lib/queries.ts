@@ -1267,7 +1267,7 @@ export interface ImpressionInput {
  * на Шаге 2, когда slot_reviews / game_reviews / slot_notes сольются в одну
  * модель, поменяется только её тело — вызывающий код останется прежним.
  */
-type SaveResult = { ok: true } | { error: string };
+type SaveResult = { ok: true; entryId?: number } | { error: string };
 
 /**
  * Единственная точка записи мнения об игре — теперь прямо в единую модель.
@@ -1331,7 +1331,7 @@ export async function saveImpression(
       playtimeMinutes: input.currentPlaytime,
     });
 
-    await addEntry(recordId, {
+    const entryId = await addEntry(recordId, {
       kind: "first",
       text: note,
       playtimeMinutes: input.currentPlaytime,
@@ -1339,7 +1339,7 @@ export async function saveImpression(
       rating: input.rating ?? 3,
     });
 
-    return { ok: true };
+    return { ok: true, entryId };
   }
 
   const gameId = input.gameId;
@@ -1370,7 +1370,7 @@ export async function saveImpression(
       .limit(1)
       .then((rows) => rows[0]);
 
-    await addEntry(recordId, {
+    const entryId = await addEntry(recordId, {
       kind: existing ? "update" : "first",
       text: note,
       playtimeMinutes: input.currentPlaytime,
@@ -1378,6 +1378,8 @@ export async function saveImpression(
       rating: input.rating,
       tier: input.tier,
     });
+
+    return { ok: true, entryId };
   }
 
   return { ok: true };
@@ -1464,7 +1466,7 @@ async function addEntry(
     /** Когда запись появилась на самом деле: у перенесённых из Steam это не «сейчас». */
     at?: Date;
   }
-): Promise<void> {
+): Promise<number> {
   const previous = await db
     .select({ total: gameEntries.playtimeTotalMinutes })
     .from(gameEntries)
@@ -1473,17 +1475,22 @@ async function addEntry(
     .limit(1)
     .then((rows) => rows[0]);
 
-  await db.insert(gameEntries).values({
-    recordId,
-    kind: data.kind,
-    text: data.text,
-    playtimeTotalMinutes: data.playtimeMinutes,
-    playtimeDeltaMinutes: Math.max(0, data.playtimeMinutes - (previous?.total ?? 0)),
-    verdictAt: data.verdict ?? null,
-    ratingAt: data.rating ?? null,
-    tierAt: data.tier ?? null,
-    createdAt: data.at ?? new Date(),
-  });
+  const [created] = await db
+    .insert(gameEntries)
+    .values({
+      recordId,
+      kind: data.kind,
+      text: data.text,
+      playtimeTotalMinutes: data.playtimeMinutes,
+      playtimeDeltaMinutes: Math.max(0, data.playtimeMinutes - (previous?.total ?? 0)),
+      verdictAt: data.verdict ?? null,
+      ratingAt: data.rating ?? null,
+      tierAt: data.tier ?? null,
+      createdAt: data.at ?? new Date(),
+    })
+    .returning({ id: gameEntries.id });
+
+  return created!.id;
 }
 
 /**

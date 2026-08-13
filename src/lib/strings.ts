@@ -40,6 +40,8 @@ const RU = {
     diaryEmpty: "Пока пусто. Возьми первый контракт!",
     diaryThread: (n: number) => `${n} ${plural(n, "запись", "записи", "записей")} по игре`,
     diarySince: "мнение с самого начала",
+    mentionedIn: (n: number) =>
+      `Упоминается в ${n} ${plural(n, "записи", "записях", "записях")} о других играх`,
     entryFirst: "первое впечатление",
     entryUpdate: "дополнение",
     entryVerdict: "смена вердикта",
@@ -339,6 +341,8 @@ const EN: Dict = {
     diaryEmpty: "Empty so far. Take your first contract!",
     diaryThread: (n: number) => `${n} ${n === 1 ? "entry" : "entries"} on this game`,
     diarySince: "the whole arc of your opinion",
+    mentionedIn: (n: number) =>
+      `Mentioned in ${n} ${n === 1 ? "entry" : "entries"} about other games`,
     entryFirst: "first impression",
     entryUpdate: "follow-up",
     entryVerdict: "verdict change",

@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { getHistory } from "../lib/queries";
+import { getDiaryMentions } from "../lib/entry-analysis";
 import {
   formatPlaytime,
   verdictLabel,
@@ -23,7 +24,10 @@ if (!user) return Astro.redirect("/");
  * как менялось мнение — приходилось собирать глазами. Внутри треда записи
  * идут снизу вверх по времени: сверху первое впечатление, дальше правки.
  */
-const timeline = await getHistory(user.id);
+const [timeline, mentions] = await Promise.all([
+  getHistory(user.id),
+  getDiaryMentions(user.id),
+]);
 
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
@@ -93,6 +97,70 @@ const grouped = [...threads.values()]
   }))
   .sort((a, b) => b.touchedAt - a.touchedAt);
 
+/*
+ * Упоминания живут отдельно от текста записи: в базе лежат дословный кусок и
+ * его позиция, а сам текст не трогается никогда. Здесь разметка только
+ * накладывается на отрисовку — и накладывается лишь тогда, когда кусок на
+ * своём месте совпал посимвольно.
+ */
+type Mention = (typeof mentions)[number];
+
+const mentionsByEntry = new Map<number, Mention[]>();
+/** Обратная сторона: где эту игру вспоминали, говоря о других. */
+const mentionsOfGame = new Map<number, Mention[]>();
+
+for (const mention of mentions) {
+  const inEntry = mentionsByEntry.get(mention.entryId);
+  if (inEntry) inEntry.push(mention);
+  else mentionsByEntry.set(mention.entryId, [mention]);
+
+  if (mention.targetGameId !== null && mention.targetGameId !== mention.sourceGameId) {
+    const ofGame = mentionsOfGame.get(mention.targetGameId);
+    if (ofGame) ofGame.push(mention);
+    else mentionsOfGame.set(mention.targetGameId, [mention]);
+  }
+}
+
+/** У игр с собственным тредом ссылка ведёт в дневник, у остальных — в магазин. */
+const threadIds = new Set(grouped.map((thread) => thread.gameId));
+
+function linkFor(gameId: number | null, steamAppId: number | null): string | null {
+  if (gameId === null) return null;
+  if (threadIds.has(gameId)) return `#game-${gameId}`;
+  return steamAppId ? `https://store.steampowered.com/app/${steamAppId}` : null;
+}
+
+interface Segment {
+  text: string;
+  href: string | null;
+  title: string | null;
+}
+
+function splitNote(note: string, found: Mention[]): Segment[] {
+  const ordered = [...found].sort((a, b) => a.startOffset - b.startOffset);
+  const segments: Segment[] = [];
+  let cursor = 0;
+
+  for (const mention of ordered) {
+    const start = mention.startOffset;
+    const end = start + mention.surface.length;
+    // Разметка старше текста быть не может, но проверка дешевле съехавшей подсветки
+    if (start < cursor || note.slice(start, end) !== mention.surface) continue;
+
+    const href = linkFor(mention.targetGameId, mention.targetSteamAppId);
+    if (!href) continue;
+
+    if (start > cursor) segments.push({ text: note.slice(cursor, start), href: null, title: null });
+    segments.push({ text: mention.surface, href, title: mention.targetTitle });
+    cursor = end;
+  }
+
+  if (cursor < note.length) {
+    segments.push({ text: note.slice(cursor), href: null, title: null });
+  }
+  return segments;
+}
+
 const KIND_LABEL: Record<string, string> = {
   first: s.pages.entryFirst,
   update: s.pages.entryUpdate,
@@ -123,7 +191,10 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
   ) : (
     <div class="space-y-6">
       {grouped.map((thread) => (
-        <section class="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/30">
+        <section
+          id={`game-${thread.gameId}`}
+          class="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/30 scroll-mt-6"
+        >
           <header class="flex flex-wrap items-center gap-4 border-b border-gray-800/80 bg-gray-900/40 p-4">
             {thread.image && (
               <img src={thread.image} alt="" class="header-art w-28 shrink-0 rounded-lg" />
@@ -190,6 +261,26 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
             />
           </header>
 
+          {mentionsOfGame.has(thread.gameId) && (
+            <div class="border-b border-gray-800/60 px-4 py-2.5 text-xs text-gray-500">
+              {s.pages.mentionedIn(mentionsOfGame.get(thread.gameId)!.length)}:{" "}
+              {[
+                ...new Map(
+                  mentionsOfGame
+                    .get(thread.gameId)!
+                    .map((mention) => [mention.sourceGameId, mention.sourceTitle])
+                ),
+              ].map(([gameId, title], index) => (
+                <>
+                  {index > 0 && <span class="text-gray-700"> · </span>}
+                  <a href={`#game-${gameId}`} class="text-gray-400 transition hover:text-sky-300">
+                    {title}
+                  </a>
+                </>
+              ))}
+            </div>
+          )}
+
           <ol class="relative m-4 ml-7 space-y-4 border-l border-gray-800 pl-5">
             {thread.items.map((entry) => (
               <li class="relative">
@@ -242,7 +333,19 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
                     </div>
 
                     <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300">
-                      {entry.note}
+                      {splitNote(entry.note, mentionsByEntry.get(entry.entryId) ?? []).map((part) =>
+                        part.href ? (
+                          <a
+                            href={part.href}
+                            title={part.title}
+                            class="text-sky-300/90 underline decoration-sky-500/40 underline-offset-2 transition hover:text-sky-200"
+                          >
+                            {part.text}
+                          </a>
+                        ) : (
+                          part.text
+                        )
+                      )}
                     </p>
 
                     <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
