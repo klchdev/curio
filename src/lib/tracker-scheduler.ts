@@ -40,15 +40,47 @@ function report(job: TrackerJob, result: PollResult): void {
   }
 }
 
+interface JobState {
+  runs: number;
+  lastRunAt: string | null;
+  /** Последний раз, когда опрос что-то увидел, а не просто отработал вхолостую. */
+  lastChangeAt: string | null;
+  lastError: string | null;
+}
+
+/**
+ * Следы работы опросов.
+ *
+ * При простое опрос молчит — играть могут раз в неделю, и лог, полный «ничего
+ * не изменилось», бесполезен. Но тогда остановившийся таймер выглядит ровно
+ * как тихий, и заметить поломку можно только по пустым графикам через месяц.
+ * Счётчик прогонов отвечает на этот вопрос сразу.
+ */
+const state: Record<TrackerJob, JobState> = {
+  presence: { runs: 0, lastRunAt: null, lastChangeAt: null, lastError: null },
+  playtime: { runs: 0, lastRunAt: null, lastChangeAt: null, lastError: null },
+};
+
+export function trackerState(): Record<TrackerJob, JobState> {
+  return state;
+}
+
 export async function runJob(job: TrackerJob): Promise<PollResult | null> {
   if (inFlight.has(job)) return null;
   inFlight.add(job);
+  const at = new Date();
   try {
-    const at = new Date();
     const result = job === "presence" ? await pollPresence(at) : await pollPlaytime(at);
+    state[job].runs += 1;
+    state[job].lastRunAt = at.toISOString();
+    state[job].lastError = result.errors[0] ?? null;
+    if (result.changed > 0) state[job].lastChangeAt = at.toISOString();
     report(job, result);
     return result;
   } catch (error) {
+    state[job].runs += 1;
+    state[job].lastRunAt = at.toISOString();
+    state[job].lastError = (error as Error).message;
     console.error(`[tracker:${job}] упал:`, (error as Error).message);
     return null;
   } finally {

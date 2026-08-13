@@ -2,7 +2,13 @@ import type { APIRoute } from "astro";
 import { timingSafeEqual } from "node:crypto";
 import { CRON_SECRET } from "astro:env/server";
 import { closeStaleSessions } from "../../../lib/playtime-tracker";
-import { runJob, startTracker, trackerStarted, type TrackerJob } from "../../../lib/tracker-scheduler";
+import {
+  runJob,
+  startTracker,
+  trackerStarted,
+  trackerState,
+  type TrackerJob,
+} from "../../../lib/tracker-scheduler";
 
 /**
  * Внешний вход в трекер.
@@ -43,7 +49,8 @@ const handle: APIRoute = async ({ request, url }) => {
 
   const requested = url.searchParams.get("job");
   if (!requested) {
-    return json({ scheduler: wasRunning ? "already running" : "started" });
+    // Без job ручка отвечает за здоровье: сколько прогонов было и когда
+    return json({ scheduler: wasRunning ? "already running" : "started", jobs: trackerState() });
   }
 
   const jobs = requested === "all" ? JOBS : JOBS.filter((job) => job === requested);

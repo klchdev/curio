@@ -192,6 +192,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
 ---
 
 <Layout title={s.pages.diary}>
+  <span class="hidden" data-advisor-label={s.pages.entryAdvisor} id="advisor-label"></span>
   <div class="mb-8 flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-bold">{s.pages.diary}</h1>
@@ -275,6 +276,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
               class="take-ask cursor-pointer rounded-lg border border-indigo-900/60 px-3 py-1.5 text-xs text-indigo-300/80 transition hover:border-indigo-700 hover:text-indigo-200 disabled:opacity-40"
               data-game={thread.gameId}
               data-busy={s.pages.askCurioBusy}
+              data-failed={s.pages.askCurioFailed}
             >
               {s.pages.askCurio}
             </button>
@@ -540,19 +542,72 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     input.focus();
   }
 
+  /** Карточка вердикта — по виду та же запись ленты, что и остальные. */
+  function takeCard(text: string): HTMLElement {
+    const item = document.createElement("li");
+    item.className = "relative";
+    item.innerHTML = `
+      <span class="absolute top-2 -left-[27px] h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
+      <div>
+        <div class="flex flex-wrap items-baseline gap-2">
+          <span class="rounded bg-indigo-950/60 px-2 py-0.5 text-xs text-indigo-300/80"></span>
+        </div>
+        <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300"></p>
+      </div>`;
+
+    const label = item.querySelector("span.rounded") as HTMLElement;
+    label.textContent = document.getElementById("advisor-label")?.dataset.advisorLabel ?? "";
+    // Текст ставим свойством, а не разметкой: он пришёл от модели
+    (item.querySelector("p") as HTMLElement).textContent = text;
+    return item;
+  }
+
   document.addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
 
     const ask = target.closest(".take-ask") as HTMLButtonElement | null;
     if (ask) {
+      const idle = ask.textContent ?? "";
+      const busy = ask.dataset.busy ?? "…";
       ask.disabled = true;
-      ask.textContent = ask.dataset.busy ?? "…";
-      await fetch("/api/entry-closing", {
+
+      /*
+       * Вердикт думает полминуты и дольше. Без счётчика «читает» и «повисло»
+       * с той стороны экрана выглядят одинаково, а это тот случай, когда
+       * человек уже нажал и ему остаётся только верить.
+       */
+      let seconds = 0;
+      ask.textContent = `${busy} 0 с`;
+      const ticking = setInterval(() => {
+        seconds += 1;
+        ask.textContent = `${busy} ${seconds} с`;
+      }, 1000);
+
+      const data = await fetch("/api/entry-closing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gameId: Number(ask.dataset.game) }),
-      }).catch(() => {});
-      window.location.reload();
+        body: JSON.stringify({ gameId: Number(ask.dataset.game), only: "take" }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null);
+
+      clearInterval(ticking);
+      ask.disabled = false;
+      ask.textContent = idle;
+
+      // Показываем прямо здесь: вердикт лёг в конец треда, и перезагрузка
+      // отправила бы человека искать его глазами по странице
+      if (data?.take) {
+        const thread = ask.closest("section");
+        const feed = thread?.querySelector("ol");
+        if (feed) {
+          feed.append(takeCard(data.take));
+          feed.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      } else {
+        ask.textContent = ask.dataset.failed ?? idle;
+        setTimeout(() => (ask.textContent = idle), 4000);
+      }
       return;
     }
 

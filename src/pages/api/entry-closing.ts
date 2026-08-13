@@ -37,6 +37,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const gameId = Number(body.gameId);
   if (!Number.isInteger(gameId)) return json({ error: "Не указана игра" }, 400);
 
+  /*
+   * Из дневника спрашивают только вердикт: вопросы имеют смысл сразу после
+   * того, как человек дописал отзыв, а не когда он перечитывает старый тред.
+   * Генерировать их «на всякий случай» — платить за то, что никто не увидит.
+   */
+  const takeOnly = body.only === "take";
+
   const record = await db
     .select({
       id: gameRecords.id,
@@ -156,10 +163,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return "";
     }),
 
-    generateQuestions(shared, GEMINI_KEYS).catch((err) => {
-      console.error("[entry-closing:questions]", err);
-      return [] as string[];
-    }),
+    takeOnly
+      ? Promise.resolve([] as string[])
+      : generateQuestions(shared, GEMINI_KEYS).catch((err) => {
+          console.error("[entry-closing:questions]", err);
+          return [] as string[];
+        }),
   ]);
 
   // Вердикт остаётся в ленте: через полгода он ценнее, чем сейчас
