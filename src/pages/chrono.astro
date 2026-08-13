@@ -141,24 +141,36 @@ const sinceLabel = data.since
           }
         </div>
 
-        <section>
-          <h2 class="text-sm font-semibold text-gray-300">{s.chrono.heatmap}</h2>
-          <p class="mb-3 text-xs text-gray-600">{s.chrono.heatmapHint}</p>
-          <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
-            <div data-heatmap class="inline-block" />
-          </div>
-        </section>
+        {
+          /*
+           * Карта и топ игр стоят рядом: обе отвечают на «как выглядит игра
+           * вообще», и порознь каждая оставляла половину широкой строки
+           * пустой. Дни и сессии идут во всю ширину — им нужна длина оси.
+           */
+        }
+        <div class="grid items-start gap-6 lg:grid-cols-2">
+          <section>
+            <h2 class="text-sm font-semibold text-gray-300">{s.chrono.heatmap}</h2>
+            <p class="mb-3 text-xs text-gray-600">{s.chrono.heatmapHint}</p>
+            <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
+              <div data-heatmap class="w-full min-w-[22rem]" />
+            </div>
+          </section>
+
+          <section>
+            <h2 class="text-sm font-semibold text-gray-300">{s.chrono.top}</h2>
+            <p class="mb-3 text-xs text-gray-600">&nbsp;</p>
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
+              <div data-top class="space-y-2" />
+            </div>
+          </section>
+        </div>
 
         <section>
           <h2 class="mb-3 text-sm font-semibold text-gray-300">{s.chrono.daily}</h2>
           <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-900/30 p-4">
             <div data-daily class="flex h-44 items-stretch gap-[2px]" />
           </div>
-        </section>
-
-        <section>
-          <h2 class="mb-3 text-sm font-semibold text-gray-300">{s.chrono.top}</h2>
-          <div data-top class="space-y-2" />
         </section>
 
         <section>
@@ -431,7 +443,9 @@ const sinceLabel = data.since
        */
       const table = document.createElement("div");
       table.className = "grid gap-[2px]";
-      table.style.gridTemplateColumns = "2rem repeat(24, minmax(1rem, 1fr))";
+      // Ячейки тянутся по ширине карточки: фиксированный размер оставлял
+      // половину строки пустой, а на узком экране вылезал за край
+      table.style.gridTemplateColumns = "1.75rem repeat(24, minmax(0, 1fr))";
 
       table.appendChild(cell(""));
       for (let hour = 0; hour < 24; hour += 1) {

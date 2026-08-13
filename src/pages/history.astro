@@ -91,11 +91,28 @@ for (const item of timeline) {
 }
 
 const grouped = [...threads.values()]
-  .map((thread) => ({
-    ...thread,
+  .map((thread) => {
     // Внутри треда — от старого к новому: так читается развитие мнения
-    items: [...thread.items].reverse(),
-  }))
+    const items = [...thread.items].reverse();
+
+    /*
+     * Готовый вердикт переспрашивать незачем, если с тех пор человек ничего
+     * не дописал: ответ будет тот же, а стоить будет как новый.
+     */
+    const own = items.filter((item) => item.type === "reviewed" && item.kind !== "advisor");
+    const take = [...items]
+      .reverse()
+      .find((item) => item.type === "reviewed" && item.kind === "advisor");
+    const lastOwn = own.at(-1);
+
+    return {
+      ...thread,
+      items,
+      takeText: take?.type === "reviewed" ? take.note : null,
+      takeFresh:
+        !!take && !!lastOwn && new Date(take.date).getTime() >= new Date(lastOwn.date).getTime(),
+    };
+  })
   .sort((a, b) => b.touchedAt - a.touchedAt);
 
 /*
@@ -192,7 +209,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
 ---
 
 <Layout title={s.pages.diary}>
-  <span class="hidden" data-advisor-label={s.pages.entryAdvisor} id="advisor-label"></span>
+  <span class="hidden" id="take-labels" data-lede={s.pages.askCurioLede} data-close={s.pages.askCurioClose}></span>
   <div class="mb-8 flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-bold">{s.pages.diary}</h1>
@@ -275,8 +292,10 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
               type="button"
               class="take-ask cursor-pointer rounded-lg border border-indigo-900/60 px-3 py-1.5 text-xs text-indigo-300/80 transition hover:border-indigo-700 hover:text-indigo-200 disabled:opacity-40"
               data-game={thread.gameId}
+              data-title={thread.title}
               data-busy={s.pages.askCurioBusy}
               data-failed={s.pages.askCurioFailed}
+              data-take={thread.takeFresh ? thread.takeText : undefined}
             >
               {s.pages.askCurio}
             </button>
@@ -542,24 +561,58 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     input.focus();
   }
 
-  /** Карточка вердикта — по виду та же запись ленты, что и остальные. */
-  function takeCard(text: string): HTMLElement {
-    const item = document.createElement("li");
-    item.className = "relative";
-    item.innerHTML = `
-      <span class="absolute top-2 -left-[27px] h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
-      <div>
-        <div class="flex flex-wrap items-baseline gap-2">
-          <span class="rounded bg-indigo-950/60 px-2 py-0.5 text-xs text-indigo-300/80"></span>
-        </div>
-        <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300"></p>
-      </div>`;
+  /**
+   * Вердикт показывается модалкой, а не вставкой в ленту: в треде он лежит
+   * как запись и никуда не денется, но читать его человек идёт сейчас, и
+   * искать его глазами по длинной странице ему незачем.
+   */
+  function showTake(title: string, text: string, failed = false) {
+    const overlay = document.createElement("div");
+    overlay.className =
+      "fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6";
 
-    const label = item.querySelector("span.rounded") as HTMLElement;
-    label.textContent = document.getElementById("advisor-label")?.dataset.advisorLabel ?? "";
+    const card = document.createElement("div");
+    card.className =
+      "max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gray-800 bg-gray-950 p-6 sm:rounded-2xl";
+
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "text-xs tracking-[0.15em] text-gray-500 uppercase";
+    eyebrow.textContent = document.getElementById("take-labels")?.dataset.lede ?? "";
+
+    const heading = document.createElement("h2");
+    heading.className = "mt-1 mb-4 text-xl font-bold";
+    heading.textContent = title;
+
+    const body = document.createElement("p");
+    body.className = failed
+      ? "text-sm leading-relaxed whitespace-pre-line text-rose-300/80"
+      : "text-sm leading-relaxed whitespace-pre-line text-gray-200";
     // Текст ставим свойством, а не разметкой: он пришёл от модели
-    (item.querySelector("p") as HTMLElement).textContent = text;
-    return item;
+    body.textContent = text;
+
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className =
+      "mt-5 w-full rounded-lg border border-gray-800 py-2 text-sm text-gray-400 transition hover:bg-gray-900";
+    close.textContent = document.getElementById("take-labels")?.dataset.close ?? "";
+
+    const dismiss = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss();
+    };
+
+    close.addEventListener("click", dismiss);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) dismiss();
+    });
+    document.addEventListener("keydown", onKey);
+
+    card.append(eyebrow, heading, body, close);
+    overlay.append(card);
+    document.body.append(overlay);
   }
 
   document.addEventListener("click", async (event) => {
@@ -567,6 +620,15 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
 
     const ask = target.closest(".take-ask") as HTMLButtonElement | null;
     if (ask) {
+      const title = ask.dataset.title ?? "";
+
+      // Готовый вердикт, к которому человек с тех пор ничего не дописал,
+      // переспрашивать незачем: ответ будет тот же, а стоить будет как новый
+      if (ask.dataset.take) {
+        showTake(title, ask.dataset.take);
+        return;
+      }
+
       const idle = ask.textContent ?? "";
       const busy = ask.dataset.busy ?? "…";
       ask.disabled = true;
@@ -595,18 +657,11 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
       ask.disabled = false;
       ask.textContent = idle;
 
-      // Показываем прямо здесь: вердикт лёг в конец треда, и перезагрузка
-      // отправила бы человека искать его глазами по странице
       if (data?.take) {
-        const thread = ask.closest("section");
-        const feed = thread?.querySelector("ol");
-        if (feed) {
-          feed.append(takeCard(data.take));
-          feed.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
+        ask.dataset.take = data.take;
+        showTake(title, data.take);
       } else {
-        ask.textContent = ask.dataset.failed ?? idle;
-        setTimeout(() => (ask.textContent = idle), 4000);
+        showTake(title, data?.error ?? (ask.dataset.failed ?? ""), true);
       }
       return;
     }

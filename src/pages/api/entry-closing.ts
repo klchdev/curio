@@ -14,6 +14,9 @@ import { generateQuestions } from "../../lib/entry-questions";
 import { generateTake } from "../../lib/curio-take";
 import { saveCurioTake } from "../../lib/queries";
 import { GEMINI_KEYS } from "../../lib/gemini-env";
+import { errorCode } from "../../lib/gemini";
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -32,6 +35,8 @@ const json = (body: unknown, status = 200) =>
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
+
+  const s = t(localeFrom(cookies, request));
 
   const body = await request.json().catch(() => ({}));
   const gameId = Number(body.gameId);
@@ -144,6 +149,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     neighbours,
   };
 
+  /*
+   * Молчание — худший ответ: пустой вердикт и упёршийся лимит выглядят из
+   * интерфейса одинаково, и человек остаётся гадать, сломалось оно или ему
+   * просто нечего сказать.
+   */
+  let failure: string | null = null;
+
   const [take, questions] = await Promise.all([
     generateTake(
       {
@@ -160,6 +172,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       GEMINI_KEYS
     ).catch((err) => {
       console.error("[entry-closing:take]", err);
+      const code = errorCode(err);
+      failure =
+        code === 429
+          ? s.errors.modelQuota
+          : code === 503 || code === 500 || code === 504
+            ? s.errors.modelBusy
+            : s.errors.generic;
       return "";
     }),
 
@@ -174,5 +193,5 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   // Вердикт остаётся в ленте: через полгода он ценнее, чем сейчас
   if (take) await saveCurioTake(userId, gameId, take);
 
-  return json({ take, questions });
+  return json({ take, questions, error: failure });
 };
