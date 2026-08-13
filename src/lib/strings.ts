@@ -45,6 +45,7 @@ const RU = {
     entryFirst: "первое впечатление",
     entryUpdate: "дополнение",
     entryVerdict: "смена вердикта",
+    entryFinal: "итог",
     entryAdvisor: "совет ИИ",
     fromSteam: "из Steam",
     shame: "стена стыда",
@@ -294,6 +295,39 @@ const RU = {
     nothingToSave: "Нечего сохранять",
   },
 
+  chrono: {
+    title: "Хронология",
+    lede: "Когда и сколько ты играешь на самом деле",
+    nav: "Хронология",
+    empty:
+      "История пишется с нуля: Steam своей не отдаёт. Поиграй немного — первые часы появятся здесь.",
+    since: (date: string) => `Трекер пишет с ${date}`,
+    silent: "Трекер молчит больше суток — проверь, что опрос запущен",
+    // Строкой, а не функцией: подпись уезжает в браузер через JSON, а функции его не переживают
+    playingNow: "Сейчас в игре",
+
+    totalHours: "Часов за период",
+    sessions: "Сессий",
+    average: "Средняя сессия",
+    longest: "Самая долгая",
+    streak: "Дней подряд",
+    nights: "Ночных часов",
+
+    heatmap: "Когда ты играешь",
+    heatmapHint: "Час дня по вертикали, день недели по горизонтали — по твоему часовому поясу",
+    daily: "По дням",
+    top: "Во что",
+    recent: "Последние сессии",
+    untracked: "Без сессии",
+    untrackedHint:
+      "Минуты, которые Steam досчитал, когда опрос не видел игрока: закрытый профиль, невидимка или лежавшее приложение",
+    ongoing: "идёт",
+    range30: "30 дней",
+    range90: "90 дней",
+    rangeAll: "Всё время",
+    weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+  },
+
   errors: {
     generic: "Не получилось",
     network: "Сеть не отвечает",
@@ -346,6 +380,7 @@ const EN: Dict = {
     entryFirst: "first impression",
     entryUpdate: "follow-up",
     entryVerdict: "verdict change",
+    entryFinal: "final word",
     entryAdvisor: "AI advice",
     fromSteam: "from Steam",
     shame: "wall of shame",
@@ -591,6 +626,38 @@ const EN: Dict = {
     minChars: (n: number) => `The note needs at least ${n} characters`,
     pickVerdict: "Pick a verdict",
     nothingToSave: "Nothing to save",
+  },
+
+  chrono: {
+    title: "Chronology",
+    lede: "When and how much you actually play",
+    nav: "Chronology",
+    empty:
+      "The history starts from scratch — Steam doesn't hand its own over. Play a bit and the first hours will show up here.",
+    since: (date: string) => `Tracking since ${date}`,
+    silent: "The tracker has been quiet for over a day — check that polling is running",
+    playingNow: "Playing now",
+
+    totalHours: "Hours in range",
+    sessions: "Sessions",
+    average: "Average session",
+    longest: "Longest",
+    streak: "Day streak",
+    nights: "Night hours",
+
+    heatmap: "When you play",
+    heatmapHint: "Hour of day down, weekday across — in your own timezone",
+    daily: "By day",
+    top: "What you played",
+    recent: "Recent sessions",
+    untracked: "Outside sessions",
+    untrackedHint:
+      "Minutes Steam counted while polling couldn't see the player: private profile, invisible mode, or the app was down",
+    ongoing: "ongoing",
+    range30: "30 days",
+    range90: "90 days",
+    rangeAll: "All time",
+    weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   },
 
   errors: {

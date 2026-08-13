@@ -168,6 +168,14 @@ const KIND_LABEL: Record<string, string> = {
   advisor: s.pages.entryAdvisor,
 };
 
+/** Вердикты, которыми тред закрывается: такая запись — итог, а не правка. */
+const CLOSING_VERDICTS = new Set(["finished", "dropped", "endless"]);
+
+function entryLabel(kind: string, verdict: string | null): string {
+  if (kind === "verdict" && verdict && CLOSING_VERDICTS.has(verdict)) return s.pages.entryFinal;
+  return KIND_LABEL[kind] ?? kind;
+}
+
 const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
   day: "numeric",
   month: "short",
@@ -314,7 +322,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
                   <div>
                     <div class="flex flex-wrap items-baseline gap-2">
                       <span class="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-500">
-                        {KIND_LABEL[entry.kind] ?? entry.kind}
+                        {entryLabel(entry.kind, entry.verdict)}
                       </span>
                       <span class="text-xs text-gray-600">
                         {formatPlaytime(entry.playtimeMinutes)}

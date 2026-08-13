@@ -1371,8 +1371,16 @@ export async function saveImpression(
       .limit(1)
       .then((rows) => rows[0]);
 
+    /*
+     * Запись, меняющая вердикт, — не дополнение: это поворотная точка треда.
+     * Раньше вид зависел только от того, первая она или нет, и «прошёл» после
+     * пяти дополнений выглядел шестым дополнением.
+     */
+    const verdictChanged =
+      !!input.verdict && input.verdict !== (input.previous?.verdict ?? null);
+
     const entryId = await addEntry(recordId, {
-      kind: existing ? "update" : "first",
+      kind: !existing ? "first" : verdictChanged ? "verdict" : "update",
       text: note,
       playtimeMinutes: input.currentPlaytime,
       verdict: input.verdict,
