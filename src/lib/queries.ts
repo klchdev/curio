@@ -9,6 +9,8 @@ import {
   recommendationRuns,
   recommendations,
   deepDives,
+  tags,
+  entryTags,
 } from "../db/schema";
 import { eq, and, or, sql, ne, lte, desc, asc, gt, lt, inArray } from "drizzle-orm";
 import {
@@ -720,6 +722,39 @@ export interface ReviewCorpusItem {
   hours: number;
   isDemo: boolean;
   note: string | null;
+  /** Что разбор вынес из записей об этой игре: «душный гринд», «живые персонажи». */
+  labels: string[];
+}
+
+/** Свойство, за которое человек хвалит или ругает игры, с охватом по играм. */
+export interface TasteTag {
+  label: string;
+  kind: string;
+  games: number;
+}
+
+/**
+ * Профиль вкуса тегами.
+ *
+ * Тег, встреченный в одной игре, — случайность; встреченный в семи — свойство
+ * вкуса. Поэтому охват считается по играм, а не по записям: пять записей об
+ * одной игре не делают претензию системной.
+ */
+export async function getTasteProfile(userId: number, limit = 25): Promise<TasteTag[]> {
+  return db
+    .select({
+      label: tags.label,
+      kind: tags.kind,
+      games: sql<number>`count(distinct ${gameRecords.gameId})::int`,
+    })
+    .from(tags)
+    .innerJoin(entryTags, eq(entryTags.tagId, tags.id))
+    .innerJoin(gameEntries, eq(gameEntries.id, entryTags.entryId))
+    .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))
+    .where(eq(tags.userId, userId))
+    .groupBy(tags.id, tags.label, tags.kind)
+    .orderBy(desc(sql`count(distinct ${gameRecords.gameId})`))
+    .limit(limit);
 }
 
 export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[]> {
@@ -737,6 +772,12 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
     .innerJoin(games, eq(games.id, gameRecords.gameId))
     .where(eq(gameRecords.userId, userId));
 
+  /*
+   * Записи вида «совет ИИ» в корпус не идут. Это слова Кьюрио, а не игрока:
+   * с тех пор как его вердикты сохраняются в ленту, модель, читая корпус,
+   * принимала бы собственные суждения за вкус человека и укреплялась в них
+   * с каждым прогоном.
+   */
   const entries = await db
     .select({
       recordId: gameEntries.recordId,
@@ -746,8 +787,24 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
     })
     .from(gameEntries)
     .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))
-    .where(eq(gameRecords.userId, userId))
+    .where(and(eq(gameRecords.userId, userId), ne(gameEntries.kind, "advisor")))
     .orderBy(gameEntries.createdAt);
+
+  const labelRows = await db
+    .select({ recordId: gameEntries.recordId, label: tags.label, kind: tags.kind })
+    .from(entryTags)
+    .innerJoin(tags, eq(tags.id, entryTags.tagId))
+    .innerJoin(gameEntries, eq(gameEntries.id, entryTags.entryId))
+    .innerJoin(gameRecords, eq(gameRecords.id, gameEntries.recordId))
+    .where(eq(gameRecords.userId, userId));
+
+  const labelsByRecord = new Map<number, Set<string>>();
+  for (const row of labelRows) {
+    const mark = `${row.kind === "praise" ? "+" : "−"}${row.label}`;
+    const set = labelsByRecord.get(row.recordId);
+    if (set) set.add(mark);
+    else labelsByRecord.set(row.recordId, new Set([mark]));
+  }
 
   const byRecord = new Map<number, typeof entries>();
   for (const entry of entries) {
@@ -763,7 +820,7 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
      * мнение менялось.
      */
     const note = timeline
-      .map((entry, index) => {
+      .map((entry) => {
         const hours = Math.round((entry.playtimeMinutes / 60) * 10) / 10;
         return timeline.length > 1 ? `[${hours}ч] ${entry.text}` : entry.text;
       })
@@ -777,6 +834,7 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
       hours: Math.round((record.minutes / 60) * 10) / 10,
       isDemo: record.isDemo,
       note: note || null,
+      labels: [...(labelsByRecord.get(record.recordId) ?? [])],
     };
   });
 }

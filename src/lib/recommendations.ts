@@ -1,6 +1,6 @@
 import { Type } from "@google/genai";
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
-import type { CandidateGame, ReviewCorpusItem } from "./queries";
+import type { CandidateGame, ReviewCorpusItem, TasteTag } from "./queries";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
 import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
 
@@ -119,6 +119,20 @@ const RESPONSE_SCHEMA = {
   propertyOrdering: ["profile", "picks", "abandoned"],
 };
 
+/**
+ * Профиль тегами — выжимка из тех же отзывов, только уже сведённая.
+ *
+ * Модель способна вывести это и сама, но выводит каждый раз заново и каждый
+ * раз чуть иначе. Готовая сводка держит её на одних и тех же словах и
+ * показывает охват: претензия из семи игр весит иначе, чем из одной.
+ */
+function formatProfile(profile: TasteTag[]): string {
+  if (profile.length === 0) return "Тегов пока нет — суди по текстам отзывов.";
+  return profile
+    .map((tag) => `- ${tag.kind === "praise" ? "хвалит" : "ругает"}: ${tag.label} (игр: ${tag.games})`)
+    .join("\n");
+}
+
 function formatReviews(reviews: ReviewCorpusItem[]): string {
   const lines = reviews.map((review) => {
     const meta = [
@@ -131,7 +145,8 @@ function formatReviews(reviews: ReviewCorpusItem[]): string {
       .filter(Boolean)
       .join(", ");
     const note = (review.note ?? "").replace(/\s*\n+\s*/g, " | ").trim();
-    return `- ${review.title} (${meta}): ${note || "без заметки"}`;
+    const labels = review.labels.length ? ` [${review.labels.join(", ")}]` : "";
+    return `- ${review.title} (${meta})${labels}: ${note || "без заметки"}`;
   });
   return lines.join("\n");
 }
@@ -182,13 +197,18 @@ export async function generateRecommendations(
   reviews: ReviewCorpusItem[],
   candidates: CandidateGame[],
   abandonedGames: CandidateGame[],
+  profile: TasteTag[],
   keys: GeminiKeys,
   locale: Locale = DEFAULT_LOCALE,
   onProgress?: (picksReady: number) => void
 ): Promise<GeneratedRecommendations> {
   const prompt = [
     `# Отзывы игрока (${reviews.length})`,
+    "В квадратных скобках — свойства, которые разбор вынес из его записей: + похвала, − претензия.",
     formatReviews(reviews),
+    "",
+    `# Профиль вкуса: что он хвалит и ругает вообще`,
+    formatProfile(profile),
     "",
     `# Кандидаты — нетронутое, отсюда берутся picks (${candidates.length})`,
     "Формат: steamAppId<TAB>название<TAB>наиграно<TAB>последний запуск, следующей строкой — жанры, дата релиза и описание из магазина",

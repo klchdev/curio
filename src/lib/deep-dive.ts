@@ -1,6 +1,6 @@
 import { Type } from "@google/genai";
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
-import type { ReviewCorpusItem } from "./queries";
+import type { ReviewCorpusItem, TasteTag } from "./queries";
 import type { AppReviews } from "./steam";
 import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
@@ -101,6 +101,8 @@ export interface DeepDiveInput {
   description: string | null;
   reviews: AppReviews | null;
   corpus: ReviewCorpusItem[];
+  /** Сведённый профиль: те же отзывы, но уже разложенные по свойствам. */
+  profile: TasteTag[];
   /** Что поставил первый проход и почему — точка отсчёта для пересмотра. */
   firstPass: { tier: string; reason: string } | null;
 }
@@ -116,7 +118,8 @@ function formatCorpus(corpus: ReviewCorpusItem[]): string {
       ]
         .filter(Boolean)
         .join(", ");
-      return `- ${item.title} (${meta}): ${item.note || "без заметки"}`;
+      const labels = item.labels.length ? ` [${item.labels.join(", ")}]` : "";
+      return `- ${item.title} (${meta})${labels}: ${item.note || "без заметки"}`;
     })
     .join("\n");
 }
@@ -155,7 +158,15 @@ export async function generateDeepDive(
     input.description ?? "Описания в магазине нет.",
     "",
     `# Отзывы игрока (${input.corpus.length}) — единственный источник правды о вкусе`,
+    "В квадратных скобках — свойства из его записей: + похвала, − претензия.",
     formatCorpus(input.corpus),
+    "",
+    "# Профиль вкуса: что он хвалит и ругает вообще",
+    input.profile.length > 0
+      ? input.profile
+          .map((tag) => `- ${tag.kind === "praise" ? "хвалит" : "ругает"}: ${tag.label} (игр: ${tag.games})`)
+          .join("\n")
+      : "Тегов пока нет — суди по текстам отзывов.",
     "",
     "# Отзывы других игроков — факты об игре, не вердикт",
     formatOthers(input.reviews),

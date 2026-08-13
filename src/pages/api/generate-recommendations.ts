@@ -10,6 +10,7 @@ import {
   completeRecommendationRun,
   failRecommendationRun,
   hasActiveRun,
+  getTasteProfile,
 } from "../../lib/queries";
 import { generateRecommendations } from "../../lib/recommendations";
 import { GEMINI_MODEL, errorCode } from "../../lib/gemini";
@@ -33,10 +34,11 @@ const json = (body: unknown, status = 200) =>
  */
 async function runInBackground(runId: number, userId: number, locale: Locale) {
   try {
-    const [reviews, candidates, abandonedGames] = await Promise.all([
+    const [reviews, candidates, abandonedGames, profile] = await Promise.all([
       getReviewCorpus(userId),
       getRecommendationCandidates(userId),
       getAbandonedGames(userId),
+      getTasteProfile(userId),
     ]);
 
     await updateRunProgress(runId, { stage: "thinking" });
@@ -46,6 +48,7 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
       reviews,
       candidates,
       abandonedGames,
+      profile,
       GEMINI_KEYS,
       locale,
       (picksReady) => {
