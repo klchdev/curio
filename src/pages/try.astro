@@ -21,6 +21,7 @@ import Layout from "../layouts/Layout.astro";
 import DemoBanner from "../components/demo/DemoBanner.astro";
 import DemoCta from "../components/demo/DemoCta.astro";
 import DemoHub from "../components/demo/DemoHub";
+import { demoRun, runVariantFrom } from "../components/demo/demo-run";
 import type { Zone } from "../components/hub/Hub";
 import { DEMO } from "../lib/demo-fixtures";
 import { localeFrom } from "../lib/i18n";
@@ -39,7 +40,12 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
   month: "long",
 });
 
-const run = DEMO.recommendations;
+/*
+ * Which advice set to show. Regenerating advice ends in a reload, and the mock
+ * points this parameter at the other set on its way out — so the freshly
+ * "generated" run is already in the first server-rendered frame.
+ */
+const run = demoRun(runVariantFrom(Astro.url.searchParams));
 ---
 
 <Layout title={s.demo.title}>

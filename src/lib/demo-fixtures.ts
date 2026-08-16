@@ -497,6 +497,489 @@ export const DEMO_LIBRARY: DemoLibraryGame[] = [
     // More playtime than in any game — which is exactly why the software filter exists
     isSoftware: true,
   },
+
+  /*
+   * The bulk of the backlog: bought on sale, never launched.
+   *
+   * This part is deliberately the largest one. Advice is drawn only from
+   * untouched games, so the size of this block is the ceiling on how many picks
+   * a run can hold — and the dice rolls between the picks, not between the
+   * library. A dozen untouched games would mean a run of a dozen cards, which
+   * is a demo that runs out after a minute of clicking.
+   *
+   * It also has to hold games that suit the player badly. Tier D — "don't spend
+   * the time" — is a working part of the advice, and without a shelf of open
+   * worlds and survival crafting bought in a sale there would be nothing
+   * honest to put there.
+   */
+  {
+    id: 35,
+    steamAppId: 620,
+    title: "Portal 2",
+    genres: "Головоломка, Приключение",
+    shortDescription: "Головоломки с порталами и лучший комический дуэт в играх.",
+    releaseDate: "19 апр. 2011",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 36,
+    steamAppId: 400,
+    title: "Portal",
+    genres: "Головоломка",
+    shortDescription: "Три часа, за которые жанр придумали заново.",
+    releaseDate: "10 окт. 2007",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 37,
+    steamAppId: 220,
+    title: "Half-Life 2",
+    genres: "Шутер, Приключение",
+    shortDescription: "Шутер, который рассказывает историю, ни разу не отняв управление.",
+    releaseDate: "16 нояб. 2004",
+    playtimeMinutes: 14,
+    lastPlayedDaysAgo: 300,
+  },
+  {
+    id: 38,
+    steamAppId: 304430,
+    title: "INSIDE",
+    genres: "Платформер, Приключение",
+    shortDescription: "Четыре часа без единого слова и без единой лишней сцены.",
+    releaseDate: "7 июл. 2016",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 39,
+    steamAppId: 753640,
+    title: "Outer Wilds",
+    genres: "Приключение, Головоломка",
+    shortDescription: "Двадцать две минуты до взрыва солнца и целая система, которую надо понять.",
+    releaseDate: "18 июн. 2020",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 40,
+    steamAppId: 653530,
+    title: "Return of the Obra Dinn",
+    genres: "Головоломка, Приключение",
+    shortDescription: "Страховой инспектор восстанавливает судьбу шестидесяти человек по одной сцене каждого.",
+    releaseDate: "18 окт. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 41,
+    steamAppId: 501300,
+    title: "What Remains of Edith Finch",
+    genres: "Приключение",
+    shortDescription: "Дом, в котором каждая комната рассказывает, как умер её хозяин.",
+    releaseDate: "25 апр. 2017",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 42,
+    steamAppId: 383870,
+    title: "Firewatch",
+    genres: "Приключение",
+    shortDescription: "Смотритель леса и голос в рации на всё лето.",
+    releaseDate: "9 фев. 2016",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 43,
+    steamAppId: 590380,
+    title: "Into the Breach",
+    genres: "Стратегия, Тактика",
+    shortDescription: "Тактика, где виден каждый следующий ход противника.",
+    releaseDate: "27 фев. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 44,
+    steamAppId: 212680,
+    title: "FTL: Faster Than Light",
+    genres: "Стратегия, Рогалик",
+    shortDescription: "Корабль, экипаж и очень длинная дорога, которую редко проходят.",
+    releaseDate: "14 сен. 2012",
+    playtimeMinutes: 6,
+    lastPlayedDaysAgo: 260,
+  },
+  {
+    id: 45,
+    steamAppId: 736260,
+    title: "Baba Is You",
+    genres: "Головоломка",
+    shortDescription: "Головоломка, в которой правила лежат на поле и их можно двигать.",
+    releaseDate: "13 мар. 2019",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 46,
+    steamAppId: 588650,
+    title: "Dead Cells",
+    genres: "Рогалик, Экшен, Метроидвания",
+    shortDescription: "Рогалик с очень быстрым фехтованием и без сохранений.",
+    releaseDate: "7 авг. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 47,
+    steamAppId: 311690,
+    title: "Enter the Gungeon",
+    genres: "Рогалик, Экшен",
+    shortDescription: "Пулевой ад, собранный из шуток про оружие.",
+    releaseDate: "5 апр. 2016",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 48,
+    steamAppId: 632360,
+    title: "Risk of Rain 2",
+    genres: "Рогалик, Экшен",
+    shortDescription: "Забег, в котором сложность растёт сама, пока ты стоишь.",
+    releaseDate: "11 авг. 2020",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 49,
+    steamAppId: 1794680,
+    title: "Vampire Survivors",
+    genres: "Рогалик, Экшен",
+    shortDescription: "Пятнадцать минут, одна кнопка и экран, забитый до предела.",
+    releaseDate: "20 окт. 2022",
+    playtimeMinutes: 11,
+    lastPlayedDaysAgo: 180,
+  },
+  {
+    id: 50,
+    steamAppId: 1817230,
+    title: "Hi-Fi RUSH",
+    genres: "Экшен, Ритм",
+    shortDescription: "Слэшер, в котором весь мир двигается в такт саундтреку.",
+    releaseDate: "25 янв. 2023",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 51,
+    steamAppId: 782330,
+    title: "DOOM Eternal",
+    genres: "Шутер, Экшен",
+    shortDescription: "Шутер, который не даёт стоять на месте ни секунды.",
+    releaseDate: "20 мар. 2020",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 52,
+    steamAppId: 1030300,
+    title: "Hollow Knight: Silksong",
+    genres: "Метроидвания, Платформер",
+    shortDescription: "Продолжение, которого ждали семь лет.",
+    releaseDate: "4 сен. 2025",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 53,
+    steamAppId: 1145350,
+    title: "Hades II",
+    genres: "Рогалик, Экшен",
+    shortDescription: "Та же формула забега, только ведьма и другой пантеон.",
+    releaseDate: "6 мая 2024",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 54,
+    steamAppId: 387290,
+    title: "Ori and the Blind Forest: Definitive Edition",
+    genres: "Платформер, Метроидвания",
+    shortDescription: "Первая часть: рисованный лес и очень точный прыжок.",
+    releaseDate: "11 мар. 2016",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 55,
+    steamAppId: 268910,
+    title: "Cuphead",
+    genres: "Экшен, Платформер",
+    shortDescription: "Рисованные боссы тридцатых годов и очень мало права на ошибку.",
+    releaseDate: "29 сен. 2017",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 56,
+    steamAppId: 2050650,
+    title: "Resident Evil 4",
+    genres: "Экшен, Хоррор",
+    shortDescription: "Ремейк, где инвентарь — это отдельная головоломка.",
+    releaseDate: "24 мар. 2023",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 57,
+    steamAppId: 814380,
+    title: "Sekiro: Shadows Die Twice",
+    genres: "Экшен, Приключение",
+    shortDescription: "Фехтование на парированиях, где уклоняться нельзя.",
+    releaseDate: "22 мар. 2019",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 58,
+    steamAppId: 374320,
+    title: "DARK SOULS III",
+    genres: "Экшен, RPG",
+    shortDescription: "Souls без открытого мира: коридоры, срезки и костры.",
+    releaseDate: "11 апр. 2016",
+    playtimeMinutes: 9,
+    lastPlayedDaysAgo: 220,
+  },
+  {
+    id: 59,
+    steamAppId: 1817070,
+    title: "Marvel's Spider-Man Remastered",
+    genres: "Экшен, Открытый мир",
+    shortDescription: "Полёты на паутине по Манхэттену и очень много вышек.",
+    releaseDate: "12 авг. 2022",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 60,
+    steamAppId: 1113560,
+    title: "NieR Replicant ver.1.22474487139...",
+    genres: "Экшен, RPG",
+    shortDescription: "Предыстория Automata: та же музыка, та же беготня.",
+    releaseDate: "23 апр. 2021",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 61,
+    steamAppId: 1172380,
+    title: "STAR WARS Jedi: Fallen Order",
+    genres: "Экшен, Приключение",
+    shortDescription: "Souls-lite по «Звёздным войнам» с картой, в которой легко потеряться.",
+    releaseDate: "15 нояб. 2019",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 62,
+    steamAppId: 435150,
+    title: "Divinity: Original Sin 2",
+    genres: "RPG, Стратегия",
+    shortDescription: "Партийная RPG, из которой выросла Baldur's Gate 3.",
+    releaseDate: "14 сен. 2017",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 63,
+    steamAppId: 22380,
+    title: "Fallout: New Vegas",
+    genres: "RPG, Экшен",
+    shortDescription: "Пустошь, где почти каждый квест решается разговором.",
+    releaseDate: "19 окт. 2010",
+    playtimeMinutes: 13,
+    lastPlayedDaysAgo: 340,
+  },
+  {
+    id: 64,
+    steamAppId: 379430,
+    title: "Kingdom Come: Deliverance",
+    genres: "RPG, Открытый мир",
+    shortDescription: "Средневековая Богемия без магии и с очень упрямым фехтованием.",
+    releaseDate: "13 фев. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 65,
+    steamAppId: 262060,
+    title: "Darkest Dungeon",
+    genres: "Рогалик, Стратегия",
+    shortDescription: "Отряд героев, которых игра методично доводит до нервного срыва.",
+    releaseDate: "19 янв. 2016",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 66,
+    steamAppId: 1888160,
+    title: "ARMORED CORE VI FIRES OF RUBICON",
+    genres: "Экшен",
+    shortDescription: "Роботы, собираемые по деталям, и боссы на проверку сборки.",
+    releaseDate: "25 авг. 2023",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+
+  /*
+   * Bought in a sale and never opened. These are exactly what tier D is for:
+   * open worlds with icon maps and survival crafting — the two things the diary
+   * names as the reason for quitting, over and over.
+   */
+  {
+    id: 67,
+    steamAppId: 812140,
+    title: "Assassin's Creed Odyssey",
+    genres: "Экшен, RPG, Открытый мир",
+    shortDescription: "Древняя Греция размером с настоящую и вопросики по всей карте.",
+    releaseDate: "5 окт. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 68,
+    steamAppId: 552520,
+    title: "Far Cry 5",
+    genres: "Шутер, Открытый мир",
+    shortDescription: "Монтана, секта и аванпосты, которые зачищаются по одному шаблону.",
+    releaseDate: "27 мар. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 69,
+    steamAppId: 990080,
+    title: "Hogwarts Legacy",
+    genres: "RPG, Открытый мир",
+    shortDescription: "Хогвартс и очень много сундуков вокруг него.",
+    releaseDate: "10 фев. 2023",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 70,
+    steamAppId: 377160,
+    title: "Fallout 4",
+    genres: "RPG, Открытый мир, Крафт",
+    shortDescription: "Пустошь, в которой надо строить поселения и защищать их по радио.",
+    releaseDate: "10 нояб. 2015",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 71,
+    steamAppId: 275850,
+    title: "No Man's Sky",
+    genres: "Выживание, Приключение, Открытый мир",
+    shortDescription: "Восемнадцать квинтиллионов планет и один цикл добычи ресурсов.",
+    releaseDate: "12 авг. 2016",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 72,
+    steamAppId: 252490,
+    title: "Rust",
+    genres: "Выживание, Крафт",
+    shortDescription: "Голым на побережье, и всё остальное надо добыть.",
+    releaseDate: "8 фев. 2018",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 73,
+    steamAppId: 108600,
+    title: "Project Zomboid",
+    genres: "Выживание, Крафт, RPG",
+    shortDescription: "Симулятор того, как ты умрёшь во время зомби-апокалипсиса.",
+    releaseDate: "8 нояб. 2013",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 74,
+    steamAppId: 526870,
+    title: "Satisfactory",
+    genres: "Симулятор, Крафт, Выживание",
+    shortDescription: "Завод на чужой планете, который надо строить руками от первого лица.",
+    releaseDate: "10 сен. 2024",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 75,
+    steamAppId: 1085660,
+    title: "Destiny 2",
+    genres: "Шутер, MMO",
+    shortDescription: "Шутер, в котором цифры на снаряжении растут каждый сезон.",
+    releaseDate: "1 окт. 2019",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+  {
+    id: 76,
+    steamAppId: 261550,
+    title: "Mount & Blade II: Bannerlord",
+    genres: "RPG, Стратегия, Открытый мир",
+    shortDescription: "Средневековая песочница, где надо самому придумать себе занятие.",
+    releaseDate: "25 окт. 2022",
+    playtimeMinutes: 0,
+    lastPlayedDaysAgo: null,
+  },
+
+  /* Played a fair bit and never written about — more fuel for the triage queue. */
+  {
+    id: 77,
+    steamAppId: 550,
+    title: "Left 4 Dead 2",
+    genres: "Шутер, Кооператив",
+    shortDescription: "Четверо, дробовики и очень много зомби.",
+    releaseDate: "17 нояб. 2009",
+    playtimeMinutes: 780,
+    lastPlayedDaysAgo: 96,
+  },
+  {
+    id: 78,
+    steamAppId: 440,
+    title: "Team Fortress 2",
+    genres: "Шутер, Кооператив",
+    shortDescription: "Девять классов и восемнадцать лет шляп.",
+    releaseDate: "10 окт. 2007",
+    playtimeMinutes: 1420,
+    lastPlayedDaysAgo: 410,
+  },
+  {
+    id: 79,
+    steamAppId: 227300,
+    title: "Euro Truck Simulator 2",
+    genres: "Симулятор",
+    shortDescription: "Дорога, радио и груз, который надо довезти к утру.",
+    releaseDate: "18 окт. 2012",
+    playtimeMinutes: 940,
+    lastPlayedDaysAgo: 58,
+  },
+  {
+    id: 80,
+    steamAppId: 359550,
+    title: "Tom Clancy's Rainbow Six Siege",
+    genres: "Шутер, Соревновательная",
+    shortDescription: "Штурм и оборона, где стены разбираются по кускам.",
+    releaseDate: "1 дек. 2015",
+    playtimeMinutes: 1180,
+    lastPlayedDaysAgo: 150,
+  },
 ];
 
 const GAMES_BY_ID = new Map(DEMO_LIBRARY.map((game) => [game.id, game]));
@@ -608,11 +1091,18 @@ export interface DemoRecord {
  */
 export const DEMO_RECORDS: DemoRecord[] = [
   {
+    /*
+     * Carried over from the Steam profile, like several other old single-entry
+     * records below. Someone who has been playing for years wrote part of their
+     * opinions there first, and the import is what brings them here — a diary
+     * where every line was typed into this app would be a demo of an account
+     * that started from nothing, which is not how anyone arrives.
+     */
     gameId: 1,
     verdict: "finished",
     tier: "S",
     rating: 5,
-    origin: "retro",
+    origin: "steam",
     playtimeAtLastEntry: 2650,
     entries: [
       {
@@ -752,7 +1242,7 @@ export const DEMO_RECORDS: DemoRecord[] = [
     verdict: "finished",
     tier: "S",
     rating: 5,
-    origin: "retro",
+    origin: "steam",
     playtimeAtLastEntry: 2510,
     entries: [
       {
@@ -794,7 +1284,7 @@ export const DEMO_RECORDS: DemoRecord[] = [
     verdict: "finished",
     tier: "A",
     rating: 5,
-    origin: "retro",
+    origin: "steam",
     playtimeAtLastEntry: 720,
     entries: [
       {
@@ -815,7 +1305,7 @@ export const DEMO_RECORDS: DemoRecord[] = [
     verdict: "finished",
     tier: "S",
     rating: 5,
-    origin: "retro",
+    origin: "steam",
     playtimeAtLastEntry: 540,
     entries: [
       {
@@ -836,7 +1326,7 @@ export const DEMO_RECORDS: DemoRecord[] = [
     verdict: "finished",
     tier: "A",
     rating: 4,
-    origin: "retro",
+    origin: "steam",
     playtimeAtLastEntry: 1980,
     entries: [
       {
@@ -1257,82 +1747,292 @@ export const DEMO_TASTE_PROFILE: TasteTag[] = (() => {
 
 /* ================= Advice ================= */
 
-const RUN_PROFILE = `Ты ценишь плотность: игру, где каждый час придуман руками, а не сгенерирован по шаблону. Твои высшие оценки стоят там, где кампания короче двадцати часов и в ней нет карты с иконками — Titanfall 2, Celeste, Hollow Knight. Всё, что просит чистить локации ради цифр, ты бросаешь между двадцатым и тридцать пятым часом, и в записях называешь одну и ту же причину: Cyberpunk 2077, ELDEN RING, Valheim, Red Dead Redemption 2. Отдельная статья — текст: Disco Elysium и первый акт Baldur's Gate 3 — единственные случаи, когда ты писал, что не пропускал диалоги.`;
+/*
+ * The portrait is a list of markdown points, not a paragraph.
+ *
+ * That is the shape the real model returns — the instruction asks it for four
+ * to seven points, each backed by named games — and the shape both renderers
+ * expect: `parseProfile` splits on newlines and strips the bullet, `RichText`
+ * lightens `**the point**` and tints `*a title*`. A single 550-character
+ * paragraph passes through both untouched and lands as a grey wall, so the
+ * demo was showing less than the product actually produces.
+ *
+ * Every game named here exists in DEMO_LIBRARY and every claim is checkable
+ * against DEMO_RECORDS. An observation about a game the visitor cannot find in
+ * the library is the one kind of error that reads as a lie rather than a bug.
+ */
+const RUN_PROFILE = `- **Ты не бросаешь игры — ты доигрываешь до места, где они начинают повторяться.** В *Cyberpunk 2077* первая запись про атмосферу и Джеки, вторая, двадцатью часами позже, — про склады с одинаковой планировкой. В *ELDEN RING* восторг держался ровно до второй одинаковой шахты. Порог устойчивый: двадцать седьмой и тридцать четвёртый час.
+- **Дело не в длине, а в том, кто придумывает следующий час.** Ты спокойно провёл семьдесят часов в *Baldur's Gate 3* и сорок два в *Hollow Knight* — обе длинные. Но там следующий час придумал автор, а в *Valheim* и *Stardew Valley* придумывать приходилось тебе, и обе закрыты до двадцатого часа.
+- **Крафт и карта с иконками — для тебя одно и то же раздражение, а не два.** В записях про *Valheim*, *Cyberpunk 2077* и *Red Dead Redemption 2* претензия сформулирована одинаково: игра требует труда, который ничего не добавляет. Слово «налог» ты употребил сам.
+- **Тебе важно, чтобы промах был твой.** *Hollow Knight* и *Celeste* описаны почти одними словами — «виноват только я», «смерть стоит полсекунды», — и обе пройдены до конца. Ни одной игры, где исход решают цифры, а не руки, ты не закрыл.
+- **Музыку ты отмечаешь только там, где она делает работу.** *Hades*, *Celeste* и *NieR:Automata* — три записи, где саундтрек назван отдельной строкой, и во всех трёх он держит конкретный момент: последняя комната Асфоделя, экран, на котором ты застрял, пустой город. Про красивую музыку в играх, которые не зашли, ты не написал ни разу.
+- **Текст — единственное, ради чего ты терпишь долгое.** *Disco Elysium* пройден, хотя первые два часа ты злился, и ты отдельно отметил, что не пропустил ни одной реплики. *Baldur's Gate 3* держит тебя семьдесят часов на спутниках. Как только текста стало меньше — в третьем акте — сразу появилось «доигрываю на автомате».`;
 
+type RunPick = RunWithPicks["items"][number];
+
+interface PickDive {
+  /** The deep dive's verdict. The card shows it before the first click. */
+  fit: "yes" | "maybe" | "no";
+  /**
+   * The deep dive's tier. It differs from the first pass exactly when the dive
+   * revised it, and the card then says so in its own line — so the two are
+   * passed separately on purpose rather than defaulted to each other.
+   */
+  tier: "S" | "A" | "B" | "C" | "D";
+  /** Where the knowledge came from. Silence means the model knows the game. */
+  grounding?: "known" | "from-description" | "guess";
+}
+
+/**
+ * One advice card, filled in from the catalogue.
+ *
+ * Title, cover and hours are never written out by hand: they exist in the
+ * library already, and a second copy would drift — a renamed game would keep
+ * its old name on the advice card and nowhere else.
+ */
+function pick(
+  gameId: number,
+  tier: "S" | "A" | "B" | "C" | "D",
+  reason: string,
+  dive: PickDive
+): RunPick {
+  const target = game(gameId);
+  return {
+    gameId: target.id,
+    steamAppId: target.steamAppId,
+    title: target.title,
+    headerImage: header(target.steamAppId),
+    tier,
+    reason,
+    grounding: dive.grounding ?? "known",
+    deepFit: dive.fit,
+    deepTier: dive.tier,
+    hours: Math.round((target.playtimeMinutes / 60) * 10) / 10,
+  };
+}
+
+/*
+ * A run is a set of cards, not a top five.
+ *
+ * The dice rolls between the picks — "the lot is drawn between N pieces of
+ * advice" is what the button itself says — so the size of this list is the
+ * size of the choice on offer. Five cards meant the dice cycled through the
+ * same five games. The tier spread follows the instructions the real model
+ * works to: one to three S, up to six A, B for the bulk, and three to eight D,
+ * which the dice deliberately skips.
+ */
 export const DEMO_RUN: RunWithPicks = {
   id: 9001,
   model: "gemini-3.7-flash",
   profile: RUN_PROFILE,
-  reviewsUsed: 15,
-  candidatesUsed: 6,
+  reviewsUsed: 17,
+  candidatesUsed: 48,
   createdAt: at(4, 12, 20),
   items: [
-    {
-      gameId: 28,
-      steamAppId: game(28).steamAppId,
-      title: game(28).title,
-      headerImage: header(game(28).steamAppId),
-      tier: "S",
-      reason:
-        "Забег двадцать минут, проигрыш не стоит ничего, голова работает всё время — ровно то, за что ты держишь Slay the Spire, только темп жёстче. Ни карты, ни крафта, ни прокачки между забегами: злиться будет не на что.",
-      grounding: "known",
-      deepFit: "yes",
-      deepTier: "S",
-      hours: 0,
-    },
-    {
-      gameId: 27,
-      steamAppId: game(27).steamAppId,
-      title: game(27).title,
-      headerImage: header(game(27).steamAppId),
-      tier: "A",
-      reason:
-        "Шесть часов, ни одной побочной иконки, каждая локация собрана руками. Про Titanfall 2 ты написал «сказали, что хотели, и отпустили» — здесь ровно тот же договор с игроком.",
-      grounding: "known",
-      deepFit: "yes",
-      deepTier: "A",
-      hours: 0,
-    },
-    {
-      gameId: 29,
-      steamAppId: game(29).steamAppId,
-      title: game(29).title,
-      headerImage: header(game(29).steamAppId),
-      tier: "A",
-      reason:
-        "Метроидвания с управлением, за которое ты хвалил Hollow Knight и Celeste, и с музыкой уровня NieR:Automata. Риск один: во второй половине появляются пара заданий на сбор — но их немного, и мимо них можно пройти.",
-      grounding: "known",
-      deepFit: "yes",
-      deepTier: "A",
-      hours: 0,
-    },
-    {
-      gameId: 31,
-      steamAppId: game(31).steamAppId,
-      title: game(31).title,
-      headerImage: header(game(31).steamAppId),
-      tier: "B",
-      reason:
-        "Линейная история без карты — это твоё. Но Red Dead Redemption 2 ты бросил из-за анимаций, которые нельзя пропустить, а здесь темп тоже медленный и катсцен много. Ставлю B честно: сюжет вытянет, если переживёшь первые два часа.",
-      grounding: "known",
+    pick(
+      28,
+      "S",
+      "Забег двадцать минут, проигрыш не стоит ничего, голова работает всё время — ровно то, за что ты держишь Slay the Spire, только темп жёстче. Ни карты, ни крафта, ни прокачки между забегами: злиться будет не на что.",
+      { fit: "yes", tier: "S" }
+    ),
+    pick(
+      39,
+      "S",
+      "Двадцать два часа, в которых нет ни одной цифры: не растёт ни уровень, ни снаряжение, весь прогресс — то, что ты понял сам. Ты поставил S Disco Elysium за «разговор и есть игра»; здесь так же, только вместо разговора устройство планетной системы.",
+      { fit: "yes", tier: "S" }
+    ),
+    pick(
+      27,
+      "A",
+      "Шесть часов, ни одной побочной иконки, каждая локация собрана руками. Про Titanfall 2 ты написал «сказали, что хотели, и отпустили» — здесь ровно тот же договор с игроком.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      29,
+      "A",
+      "Метроидвания с управлением, за которое ты хвалил Hollow Knight и Celeste, и с музыкой уровня NieR:Automata. Риск один: во второй половине появляются пара заданий на сбор — но их немного, и мимо них можно пройти.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      52,
+      "A",
+      "Прямое продолжение игры, которой ты поставил S и написал «ни одной лишней комнаты». Ставлю A, а не S, только из-за жалоб на сложность: та же школа, но требований к рукам больше.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      40,
+      "A",
+      "Детектив, который целиком состоит из внимания к деталям: ни боёв, ни прокачки, четыре часа чистой дедукции. Ты писал, что в Disco Elysium не пропустил ни одной реплики, — здесь пропустить нельзя вообще ничего, иначе не сойдётся.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      31,
+      "B",
+      "Линейная история без карты — это твоё. Но Red Dead Redemption 2 ты бросил из-за анимаций, которые нельзя пропустить, а здесь темп тоже медленный и катсцен много. Ставлю B честно: сюжет вытянет, если переживёшь первые два часа.",
       // The analysis raised the tier: the card says so with a "B → A" line
-      deepFit: "yes",
-      deepTier: "A",
-      hours: 0,
-    },
-    {
-      gameId: 30,
-      steamAppId: game(30).steamAppId,
-      title: game(30).title,
-      headerImage: header(game(30).steamAppId),
-      tier: "C",
-      reason:
-        "Формально сходится всё: ручные уровни, сильные диалоги отца и сына. Но во второй половине игра открывает озеро с побочными точками и просит перекачивать снаряжение под уровень врагов — по твоим записям это ровно та развилка, на которой ты выходишь.",
-      grounding: "known",
-      deepFit: "maybe",
-      deepTier: "C",
-      hours: 0.2,
-    },
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      46,
+      "B",
+      "Забег на полчаса с очень отзывчивым управлением — то, за что у тебя стоят пятёрки у Hades и Slay the Spire. Ниже A потому, что прогресс тут всё-таки копится между забегами, а ты про такое писал «гринд ради цифр».",
+      { fit: "yes", tier: "B" }
+    ),
+    pick(
+      50,
+      "B",
+      "Слэшер, где весь уровень двигается в такт музыке: ты трижды отмечал саундтрек отдельной строкой — у Hades, Celeste и NieR:Automata. Ниже A потому, что боёвка проще, чем ты обычно любишь.",
+      { fit: "yes", tier: "B" }
+    ),
+    pick(
+      62,
+      "B",
+      "Прямая предшественница Baldur's Gate 3, которую ты сейчас проходишь: те же бои и те же спутники, но текст суше. Ты уже писал, что третий акт BG3 — болото; здесь болото начинается раньше, во втором акте.",
+      { fit: "maybe", tier: "B" }
+    ),
+    pick(
+      30,
+      "C",
+      "Формально сходится всё: ручные уровни, сильные диалоги отца и сына. Но во второй половине игра открывает озеро с побочными точками и просит перекачивать снаряжение под уровень врагов — по твоим записям это ровно та развилка, на которой ты выходишь.",
+      { fit: "maybe", tier: "C" }
+    ),
+    pick(
+      67,
+      "D",
+      "Не трать время. Это та самая карта из галочек, на которой ты бросил Cyberpunk 2077 и ELDEN RING, только больше в несколько раз: вопросики, аванпосты и уровни снаряжения, без которых сюжет не пускает дальше.",
+      { fit: "no", tier: "D" }
+    ),
+    pick(
+      72,
+      "D",
+      "Не трать время. Про Valheim ты написал, что против крафта как обязательного налога на всё интересное, — здесь этот налог и есть вся игра, и платить его придётся ещё и другим игрокам.",
+      { fit: "no", tier: "D" }
+    ),
+    pick(
+      75,
+      "D",
+      "Не трать время. Шутер, устроенный вокруг цифр на снаряжении, которые обнуляются каждый сезон: «гринд ради цифр» — твоя формулировка из записи про Stardew Valley, и лучше про эту игру не скажешь.",
+      { fit: "no", tier: "D" }
+    ),
+  ],
+};
+
+/**
+ * The second run, for the "regenerate" button.
+ *
+ * Not a shuffle of the same cards: a repeat run genuinely lands on other games,
+ * because the model re-reads the whole diary and the shelf of untouched games is
+ * large enough to be cut a different way. What must not change is the ground —
+ * every reason here still leans on the same entries and the same taste tags, or
+ * the whole premise of "advice from your own words" falls apart.
+ */
+/*
+ * The second portrait cuts the same diary along different seams — verdicts and
+ * numbers rather than mechanics — and names different games in its examples.
+ * A repeat run that returns the same observations in different words is the
+ * one thing that would give the imitation away.
+ */
+const RUN_PROFILE_ALT = `- **Мнение об игре у тебя не портится постепенно — оно ломается на одной конкретной механике.** *Baldur's Gate 3* держала пятёрку тридцать три часа и просела до четвёрки к семидесятому, и причина в записи названа точно: не бои и не длина, а городские квесты по шаблону. Ты не устаёшь от игры, ты замечаешь шов.
+- **Ни одна игра длиннее сорока пяти часов не дошла у тебя до «пройдено».** Все шесть законченных укладываются в сорок пять часов, и самая долгая из них — *Disco Elysium*. Дальше этой черты ты заходил дважды: *The Witcher 3: Wild Hunt* брошена за десять часов до финала, а в *Baldur's Gate 3* на семидесятом часу появилось «доигрываю на автомате».
+- **Ты выбираешь по тому, можно ли из игры выйти.** *Hades* и *Slay the Spire* — твои единственные «бесконечные», и в обеих записях сказано одно и то же: забег кончается, встать можно. При этом *Terraria* и *Counter-Strike 2* наиграны больше почти всего в библиотеке, но о них не написано ни строчки — им нечем кончиться, и сказать про них нечего.
+- **Ты не против сложности, ты против того, чтобы её решали часы вместо рук.** *Hollow Knight* пройден до Радиантного, в *Celeste* ты насчитал четыреста смертей на одной главе — и обе хвалишь. А *Stardew Valley* и *Valheim* брошены ровно там, где нужны не руки: «оптимизирую маршрут» и «стучать по деревьям» — твои же слова.
+- **Первые два часа решают почти всё.** Записи про *Cyberpunk 2077* и *Red Dead Redemption 2* начинаются с претензии к началу, и обе игры в итоге брошены. Исключение одно: *Disco Elysium*, где ты сам написал, что два часа бесился, а потом «всё встало на место».
+- **Оценка у тебя сглажена, а тир — нет.** Средняя оценка по дневнику ровно четыре, двойку ты поставил всего дважды. Зато тиры разведены до краёв: *Disco Elysium*, *Hollow Knight* и *Titanfall 2* в S, *Valheim* и *Stardew Valley* в D. Твой вкус читается по тирам, а не по звёздам.`;
+
+export const DEMO_RUN_ALT: RunWithPicks = {
+  id: 9002,
+  model: "gemini-3.7-flash",
+  profile: RUN_PROFILE_ALT,
+  reviewsUsed: 17,
+  candidatesUsed: 48,
+  // Just now: this is what the "regenerate" button has produced
+  createdAt: new Date(NOW - 2 * MINUTE),
+  items: [
+    pick(
+      43,
+      "S",
+      "Тактика без единого элемента случайности: игра честно показывает, что сделает противник на следующем ходу. Про Hollow Knight ты написал, что в любой смерти виноват только ты, — здесь это доведено до предела, проигрыш всегда твой просчёт.",
+      { fit: "yes", tier: "S" }
+    ),
+    pick(
+      41,
+      "S",
+      "Два часа, и ни одной механики, которая повторяется дважды: каждая комната дома — отдельный приём, который больше не используют. Ты дословно этими словами хвалил Titanfall 2.",
+      { fit: "yes", tier: "S" }
+    ),
+    pick(
+      57,
+      "A",
+      "Фехтование на парированиях, где нельзя откатиться и переждать: чистая проверка рук, без прокачки, которая решает за тебя. ELDEN RING ты бросил из-за повторов в открытом мире — здесь мира нет, есть коридор и боссы.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      42,
+      "A",
+      "Четыре часа, весь сюжет — разговор двух людей по рации. Disco Elysium у тебя S с формулировкой «разговор и есть игра»; это то же самое, только короче в десять раз и без проверок навыков.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      53,
+      "A",
+      "Продолжение игры, которой ты поставил A и написал «встать можно в любой момент». Здесь тот же двадцатиминутный забег и те же неповторяющиеся диалоги между ними.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      55,
+      "A",
+      "Игра целиком состоит из боссов: ни коридоров между ними, ни собирательства, ни прокачки. Ты писал про Celeste, что четыреста смертей не злят, потому что смерть стоит полсекунды, — здесь ровно та же цена ошибки.",
+      { fit: "yes", tier: "A" }
+    ),
+    pick(
+      35,
+      "B",
+      "Восемь часов головоломок и один из лучших текстов в играх — обе твои опоры сразу. Ниже A только потому, что руки здесь почти не нужны, а ты ценишь именно точное управление.",
+      { fit: "yes", tier: "B" }
+    ),
+    pick(
+      36,
+      "B",
+      "Три часа, и ни одной лишней комнаты — та же формулировка, которой ты описал Hollow Knight. Начинать логично с неё, а не сразу со второй части.",
+      { fit: "yes", tier: "B" }
+    ),
+    pick(
+      63,
+      "B",
+      "Открытый мир, но устроенный не как карта с иконками: почти любой квест здесь можно решить разговором, и от выбора реплики зависит исход. Ставлю B из-за возраста — интерфейс и техническое состояние отпугивают.",
+      // The dive raises it: the reviews say the writing outweighs the age
+      { fit: "yes", tier: "A", grounding: "from-description" }
+    ),
+    pick(
+      59,
+      "B",
+      "Постановка и полёты сделаны отлично, но это Ubisoft-карта: вышки, склады, случайные преступления на улице. Ты снёс Cyberpunk 2077 ровно за это, так что B здесь — аванс за то, что основная линия короткая.",
+      { fit: "maybe", tier: "B" }
+    ),
+    pick(
+      65,
+      "C",
+      "Отряд, который надо лечить от стресса и терять насовсем. Ты пишешь, что против игр, которые требуют времени вместо умения, — здесь этого много; но сам цикл вылазок короткий, поэтому не D.",
+      { fit: "maybe", tier: "C" }
+    ),
+    pick(
+      70,
+      "D",
+      "Не трать время. Стройка поселений и защита их по радио — это тот самый крафт как обязательный налог, из-за которого ты ушёл из Valheim, только вместо руды здесь мусор.",
+      { fit: "no", tier: "D" }
+    ),
+    pick(
+      73,
+      "D",
+      "Не трать время. Симулятор выживания, где первые часы уходят на инвентарь и еду. Твоя запись про Stardew Valley — «оптимизирую маршрут вместо того, чтобы отдыхать» — описывает и эту игру целиком.",
+      { fit: "no", tier: "D" }
+    ),
+    pick(
+      76,
+      "D",
+      "Не трать время. Огромная песочница, которая не говорит, чем в ней заниматься, и требует сначала натаскать себе денег и людей. Всё, что ты бросал, начиналось примерно так же.",
+      { fit: "no", tier: "D", grounding: "from-description" }
+    ),
   ],
 };
 
@@ -1444,6 +2144,401 @@ export const DEMO_DEEP_DIVES: DemoDeepDive[] = [
       "Возврат в пройденные локации ради дверей, которые не открывались с первого раза",
     ],
     reviewsUsed: 40,
+  },
+
+  /* Remaining picks of the first run. */
+  {
+    gameId: 39,
+    fit: "yes",
+    tier: "S",
+    summary:
+      "Приключение про планетную систему, которая взрывается каждые двадцать две минуты; единственный прогресс — знание в твоей голове.",
+    forYou:
+      "Здесь нечего качать и нечего собирать: цикл короткий, выйти можно на любом витке. Твоя формула «встать можно в любой момент» из записи про Hades работает и тут, только вместо забега — своя догадка.",
+    against:
+      "Подсказок игра не даёт вообще. Если сессия прервалась на неделю, возвращаться придётся в собственные заметки — часть игроков на этом и уходит.",
+    complaints: [
+      "Без записей на бумаге легко потерять нить и ходить кругами",
+      "Полёты между планетами требуют ручного управления и раздражают на десятый раз",
+      "Одна обязательная сцена с погоней ломает темп всей игры",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 52,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Продолжение Hollow Knight: та же плотность карты, более быстрая героиня и заметно более высокая планка требований.",
+    forYou:
+      "Ты прошёл первую часть и написал «ни одной лишней комнаты». Структура здесь та же, и претензия про копипаст локаций, которую ты предъявлял ELDEN RING, к ней не относится: повторов нет.",
+    against:
+      "Сложность выше первой части с самого начала, и жалуются на это чаще всего. Ты доходил до Радиантного, так что руки есть, но первые часы будут злее, чем ты помнишь.",
+    complaints: [
+      "Ранние боссы бьют больнее, чем в первой части, а лечиться дают меньше",
+      "Карта продаётся у торговца — до покупки легко ходить вслепую",
+      "Быстрых перемещений мало, и обратная дорога съедает время",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 40,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Детектив на четыре часа: по замершим сценам гибели нужно опознать шестьдесят человек и восстановить, что случилось с кораблём.",
+    forYou:
+      "Ни боёв, ни прокачки, ни карты — только внимание к деталям, и игра проверяет его честно, по три догадки за раз. Про Disco Elysium ты писал, что не пропустил ни одной реплики; здесь пропустить нельзя ничего, иначе не сойдётся.",
+    against:
+      "Графика в один бит — то, на чём чаще всего спотыкаются: сцены иногда трудно разобрать глазами, и это не художественный приём, а честная проблема.",
+    complaints: [
+      "Одноцветная графика утомляет глаза за час-полтора",
+      "Часть опознаний решается перебором, а не выводом",
+      "Второй раз играть невозможно в принципе — разгадка уже известна",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 46,
+    fit: "yes",
+    tier: "B",
+    summary:
+      "Рогалик с очень быстрым фехтованием и метроидванийной картой: смерть отправляет в начало, часть открытых путей остаётся навсегда.",
+    forYou:
+      "Управление того же класса, что ты хвалил у Hollow Knight: промах всегда твой. Забег — тридцать-сорок минут, ровно тот формат, который ты держишь у Slay the Spire.",
+    against:
+      "Между забегами копятся постоянные улучшения, и первые часы ощущаются как их фарм. Ты назвал это «гриндом ради цифр» в записи про Stardew Valley — здесь этого меньше, но оно есть.",
+    complaints: [
+      "Ранние забеги упираются в нехватку постоянных улучшений, а не в умение",
+      "Часть оружия объективно сильнее прочего, и выбор сводится к паре сборок",
+      "Поздние уровни сложности требуют заучивания карт наизусть",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 50,
+    fit: "yes",
+    tier: "B",
+    summary:
+      "Слэшер, в котором весь мир — от вентиляторов до ударов — двигается в такт саундтреку; кампания на десять-двенадцать часов.",
+    forYou:
+      "Ты трижды отмечал музыку отдельной строкой: у Hades, Celeste и NieR:Automata. Здесь она не фон, а механика, и попадание в такт — это и есть боёвка. Никакой карты и никакого собирательства.",
+    against:
+      "Боёвка проще, чем у слэшеров, к которым ты привык: набор приёмов небольшой, и к середине он перестаёт расширяться. Плюс несколько эпизодов со скрытностью, которые тормозят темп.",
+    complaints: [
+      "Скрытные эпизоды выбиваются из ритма и раздражают почти всех",
+      "Набор приёмов не растёт со второй трети игры",
+      "Юмор очень громкий — либо заходит сразу, либо мешает всю игру",
+    ],
+    reviewsUsed: 38,
+  },
+  {
+    gameId: 62,
+    fit: "maybe",
+    tier: "B",
+    summary:
+      "Партийная RPG на восемьдесят часов с той же боевой системой, из которой выросла Baldur's Gate 3, и с полной свободой в решении квестов.",
+    forYou:
+      "Спутники и вариативность — то, за что ты держишь BG3. Здесь свободы даже больше: почти любую задачу можно решить не так, как задумано.",
+    against:
+      "Ты уже пишешь про третий акт BG3, что это болото. Здесь то же самое начинается раньше — на втором акте, — а текста, который тебя там удерживал, заметно меньше: диалоги суше и длиннее.",
+    complaints: [
+      "Второй акт растянут и завален однотипными боями",
+      "Броня двух типов заставляет пересобирать отряд под механику, а не под роль",
+      "Финальный акт заметно сырее остальных",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 67,
+    fit: "no",
+    tier: "D",
+    summary:
+      "Открытый мир по Древней Греции на сто с лишним часов: вопросики на карте, аванпосты и уровни снаряжения, без которых сюжет не пускает дальше.",
+    forYou:
+      "Честно — почти ничего. Разве что постановка отдельных сюжетных линий и вид с горы; за это игру и хвалят те, кому она подошла.",
+    against:
+      "Это ровно та конструкция, на которой ты вышел из Cyberpunk 2077 и ELDEN RING, и в записях ты назвал её дважды одними словами: карта победила сценарий. Здесь карта больше, а сценарий слабее обоих.",
+    complaints: [
+      "Уровни врагов заставляют зачищать побочное, чтобы продолжить сюжет",
+      "Аванпосты и пещеры собраны по одному шаблону на всю карту",
+      "Внутриигровой магазин ускорений — прямое признание того, что игра растянута",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 72,
+    fit: "no",
+    tier: "D",
+    summary:
+      "Многопользовательское выживание: старт голым на побережье, всё остальное добывается, а построенное регулярно отбирают другие игроки.",
+    forYou:
+      "Ничего. Единственное совпадение — ощущение первого выхода в незнакомый мир, про которое ты писал в записи про Valheim.",
+    against:
+      "Ты сформулировал это сам: против крафта как обязательного налога на всё интересное. Здесь налог и есть игра, и платить его надо ещё и в чужом расписании — базу сносят, пока ты на работе.",
+    complaints: [
+      "Потеря всего нажитого за одну ночь — не исключение, а норма",
+      "Новичка отстреливают быстрее, чем он успевает построить дверь",
+      "Сотни часов уходят на добычу, а не на то, ради чего добывали",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 75,
+    fit: "no",
+    tier: "D",
+    summary:
+      "Шутер-сервис: стрельба отличная, всё вокруг неё построено на цифрах снаряжения, которые обесцениваются с каждым сезоном.",
+    forYou:
+      "Стрельба здесь действительно одна из лучших в жанре — это признают даже те, кто ушёл. На этом совпадения заканчиваются.",
+    against:
+      "«Гринд ради цифр» — твоя формулировка из записи про Stardew Valley, и она описывает эту игру целиком. Добавь к этому, что часть купленного сюжета со временем убирают из игры.",
+    complaints: [
+      "Прогресс сгорает каждый сезон, и качаться надо заново",
+      "Сюжетные кампании удаляли из игры уже после покупки",
+      "Разобраться в том, что происходит, без сторонних гайдов невозможно",
+    ],
+    reviewsUsed: 40,
+  },
+
+  /* Picks of the second run — the regenerate button has to work the same way. */
+  {
+    gameId: 43,
+    fit: "yes",
+    tier: "S",
+    summary:
+      "Тактика на поле восемь на восемь, где игра заранее показывает каждый ход противника; партия — двадцать-тридцать минут.",
+    forYou:
+      "Случайности нет вообще: проигрыш всегда просчёт. Ты хвалил Hollow Knight и Celeste одними и теми же словами — «виноват только я», — и здесь это доведено до логического конца. Плюс формат: партия короче твоего вечера.",
+    against:
+      "Визуально это одна и та же сетка все двадцать часов, и сюжета в привычном смысле нет — а текст для тебя обычно и есть причина остаться.",
+    complaints: [
+      "Отряды приходится открывать повторными прохождениями",
+      "Мелкий масштаб: разобрать, кто есть кто на поле, поначалу трудно",
+      "Поздние острова сводятся к паре рабочих связок",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 41,
+    fit: "yes",
+    tier: "S",
+    summary:
+      "Два часа в доме, где каждая комната — история одного умершего родственника, рассказанная своей собственной механикой.",
+    forYou:
+      "Ни одна механика не повторяется дважды: эпизод отыграл своё и больше не встречается. Ты дословно этим хвалил Titanfall 2 — «в каждой миссии своя идея, которую потом ни разу не переиспользуют».",
+    against:
+      "Игры в привычном смысле тут нет: проиграть невозможно, сопротивления материала ноль. За два часа берут полную цену, и это вторая по частоте претензия.",
+    complaints: [
+      "Два часа за полную цену — самая частая претензия в отзывах",
+      "Проиграть нельзя, вызова нет никакого",
+      "Эпизод с рыбным цехом вызывает у части игроков тошноту от качки камеры",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 57,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Фехтование на парированиях в линейной Японии эпохи Сэнгоку: уклоняться нельзя, прокачка почти ничего не решает.",
+    forYou:
+      "ELDEN RING ты бросил из-за повторов в открытом мире — здесь мира нет, есть коридор с срезками и боссы. Прокачка не спасает: проходит тот, кто выучил ритм, то есть промах всегда твой.",
+    against:
+      "Порог входа выше всего, что ты играл: первые пять-десять часов уходят на то, чтобы перестать уклоняться по привычке. Часть игроков не переживает этого перелома.",
+    complaints: [
+      "Первые часы ломают привычки, наработанные в других играх серии",
+      "Два-три босса выбиваются по сложности из всей игры",
+      "Стелс-участки между боссами пресные и явно вторичны",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 42,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Четыре часа в лесу Вайоминга: смотритель вышки и голос в рации — весь сюжет держится на их разговоре.",
+    forYou:
+      "Disco Elysium у тебя S с формулировкой «разговор и есть игра». Здесь ровно та же ставка, только короче в десять раз и без проверок навыков — ни одной цифры на экране.",
+    against:
+      "Финал разочаровывает многих: интрига, которую игра выстраивает три часа, разрешается тише, чем обещала. Если тебе важна отдача в конце, готовься.",
+    complaints: [
+      "Финал считают скомканным даже те, кому игра понравилась",
+      "Ходьбы много, а занятий между разговорами почти нет",
+      "Карта и компас работают нарочито неудобно",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 53,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Продолжение Hades: та же структура забега, другая героиня, добавлена подготовка заклинаний перед вылазкой.",
+    forYou:
+      "Ты поставил первой части A и написал «встать можно в любой момент». Формат не изменился: двадцать минут на забег, диалоги между ними не повторяются.",
+    against:
+      "Появился сбор ресурсов для заклинаний — небольшой, но это именно тот тип занятия, который ты называешь налогом. И это ранний доступ: часть контента ещё меняется.",
+    complaints: [
+      "Сбор ресурсов между забегами добавляет обязательной рутины",
+      "Ранний доступ: баланс и концовки ещё переписывают",
+      "Вторая героиня заметно медленнее, привыкать придётся заново",
+    ],
+    reviewsUsed: 38,
+  },
+  {
+    gameId: 55,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Игра, состоящая почти целиком из боссов, нарисованных вручную в стилистике мультфильмов тридцатых годов.",
+    forYou:
+      "Коридоров между боями почти нет, собирательства нет, прокачки нет — только руки. Про Celeste ты написал, что четыреста смертей не злят, потому что смерть стоит полсекунды; здесь цена ошибки такая же.",
+    against:
+      "Сложность распределена неровно, и пара боссов останавливает надолго. Ещё это игра для геймпада — на клавиатуре жалуются заметно чаще.",
+    complaints: [
+      "Несколько боссов выбиваются по сложности и стопорят прохождение",
+      "Уровни-стрелялки на самолёте нравятся куда меньше остальных",
+      "На клавиатуре управление ощутимо хуже, чем на геймпаде",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 35,
+    fit: "yes",
+    tier: "B",
+    summary:
+      "Восемь часов головоломок с порталами и один из самых цитируемых текстов в играх; есть отдельная кооперативная кампания.",
+    forYou:
+      "Обе твои опоры сразу: плотный ручной уровень и текст, ради которого не хочется проматывать. Ни карты, ни побочного, ни прокачки.",
+    against:
+      "Руки здесь почти не нужны — вся сложность в голове. Ты ценишь точное управление и отзывчивость, а этой игре они просто не требуются.",
+    complaints: [
+      "Между головоломками много ходьбы по коридорам",
+      "Часть решений сводится к поиску единственной белой стены",
+      "Кооперативная кампания требует напарника и в одиночку недоступна",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 36,
+    fit: "yes",
+    tier: "B",
+    summary:
+      "Три часа, за которые жанр головоломок от первого лица придумали заново; предыстория второй части.",
+    forYou:
+      "Три часа без единой лишней комнаты — та же формулировка, которой ты описал Hollow Knight. И начинать логично с неё: вторая часть прямо продолжает эту.",
+    against:
+      "Игра 2007 года, и это заметно: тестовые камеры выглядят одинаково серыми, а последняя треть заметно слабее начала.",
+    complaints: [
+      "Все камеры выглядят одинаково — визуального разнообразия нет",
+      "Финальная часть с побегом слабее основной",
+      "Три часа — многие считают это скорее прологом, чем игрой",
+    ],
+    reviewsUsed: 38,
+  },
+  {
+    gameId: 63,
+    fit: "yes",
+    tier: "A",
+    summary:
+      "Ролевая игра в пустоши Мохаве: почти любой конфликт решается разговором, а исход зависит от того, кого ты поддержал.",
+    forYou:
+      "Первый проход поставил B, опасаясь возраста игры. Отзывы говорят обратное: люди возвращаются к ней спустя пятнадцать лет именно ради текста, и это твоя главная опора — Disco Elysium у тебя S, а первый акт Baldur's Gate 3 ты хвалил за спутников. Открытый мир здесь не карта с иконками: значков нет, есть дороги и разговоры.",
+    against:
+      "Техническое состояние честно плохое: вылеты в поздней игре — обычное дело, и без сторонних правок многие не доигрывают. Боёвка слабая и остаётся такой до конца.",
+    complaints: [
+      "Вылеты и зависания в поздней игре без сторонних исправлений",
+      "Стрельба ощущается вяло даже по меркам своего времени",
+      "Интерфейс и инвентарь рассчитаны на другую эпоху",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 59,
+    fit: "maybe",
+    tier: "B",
+    summary:
+      "Экшен про Человека-паука в открытом Манхэттене: отличная постановка основной линии и стандартный набор побочных занятий вокруг неё.",
+    forYou:
+      "Полёты на паутине — лучшее ощущение движения в жанре, а основная линия короткая и поставлена плотно. Её одну можно пройти часов за пятнадцать.",
+    against:
+      "Всё остальное — вышки, склады и случайные преступления на улицах, то есть ровно то, за что ты снёс Cyberpunk 2077 со словами «чистил карту вместо того, чтобы играть в историю».",
+    complaints: [
+      "Побочные задания повторяются почти без изменений",
+      "Обязательные эпизоды за других персонажей ломают темп",
+      "Открытый мир существует ради заполнения, а не ради истории",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 65,
+    fit: "maybe",
+    tier: "C",
+    summary:
+      "Мрачный рогалик про отряд наёмников, которых игра методично изматывает: стресс, болезни и смерть без возврата.",
+    forYou:
+      "Одна вылазка — двадцать-тридцать минут, и выйти можно между ними. Решения жёсткие и внятные, случайность видна честно.",
+    against:
+      "Между вылазками надо лечить, нанимать и копить — это время, а не умение. Ты писал ровно об этом про Stardew Valley: «оптимизирую маршрут вместо того, чтобы отдыхать».",
+    complaints: [
+      "Между вылазками много обязательной возни в городе",
+      "Случайные промахи при 95% решают исход боя чаще, чем хотелось бы",
+      "Поздняя игра требует нескольких равных отрядов, то есть фарма",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 70,
+    fit: "no",
+    tier: "D",
+    summary:
+      "Открытый мир в пустоши с обязательной стройкой поселений и радиовызовами, которые не заканчиваются никогда.",
+    forYou:
+      "Стрельба заметно лучше, чем в предыдущих частях серии, — это единственное, что хвалят почти все.",
+    against:
+      "Стройка и защита поселений — тот самый крафт как обязательный налог, из-за которого ты ушёл из Valheim, только вместо руды здесь мусор. Диалоги при этом сведены к четырём вариантам ответа, а текст — твоя главная причина терпеть длинное.",
+    complaints: [
+      "Радио бесконечно шлёт однотипные задания на защиту поселений",
+      "Четыре варианта ответа в диалоге вместо реального выбора",
+      "Сортировка мусора ради стройки занимает больше времени, чем сюжет",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 73,
+    fit: "no",
+    tier: "D",
+    summary:
+      "Изометрический симулятор выживания в зомби-апокалипсисе, устроенный вокруг голода, ран, настроения и очень медленной смерти.",
+    forYou:
+      "Ничего существенного. Первые часы дают ту же тревогу неизвестности, что ты описывал в записи про Valheim, — на этом всё.",
+    against:
+      "Игра целиком состоит из обслуживания персонажа: еда, вода, температура, инвентарь. Твоя фраза про Stardew Valley — «оптимизирую маршрут вместо того, чтобы отдыхать» — описывает её точнее любого отзыва.",
+    complaints: [
+      "Смерть окончательная, и сотня часов пропадает за одну ошибку",
+      "Управление и инвентарь освоить без гайдов почти невозможно",
+      "Часы уходят на быт, а не на события",
+    ],
+    reviewsUsed: 40,
+  },
+  {
+    gameId: 76,
+    fit: "no",
+    tier: "D",
+    summary:
+      "Средневековая песочница с боями на сотни солдат и полностью открытой картой, которая не ставит перед игроком никакой цели.",
+    forYou:
+      "Сами бои действительно уникальны: ничего похожего по масштабу в твоей библиотеке нет.",
+    against:
+      "Игра не говорит, чем в ней заниматься, и первые часы уходят на караваны и накопление денег. Всё, что ты бросал — Valheim, Stardew Valley, ELDEN RING, — начиналось примерно так же: сначала работа, потом, может быть, интересное.",
+    complaints: [
+      "Сюжетная линия обрывается и фактически не завершена",
+      "Первые часы — торговля и накопление, а не бои",
+      "Осады однообразны, несмотря на масштаб",
+    ],
+    reviewsUsed: 38,
   },
 ];
 
@@ -1713,6 +2808,8 @@ export const DEMO = {
   diaryMentions: DEMO_DIARY_MENTIONS,
   taste: DEMO_TASTE_PROFILE,
   recommendations: DEMO_RUN,
+  /** The second run, shown after "regenerate". Same shape, other games. */
+  recommendationsAlt: DEMO_RUN_ALT,
   deepDives: DEMO_DEEP_DIVES,
   demos: DEMO_DEMOS,
   stats: DEMO_STATS,

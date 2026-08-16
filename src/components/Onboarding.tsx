@@ -286,7 +286,7 @@ export default function Onboarding({
   );
 }
 
-/** Step titles are needed both by the progress bar and by the final list of leftovers. */
+/** Full step titles — for the card heading and the list of leftovers on the last step. */
 const LABELS: Record<StepId, (s: Dict) => string> = {
   key: (s) => s.onboarding.keyTitle,
   library: (s) => s.onboarding.libraryTitle,
@@ -294,6 +294,23 @@ const LABELS: Record<StepId, (s: Dict) => string> = {
   ready: (s) => s.onboarding.readyTitle,
 };
 
+/** One word per pill: the full title is the card heading directly underneath. */
+const SHORT: Record<StepId, (s: Dict) => string> = {
+  key: (s) => s.onboarding.keyShort,
+  library: (s) => s.onboarding.libraryShort,
+  reviews: (s) => s.onboarding.reviewsShort,
+  ready: (s) => s.onboarding.doneShort,
+};
+
+/*
+ * The pills are the only progress indicator: they show both where you are and
+ * what is already closed, so a separate "step 2 of 4" line above them said
+ * strictly less than what was drawn right underneath.
+ *
+ * Sized by their content and allowed to wrap rather than laid out four to a row:
+ * an equal-width grid is what forced the captions to be cut off in the first
+ * place, and on a narrow screen four of them do not fit at any caption length.
+ */
 function Progress({
   order,
   done,
@@ -308,34 +325,33 @@ function Progress({
   s: Dict;
 }) {
   return (
-    <div>
-      <p className="mb-3 text-xs tracking-[0.2em] text-gray-500 uppercase">
-        {s.onboarding.progress(order.indexOf(step) + 1, order.length)}
-      </p>
-      <ol className="grid gap-2 sm:grid-cols-4">
-        {order.map((id) => {
-          const active = id === step;
-          return (
-            <li key={id}>
-              <button
-                type="button"
-                onClick={() => onGo(id)}
-                className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
-                  active
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
-                    : "border-gray-800 text-gray-400 hover:border-gray-700"
-                }`}
-              >
-                <span className="block truncate">{LABELS[id](s)}</span>
-                <span className="block text-xs text-gray-600">
-                  {done[id] ? `✓ ${s.onboarding.stepDone}` : " "}
+    <ol className="flex flex-wrap gap-2">
+      {order.map((id) => {
+        const active = id === step;
+        return (
+          <li key={id}>
+            <button
+              type="button"
+              onClick={() => onGo(id)}
+              aria-current={active ? "step" : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm whitespace-nowrap transition ${
+                active
+                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
+                  : "border-gray-800 text-gray-400 hover:border-gray-700"
+              }`}
+            >
+              {done[id] && (
+                <span aria-hidden="true" className="text-emerald-400">
+                  ✓
                 </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+              )}
+              {SHORT[id](s)}
+              {done[id] && <span className="sr-only"> — {s.onboarding.stepDone}</span>}
+            </button>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
