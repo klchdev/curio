@@ -3,8 +3,9 @@ import { getUserId } from "../../lib/auth";
 import { getEntryContext } from "../../lib/entry-context";
 
 /**
- * Что показать в листе впечатления до того, как человек начал писать: его же
- * прошлые слова об этой игре и расхождение оценки с тоном последних записей.
+ * What to show on the impression sheet before a person has started writing:
+ * their own earlier words about this game, and the gap between the rating and
+ * the tone of their latest entries.
  */
 export const GET: APIRoute = async ({ cookies, url }) => {
   const userId = getUserId(cookies);

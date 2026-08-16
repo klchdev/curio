@@ -44,9 +44,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const currentPlaytime = await getRecentPlaytime(user.steamId, game.steamAppId, { fresh: true });
 
   /*
-   * Через трекер, а не прямым update: кнопку жмут ровно тогда, когда человек
-   * только что вышел из игры, — это самый точный замер за вечер, и терять его
-   * в истории было бы обидно.
+   * Through the tracker rather than a direct update: the button gets pressed
+   * exactly when someone has just quit the game — that is the most accurate
+   * measurement of the evening, and losing it from the history would be a shame.
    */
   await recordPlaytime(
     userId,

@@ -1,21 +1,22 @@
 /**
- * Расписание опросов внутри самого веб-процесса.
+ * Poll scheduling inside the web process itself.
  *
- * На Railway отдельная крон-служба поднимала бы контейнер под задачу на
- * полторы секунды и упиралась бы в пятиминутный минимум расписания, а границы
- * сессий нужны точнее. Внутри уже работающего процесса это два таймера, и код
- * трекера остаётся тем же, что у приложения: та же схема, тот же пул
- * подключений, те же переменные окружения (`astro:env` вне сборки Astro не
- * существует, и вынесенной службе пришлось бы городить свою точку входа).
+ * On Railway a separate cron service would spin a container up for a second and
+ * a half per job and run into the five-minute minimum schedule, while session
+ * boundaries need to be finer than that. Inside an already running process it
+ * comes down to two timers, and the tracker's code stays the same as the app's:
+ * same schema, same connection pool, same environment variables (`astro:env`
+ * doesn't exist outside an Astro build, and a service split off on its own
+ * would have to bolt together an entry point of its own).
  *
- * Расплата — служба должна не спать: с включённым App Sleeping таймеры встают
- * вместе с контейнером. Поэтому опросы дублируются http-ручкой /api/cron/poll:
- * ей всё равно, кто дёрнул — таймер, крон Railway или курл.
+ * The price is that the service must not sleep: with App Sleeping on, the
+ * timers stop along with the container. So the polls are duplicated by the http
+ * endpoint /api/cron/poll: it doesn't care who pulled it — a timer, Railway's
+ * cron or curl.
  *
- * Считается, что реплика одна. Если их станет несколько, каждая начнёт свой
- * опрос; двойного учёта не будет (прирост считается под блокировкой строки в
- * той же транзакции, где записывается новое значение), но запросов к Valve
- * станет вдвое больше.
+ * A single replica is assumed. If there are several, each starts its own poll;
+ * nothing gets counted twice (the gain is computed under a row lock in the same
+ * transaction that writes the new value), but Valve gets twice the requests.
  */
 import {
   PLAYTIME_INTERVAL_MS,
@@ -30,31 +31,31 @@ export type TrackerJob = "presence" | "playtime";
 
 let started = false;
 
-/** Опрос идёт дольше своего интервала — второй поверх него не запускаем. */
+/** A poll outlasting its own interval — we don't start a second one on top. */
 const inFlight = new Set<TrackerJob>();
 
 function report(job: TrackerJob, result: PollResult): void {
   for (const error of result.errors) console.error(`[tracker:${job}] ${error}`);
   if (result.changed > 0) {
-    console.log(`[tracker:${job}] ${result.changed} изменений у ${result.users} игроков`);
+    console.log(`[tracker:${job}] ${result.changed} changes across ${result.users} players`);
   }
 }
 
 interface JobState {
   runs: number;
   lastRunAt: string | null;
-  /** Последний раз, когда опрос что-то увидел, а не просто отработал вхолостую. */
+  /** The last time a poll saw something, rather than just idling through a run. */
   lastChangeAt: string | null;
   lastError: string | null;
 }
 
 /**
- * Следы работы опросов.
+ * Traces of the polls doing their work.
  *
- * При простое опрос молчит — играть могут раз в неделю, и лог, полный «ничего
- * не изменилось», бесполезен. Но тогда остановившийся таймер выглядит ровно
- * как тихий, и заметить поломку можно только по пустым графикам через месяц.
- * Счётчик прогонов отвечает на этот вопрос сразу.
+ * When nothing is happening the poll stays quiet — someone may play once a
+ * week, and a log full of "nothing changed" is useless. But then a stopped timer
+ * looks exactly like a quiet one, and the breakage would only surface as empty
+ * charts a month later. A run counter answers that question right away.
  */
 const state: Record<TrackerJob, JobState> = {
   presence: { runs: 0, lastRunAt: null, lastChangeAt: null, lastError: null },
@@ -81,7 +82,7 @@ export async function runJob(job: TrackerJob): Promise<PollResult | null> {
     state[job].runs += 1;
     state[job].lastRunAt = at.toISOString();
     state[job].lastError = (error as Error).message;
-    console.error(`[tracker:${job}] упал:`, (error as Error).message);
+    console.error(`[tracker:${job}] failed:`, (error as Error).message);
     return null;
   } finally {
     inFlight.delete(job);
@@ -89,9 +90,9 @@ export async function runJob(job: TrackerJob): Promise<PollResult | null> {
 }
 
 /**
- * Заводит таймеры. Идемпотентна: её зовут и при старте контейнера, и на каждый
- * заход в крон-ручку — какой из способов сработает первым, зависит от того,
- * как приложение подняли.
+ * Starts the timers. Idempotent: it gets called both on container startup and
+ * on every hit to the cron endpoint — which of the two fires first depends on
+ * how the app was brought up.
  */
 export function startTracker(): boolean {
   if (started) return false;
@@ -101,15 +102,15 @@ export function startTracker(): boolean {
   setInterval(() => void runJob("playtime"), PLAYTIME_INTERVAL_MS);
 
   /*
-   * Первым делом — подвешенные сессии: контейнер мог уехать в деплой прямо
-   * посреди вечера, и открытая сессия должна закрыться прошлым опросом, а не
-   * тянуться до следующего запуска игры.
+   * Hanging sessions come first: the container may have gone off into a deploy
+   * in the middle of the evening, and an open session should be closed at the
+   * last poll rather than dragging on until the game is launched again.
    */
   void closeStaleSessions()
     .then((closed) => {
-      if (closed > 0) console.log(`[tracker] закрыто подвисших сессий: ${closed}`);
+      if (closed > 0) console.log(`[tracker] stale sessions closed: ${closed}`);
     })
-    .catch((error) => console.error("[tracker] сессии:", (error as Error).message));
+    .catch((error) => console.error("[tracker] sessions:", (error as Error).message));
 
   void runJob("presence");
   void runJob("playtime");

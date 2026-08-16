@@ -1,41 +1,43 @@
 /**
- * Трекер наигранного времени.
+ * The playtime tracker.
  *
- * Steam не хранит историю по дням и часам, и в апи её нет. Но он отдаёт два
- * сигнала, из которых история строится сама, если снимать их регулярно:
+ * Steam keeps no history by day and hour, and the api has none either. But it
+ * hands out two signals from which the history builds itself, as long as they
+ * are sampled regularly:
  *
- *   1. `playtime_forever` — накопительный счётчик минут. Точен по минутам,
- *      но обновляется рывками: три часа вечера могут прилететь одним куском
- *      в момент выхода из игры. Из него получаются замеры (playtime_snapshots).
- *   2. Статус «играет в X прямо сейчас» из профиля. Ничего не знает о
- *      минутах, зато честен по времени. Из него получаются сессии
+ *   1. `playtime_forever` — a cumulative counter of minutes. Exact down to the
+ *      minute, but it updates in jumps: three hours of an evening can arrive in
+ *      one lump the moment you quit the game. It yields the snapshots
+ *      (playtime_snapshots).
+ *   2. The "playing X right now" status from the profile. It knows nothing
+ *      about minutes, but it is honest about time. It yields the sessions
  *      (play_sessions).
  *
- * Ни один из них по отдельности не отвечает на вопрос «во сколько ты обычно
- * играешь и сколько за раз» — вместе отвечают. Поэтому опросов два, с разной
- * частотой, и данные они пишут в разные таблицы.
+ * Neither of them alone answers "when do you usually play, and for how long at
+ * a stretch" — together they do. Hence two polls, running at different rates
+ * and writing into different tables.
  */
 import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { games, playSessions, playtimeSnapshots, userGames, users } from "../db/schema";
 import { getPlayersPresence, getRecentlyPlayedGames } from "./steam";
 
-/** Как часто спрашиваем статус. Настолько же неточны границы сессий. */
+/** How often we ask for the status. Session boundaries are off by just as much. */
 export const PRESENCE_INTERVAL_MS = 3 * 60 * 1000;
 
-/** Как часто снимаем счётчик. Чаще смысла нет: Steam сам обновляет реже. */
+/** How often we sample the counter. More often is pointless: Steam updates slower. */
 export const PLAYTIME_INTERVAL_MS = 30 * 60 * 1000;
 
 /**
- * Сколько сессия переживает молчание опроса. Больше интервала в разы:
- * перезапуск контейнера или моргнувший Steam не должны рвать вечер надвое.
+ * How long a session survives silence from the poll. Several times the
+ * interval: a container restart or a Steam blip must not tear an evening in two.
  */
 const SESSION_GRACE_MS = 12 * 60 * 1000;
 
 /**
- * Насколько поздно прирост счётчика ещё можно приписать закрытой сессии.
- * Steam засчитывает минуты при выходе из игры, а замер приходит раз в
- * полчаса — к этому моменту сессия уже закрыта опросом статуса.
+ * How late a counter gain can still be attributed to a closed session. Steam
+ * credits the minutes when you quit the game, and a snapshot arrives once every
+ * half hour — by which point the status poll has already closed the session.
  */
 const GAIN_WINDOW_MS = 3 * 60 * 60 * 1000;
 
@@ -51,7 +53,7 @@ function minutesBetween(from: Date, to: Date): number {
   return Math.max(0, Math.round((to.getTime() - from.getTime()) / 60_000));
 }
 
-/** Наблюдение за одной игрой: столько минут в ней на такой-то момент. */
+/** One observation of one game: this many minutes in it as of this moment. */
 export interface PlaytimeObservation {
   appId: number;
   name: string;
@@ -62,11 +64,12 @@ export interface PlaytimeObservation {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
- * Заводит карточки под наблюдаемые appid и возвращает их id.
+ * Creates cards for the observed appids and returns their ids.
  *
- * Нужна и трекеру, и синку: игра может впервые попасться на глаза во время
- * опроса — купил и запустил между заходами в приложение. Подробности из
- * магазина дотянет синк, здесь важно только не потерять факт игры.
+ * Needed by the tracker and by the sync alike: a game can first come into view
+ * during a poll — bought and launched between two visits to the app. The sync
+ * will pull the store details in later; all that matters here is not losing the
+ * fact that it was played.
  */
 async function ensureGameIds(
   tx: Tx,
@@ -102,16 +105,16 @@ async function ensureGameIds(
 }
 
 /**
- * Записывает замер: сколько минут в играх сейчас и на сколько это больше,
- * чем было в прошлый раз.
+ * Records a snapshot: how many minutes sit in the games now, and how much more
+ * that is than last time.
  *
- * База для сравнения — `user_games.playtime_minutes`, то самое последнее
- * известное значение. Поэтому и чтение базы, и запись новой идут в одной
- * транзакции со строчной блокировкой: иначе два опроса, сошедшихся в одну
- * секунду (крон и таймер), запишут один и тот же прирост дважды.
+ * The baseline for the comparison is `user_games.playtime_minutes`, that very
+ * last known value. Which is why reading the baseline and writing the new one
+ * happen in one transaction under a row lock: otherwise two polls that meet
+ * within the same second (cron and timer) would record the same gain twice.
  *
- * Игра, увиденная впервые, прироста не даёт вовсе: у неё нет «прошлого раза»,
- * и всё накопленное за годы не должно превратиться в один вечер.
+ * A game seen for the first time yields no gain at all: it has no "last time",
+ * and years of accumulated hours must not turn into a single evening.
  */
 export async function recordPlaytime(
   userId: number,
@@ -161,7 +164,7 @@ export async function recordPlaytime(
         userId,
         gameId,
         playtimeMinutes: observation.playtimeMinutes,
-        // Опрос не отдаёт дату последнего запуска, но прирост её и означает
+        // The poll gives no last-played date, but a gain is exactly what it means
         lastPlayedAt: observation.lastPlayedAt ?? (delta > 0 ? at : null),
       });
     }
@@ -180,7 +183,7 @@ export async function recordPlaytime(
           target: [userGames.userId, userGames.gameId],
           set: {
             playtimeMinutes: sql`excluded.playtime_minutes`,
-            // Пустая дата из опроса не должна стирать известную из синка
+            // An empty date from the poll must not erase the one known from the sync
             lastPlayedAt: sql`coalesce(excluded.last_played_at, ${userGames.lastPlayedAt})`,
           },
         });
@@ -201,15 +204,16 @@ export async function recordPlaytime(
 }
 
 /**
- * Ищет сессию, которой принадлежит прирост счётчика.
+ * Finds the session a counter gain belongs to.
  *
- * Сессия знает, когда игрок сидел в игре, но не знает, сколько Steam за это
- * начислил; замер знает минуты, но приходит с опозданием и без границ. Связь
- * между ними — единственный способ получить «сессия на два часа сорок» вместо
- * «где-то между 21:00 и 23:30 набежало 160 минут».
+ * A session knows when the player sat in the game but not what Steam credited
+ * for it; a snapshot knows the minutes but arrives late and without boundaries.
+ * Linking the two is the only way to get "a session of two hours forty" instead
+ * of "somewhere between 21:00 and 23:30, 160 minutes accumulated".
  *
- * Пустой ответ — законный: в игру играли без нас, и в статистике эти минуты
- * лягут отдельной строкой, а не растворятся в сессиях.
+ * An empty answer is legitimate: the game was played without us, and in the
+ * statistics those minutes land on their own row rather than dissolving into
+ * sessions.
  */
 async function sessionForGain(
   tx: Tx,
@@ -237,13 +241,14 @@ async function sessionForGain(
 }
 
 /**
- * Двигает сессии по одному наблюдению статуса.
+ * Advances the sessions from a single status observation.
  *
- * Три случая: игрок в той же игре — сессия продлевается; игрок вышел или
- * сменил игру — старая закрывается задним числом, последним опросом, который
- * его в ней застал; игрок в новой игре — открывается новая. Разрыв больше
- * `SESSION_GRACE_MS` считается выходом, даже если игра та же: между двумя
- * заходами в одну игру был перерыв, и склеивать их в один вечер неправильно.
+ * Three cases: the player is in the same game — the session is extended; the
+ * player has quit or switched games — the old one is closed retroactively, at
+ * the last poll that still caught them in it; the player is in a new game — a
+ * new session opens. A gap longer than `SESSION_GRACE_MS` counts as quitting
+ * even for the same game: there was a break between the two visits, and gluing
+ * them into one evening would be wrong.
  */
 async function applyPresence(
   userId: number,
@@ -306,11 +311,11 @@ export interface PollResult {
 }
 
 /**
- * Все, за кем есть смысл следить.
+ * Everyone worth watching.
  *
- * Отсеиваем тестовые учётки: steamid64 — это ровно семнадцать цифр, а на
- * «123» Valve отвечает 400, и опрос каждые три минуты пишет в лог ошибку,
- * которая ничего не значит.
+ * Test accounts get filtered out: a steamid64 is exactly seventeen digits, and
+ * to "123" Valve answers 400 — so every three minutes the poll would write a
+ * log error that means nothing.
  */
 async function trackedUsers() {
   const all = await db.select({ id: users.id, steamId: users.steamId }).from(users);
@@ -318,10 +323,10 @@ async function trackedUsers() {
 }
 
 /**
- * Опрос счётчика: сколько минут набежало с прошлого раза.
+ * The counter poll: how many minutes have piled up since last time.
  *
- * Тянем не библиотеку, а недавно игранное — ответ на порядки легче, а всё
- * остальное всё равно не меняется.
+ * We fetch recently played games rather than the library — the response is
+ * orders of magnitude lighter, and everything else hasn't changed anyway.
  */
 export async function pollPlaytime(at: Date = new Date()): Promise<PollResult> {
   const list = await trackedUsers();
@@ -351,10 +356,10 @@ export async function pollPlaytime(at: Date = new Date()): Promise<PollResult> {
 }
 
 /**
- * Опрос статуса: кто во что играет прямо сейчас.
+ * The status poll: who is playing what right now.
  *
- * Один запрос на сотню игроков, поэтому частота упирается не в лимиты Valve,
- * а в то, с какой точностью нужны границы сессий.
+ * One request per hundred players, so the rate is bounded not by Valve's limits
+ * but by how precisely we need the session boundaries.
  */
 export async function pollPresence(at: Date = new Date()): Promise<PollResult> {
   const list = await trackedUsers();
@@ -390,11 +395,11 @@ export async function pollPresence(at: Date = new Date()): Promise<PollResult> {
 }
 
 /**
- * Закрывает сессии, о которых опрос забыл.
+ * Closes sessions the poll has forgotten about.
  *
- * Приложение могло простоять выключенным, и открытая сессия так и висит с
- * прошлой недели. Считать её идущей нельзя: она врёт и в статистике, и в
- * привязке приростов.
+ * The app may have sat switched off, leaving an open session hanging since last
+ * week. It can't be treated as running: it lies both in the statistics and in
+ * the attribution of gains.
  */
 export async function closeStaleSessions(at: Date = new Date()): Promise<number> {
   const deadline = new Date(at.getTime() - SESSION_GRACE_MS);

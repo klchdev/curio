@@ -1,17 +1,18 @@
 /**
- * Софт или игра — по данным карточки магазина.
+ * Software or game — decided from the store page data.
  *
- * Без импортов astro:env и db: модуль нужен и серверу, и разовым скриптам.
+ * No astro:env or db imports: the module is needed by the server and by
+ * one-off scripts alike.
  *
- * Первая версия отсекала всё, у чего `type !== "game"`, и всё без жанров —
- * и записала в софт GTR Evolution (числится dlc), Killing Floor Mod (mod),
- * Cities XL и Mortal Kombat (legacy-тип advertising) и Total War: SHOGUN 2,
- * у которой в карточке просто нет жанров. Прятать чужие игры хуже, чем
- * пропустить в список одну утилиту, поэтому теперь софт помечается только
- * по положительным уликам.
+ * The first version rejected everything with `type !== "game"` and everything
+ * without genres — and so filed as software GTR Evolution (listed as dlc),
+ * Killing Floor Mod (mod), Cities XL and Mortal Kombat (the legacy type
+ * advertising), and Total War: SHOGUN 2, whose store page simply carries no
+ * genres. Hiding someone's games is worse than letting one utility into the
+ * list, so software is now flagged on positive evidence only.
  */
 
-/** Жанры, которые Steam даёт инструментам. */
+/** Genres Steam hands out to tools. */
 const SOFTWARE_GENRES = new Set([
   "Animation & Modeling",
   "Audio Production",
@@ -25,16 +26,16 @@ const SOFTWARE_GENRES = new Set([
   "Web Publishing",
 ]);
 
-/** Типы, которые играми не бывают вовсе. */
+/** Types that are never games at all. */
 const SOFTWARE_TYPES = new Set(["software", "video", "music", "audio", "movie", "series"]);
 
-/** Наличие такой категории — прямое доказательство, что в это играют. */
+/** One of these categories is direct proof that the thing gets played. */
 const PLAYER_CATEGORIES = ["Single-player", "Multi-player", "Co-op", "PvP", "MMO"];
 
 /**
- * Техническая обвязка, а не свойство продукта. У ARC Raiders Playtest в
- * карточке нет ничего, кроме поддержки геймпадов, — принимать это за признак
- * заполненной карточки нельзя, иначе плейтесты уезжают в софт.
+ * Plumbing, not a property of the product. The ARC Raiders Playtest page has
+ * nothing on it but controller support — taking that as a sign of a filled-in
+ * page is wrong, or playtests drift off into software.
  */
 const NON_FEATURE_CATEGORIES = new Set([
   "Family Sharing",
@@ -53,16 +54,16 @@ export function classifyAsSoftware(
 ): boolean {
   if (type && SOFTWARE_TYPES.has(type)) return true;
 
-  // В это играют — дальше можно не гадать
+  // This gets played — no need to guess any further
   if (categories.some((c) => PLAYER_CATEGORIES.some((p) => c.includes(p)))) return false;
 
   const software = genres.filter((g) => SOFTWARE_GENRES.has(g)).length;
   if (genres.length > 0 && software / genres.length >= 0.5) return true;
 
   /*
-   * Ни одного жанра, но карточка заполнена — так выглядят служебные
-   * приложения вроде SteamVR. Пустая карточка (только «Family Sharing»)
-   * ничего не доказывает: это старая игра без метаданных.
+   * No genres at all, yet the page is filled in — that is what utility apps
+   * like SteamVR look like. An empty page (only "Family Sharing") proves
+   * nothing: that's an old game with no metadata.
    */
   const meaningful = categories.filter((c) => !NON_FEATURE_CATEGORIES.has(c));
   if (genres.length === 0 && meaningful.length > 0) return true;

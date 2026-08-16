@@ -1,32 +1,34 @@
 /**
- * Восстанавливает историю наигранного времени из дневника.
+ * Reconstructs playtime history from the journal.
  *
- * Трекер пишет историю с того дня, как его завели, а до него в базе уже лежал
- * ответ на тот же вопрос, просто в другой форме: каждая запись дневника
- * помечена абсолютным наигранным временем и датой. Две записи об одной игре —
- * это «между третьим и двенадцатым мая наиграно 127 минут». Взятый контракт
- * даёт такую же пару: время на старте и время в первой записи.
+ * The tracker records history from the day it was set up, but the answer to the
+ * same question was already sitting in the database before that, just in another
+ * shape: every journal entry is stamped with an absolute playtime and a date.
+ * Two entries about one game mean "127 minutes played between May 3rd and May
+ * 12th". A slot that was taken gives the same kind of pair: the playtime at the
+ * start and the playtime in the first entry.
  *
- * Чего в этих данных нет и не будет — часа. Поэтому строки помечаются
- * `source='backfill'` и несут `since_at`: статистика по времени суток их
- * обязана игнорировать, а итоги по играм и месяцам — нет.
+ * What this data doesn't have, and never will, is the hour. That's why the rows
+ * are marked `source='backfill'` and carry `since_at`: time-of-day statistics
+ * are obliged to ignore them, while per-game and per-month totals are not.
  *
- * Идемпотентен: восстановленные строки вычисляются заново целиком, живые
- * замеры опроса не трогаются.
+ * Idempotent: the reconstructed rows are recomputed from scratch in full, and
+ * the live polling readings are left untouched.
  *
  *   DATABASE_URL=... npx tsx scripts/backfill-playtime-history.ts [--apply]
  *
- * Без --apply только показывает, что бы записалось.
+ * Without --apply it only shows what would be written.
  */
 import pg from "pg";
 
 const apply = process.argv.includes("--apply");
 
 /*
- * Даты дневника лежат в колонках без пояса, и драйвер разбирает их по поясу
- * процесса: на машине разработчика тот же ряд прочитается на несколько часов
- * иначе, чем на сервере. Приложение живёт в UTC — читаем так же, иначе
- * восстановленные интервалы уедут относительно живых замеров.
+ * Journal dates sit in columns without a time zone, and the driver parses them
+ * in the process's own zone: on a developer's machine the same row reads several
+ * hours differently than on the server. The app lives in UTC — we read them the
+ * same way, otherwise the reconstructed intervals drift relative to the live
+ * readings.
  */
 pg.types.setTypeParser(1114, (value: string) => new Date(`${value}Z`));
 
@@ -37,7 +39,7 @@ interface Interval {
   takenAt: Date;
   playtimeMinutes: number;
   deltaMinutes: number;
-  kind: "запись → запись" | "контракт → запись";
+  kind: "entry → entry" | "slot → entry";
 }
 
 const BETWEEN_ENTRIES = `
@@ -56,8 +58,9 @@ const BETWEEN_ENTRIES = `
 `;
 
 /*
- * Первая запись треда, а не любая: контракт задаёт время только до неё.
- * Дальше интервалы считает запрос выше, и складывать их нельзя.
+ * The first entry of a thread, not just any entry: the slot only fixes the
+ * playtime up to that one. Beyond it the intervals are counted by the query
+ * above, and the two must not be added together.
  */
 const FROM_SLOT = `
   with firsts as (
@@ -76,7 +79,7 @@ const FROM_SLOT = `
 `;
 
 function hours(minutes: number): string {
-  return `${Math.round(minutes / 6) / 10} ч`;
+  return `${Math.round(minutes / 6) / 10} h`;
 }
 
 function day(date: Date): string {
@@ -85,7 +88,7 @@ function day(date: Date): string {
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("Нужен DATABASE_URL");
+  if (!connectionString) throw new Error("DATABASE_URL is required");
 
   const db = new pg.Client({ connectionString });
   await db.connect();
@@ -93,8 +96,8 @@ async function main() {
   const intervals: Interval[] = [];
 
   for (const [query, kind] of [
-    [BETWEEN_ENTRIES, "запись → запись"],
-    [FROM_SLOT, "контракт → запись"],
+    [BETWEEN_ENTRIES, "entry → entry"],
+    [FROM_SLOT, "slot → entry"],
   ] as const) {
     const { rows } = await db.query(query);
     for (const row of rows) {
@@ -117,21 +120,21 @@ async function main() {
     ? `${day(intervals[0]!.sinceAt)} … ${day(intervals.at(-1)!.takenAt)}`
     : "—";
 
-  console.log(`Интервалов: ${intervals.length}, всего ${hours(total)}, период ${span}`);
-  for (const kind of ["запись → запись", "контракт → запись"] as const) {
+  console.log(`Intervals: ${intervals.length}, ${hours(total)} in total, span ${span}`);
+  for (const kind of ["entry → entry", "slot → entry"] as const) {
     const part = intervals.filter((item) => item.kind === kind);
     const sum = part.reduce((acc, item) => acc + item.deltaMinutes, 0);
-    console.log(`  ${kind}: ${part.length} шт, ${hours(sum)}`);
+    console.log(`  ${kind}: ${part.length} of them, ${hours(sum)}`);
   }
 
   const existing = await db.query(`select count(*)::int as n from playtime_snapshots where source = 'backfill'`);
-  console.log(`Уже восстановлено раньше: ${existing.rows[0].n}`);
+  console.log(`Already reconstructed earlier: ${existing.rows[0].n}`);
 
   if (!apply) {
-    console.log("\nСухой прогон. Запусти с --apply, чтобы записать.");
+    console.log("\nDry run. Run with --apply to write.");
     for (const item of intervals.slice(0, 5)) {
       console.log(
-        `  игра ${item.gameId}: ${day(item.sinceAt)} → ${day(item.takenAt)}, +${hours(item.deltaMinutes)}`
+        `  game ${item.gameId}: ${day(item.sinceAt)} → ${day(item.takenAt)}, +${hours(item.deltaMinutes)}`
       );
     }
     await db.end();
@@ -140,7 +143,8 @@ async function main() {
 
   await db.query("begin");
   try {
-    // Пересчитываем целиком: строки производные, накапливать дубли незачем
+    // Recompute the whole thing: these rows are derived, there's no point in
+    // accumulating duplicates
     await db.query(`delete from playtime_snapshots where source = 'backfill'`);
     for (const item of intervals) {
       await db.query(
@@ -151,7 +155,7 @@ async function main() {
       );
     }
     await db.query("commit");
-    console.log(`\nЗаписано строк: ${intervals.length}`);
+    console.log(`\nRows written: ${intervals.length}`);
   } catch (error) {
     await db.query("rollback");
     throw error;

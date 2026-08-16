@@ -32,8 +32,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!reason || typeof reason !== "string") return fail(s.skip.pickReason);
 
   /*
-   * Тип скипа решает код, а не текст: текст теперь приходит на языке
-   * пользователя, и сравнивать его со списком русских строк нельзя.
+   * The code decides the kind of skip, not the text: the text now arrives in
+   * the user's own language, and it cannot be matched against a list of
+   * Russian strings.
    */
   const isLegitimate = (SKIP_CODES as readonly string[]).includes(reasonCode);
   const result = await skipSlot(slotId, userId, isLegitimate ? "legitimate" : "shame", reason);

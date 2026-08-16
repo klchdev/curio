@@ -1,29 +1,30 @@
 import { normalizeTitle } from "./titles";
 
 /**
- * Привязка упоминаний к строкам каталога.
+ * Binding mentions to catalog rows.
  *
- * Работа разделена надвое намеренно. Модель делает то, что кодом не сделать:
- * понимает, что «первый LiS», «вторая часть» и «RE4» — это игры, и называет
- * их полностью (этим занят entry-reading.ts). Привязку к конкретной строке в
- * базе делает код: у модели нет каталога, и угадывать, какая именно Life is
- * Strange из пяти имеется в виду, она будет мимо. Промах в сопоставлении
- * чинится правкой правил, а не промпта.
+ * The split in two is deliberate. The model does what code cannot: it works out
+ * that "the first LiS", "part two" and "RE4" all name games, and spells them out
+ * in full (that part lives in entry-reading.ts). Binding a name to a specific
+ * row is the code's job: the model has no catalog, and guessing which of the
+ * five Life is Strange games is meant, it will miss. A bad match is fixed by
+ * editing the rules, not the prompt.
  *
- * Без импортов astro:env и db: модуль нужен и серверу, и разовому скрипту.
+ * No astro:env or db imports: this module is needed by the server and by a
+ * one-off script alike.
  */
 
-/** Что модель нашла в тексте: дословный кусок и её догадка о названии. */
+/** What the model found in the text: the verbatim span and its guess at the title. */
 export interface RawMention {
   surface: string;
   title: string;
 }
 
-/** Строка каталога для сопоставления. Флаги решают неоднозначность. */
+/** A catalog row to match against. The flags break the ties. */
 export interface CatalogGame {
   id: number;
   title: string;
-  /** Есть запись в дневнике — про эту игру человек точно знает. */
+  /** Has a diary record — this is a game the player definitely knows. */
   hasRecord: boolean;
   inLibrary: boolean;
 }
@@ -36,8 +37,8 @@ export interface PlacedMention {
 }
 
 /**
- * Из двух игр с одинаковым названием выбирается та, о которой человек уже
- * писал: своё для него определённее чужого.
+ * Between two games with the same title, take the one the player has already
+ * written about: what they have touched is surer than what they have not.
  */
 function pickBest(candidates: CatalogGame[]): CatalogGame {
   return [...candidates].sort((a, b) => {
@@ -48,12 +49,12 @@ function pickBest(candidates: CatalogGame[]): CatalogGame {
 }
 
 /**
- * Каталог даёт точное совпадение либо ничего.
+ * The catalog gives an exact match or nothing at all.
  *
- * Есть соблазн дотягивать по префиксу («Dishonored» → «Dishonored -
- * Definitive Edition»), и он оправдан ровно до тех пор, пока кандидат один.
- * «Life is Strange» — префикс пяти игр сразу, и любая догадка тут будет
- * ссылкой не на ту часть. Молчание в таком месте честнее.
+ * Stretching to a prefix is tempting («Dishonored» → «Dishonored - Definitive
+ * Edition»), and it holds up exactly as long as there is a single candidate.
+ * «Life is Strange» is a prefix of five games at once, and any guess there
+ * links to the wrong installment. Saying nothing is the honest answer.
  */
 function resolveTitle(title: string, index: Map<string, CatalogGame[]>): CatalogGame | null {
   const key = normalizeTitle(title);
@@ -75,12 +76,12 @@ function resolveTitle(title: string, index: Map<string, CatalogGame[]>): Catalog
 }
 
 /**
- * Ставит упоминания на их места в тексте.
+ * Puts mentions where they actually sit in the text.
  *
- * Позицию модель не сообщает — её ищет код: смещения модели врут чаще, чем
- * дословный кусок, а кусок ещё и проверяем. Не нашли подстроку — упоминания
- * не было; выдумывать место подсветки нельзя, иначе она уедет по чужому
- * тексту.
+ * The model never reports the position — the code finds it: model offsets lie
+ * more often than the verbatim span does, and the span can be verified on top
+ * of that. No substring match means there was no mention; inventing a spot for
+ * the highlight is not an option, or it slides onto someone else's words.
  */
 export function placeMentions(
   text: string,
@@ -102,7 +103,7 @@ export function placeMentions(
 
   for (const mention of raw) {
     const match = resolveTitle(mention.title, index);
-    // Запись и так об этой игре — ссылка сама на себя ничего не добавляет
+    // The entry is about this game anyway — a link to itself adds nothing
     if (match && match.id === ownGameId) continue;
 
     let from = 0;

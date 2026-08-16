@@ -3,11 +3,11 @@ import type { AstroCookies } from "astro";
 import { SESSION_SECRET } from "astro:env/server";
 
 /**
- * Авторизация в подписанной куке вместо серверного хранилища.
+ * Auth lives in a signed cookie instead of server-side storage.
  *
- * Хранить нужно ровно одно число — userId. Файловые сессии Astro лежали
- * внутри контейнера и исчезали на каждом деплое; кука переживает деплои,
- * рестарты и работу на нескольких инстансах.
+ * There is exactly one number to keep — the userId. Astro's file-backed
+ * sessions sat inside the container and vanished on every deploy; a cookie
+ * survives deploys, restarts and running on several instances.
  */
 
 const COOKIE_NAME = "br_auth";
@@ -24,7 +24,7 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(left, right);
 }
 
-/** Значение куки: `userId.expiresAt.подпись` */
+/** Cookie value: `userId.expiresAt.signature` */
 function serialize(userId: number): string {
   const expiresAt = Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS;
   const payload = `${userId}.${expiresAt}`;
@@ -45,7 +45,7 @@ function parse(value: string): number | null {
   return Number.isInteger(userId) && userId > 0 ? userId : null;
 }
 
-/** За обратным прокси реальный протокол приходит заголовком. */
+/** Behind a reverse proxy the real protocol arrives in a header. */
 function isSecureRequest(request: Request, url: URL): boolean {
   const forwarded = request.headers.get("x-forwarded-proto");
   if (forwarded) return forwarded.split(",")[0]!.trim() === "https";

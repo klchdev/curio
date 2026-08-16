@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
-/** Разовый перенос отзывов с профиля Steam. Идёт секунд десять: страниц немного. */
+/** A one-off import of reviews from a Steam profile. Takes about ten seconds: few pages. */
 export const POST: APIRoute = async ({ cookies, request }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
@@ -32,11 +32,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   try {
     const reviews = await fetchOwnReviews(user.steamId);
-    // Ноль отзывов и закрытый профиль выглядят одинаково — Steam не различает
+    // Zero reviews and a private profile look identical — Steam does not tell them apart
     if (reviews.length === 0) return json({ found: 0, imported: 0 });
 
     const { entryIds, ...result } = await importSteamReviews(userId, reviews);
-    // Перенесённые отзывы — такой же текст дневника: упоминания в них тоже ищем
+    // Imported reviews are diary text like any other: we look for mentions in them too
     for (const entryId of entryIds) queueEntryAnalysis(entryId);
     return json({ found: reviews.length, ...result });
   } catch (err) {

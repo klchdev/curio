@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Салют при закрытии контракта. Жил внутри CompleteModal — вынесен, чтобы
- * лист впечатления включал его по правилу режима, а не хранил копию.
+ * Fireworks for closing a contract. It used to live inside CompleteModal — it
+ * was pulled out so the impression sheet can turn it on by the mode's rule
+ * instead of keeping a copy of it.
  */
 export default function Celebration({ onDone }: { onDone: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

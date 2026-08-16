@@ -1,12 +1,12 @@
 /**
- * Сравнение названий игр.
+ * Comparing game titles.
  *
- * Нужно и разбору записей, и поиску по магазину, а тянуть ради одной функции
- * модуль с моделью незачем. Без импортов astro:env и db: работает и на
- * сервере, и в разовых скриптах.
+ * Both entry parsing and store search need this, and dragging in the module
+ * with the model for one function makes no sense. No astro:env or db imports:
+ * works on the server and in one-off scripts alike.
  */
 
-/** Римские номера частей: в базе «Civilization VI», в записи — «Civilization 6». */
+/** Roman sequel numbers: the catalog says "Civilization VI", an entry "Civilization 6". */
 const ROMAN: Record<string, string> = {
   i: "1",
   ii: "2",
@@ -21,9 +21,9 @@ const ROMAN: Record<string, string> = {
 };
 
 /**
- * Приводит название к виду, в котором сравнение имеет смысл: «Life is
- * Strange™» и «life is strange» должны сойтись, а «Life is Strange 2» —
- * остаться другой игрой.
+ * Reduces a title to a form where comparison means something: "Life is
+ * Strange™" and "life is strange" must match, while "Life is Strange 2" has to
+ * stay a different game.
  */
 export function normalizeTitle(value: string): string {
   const words = value

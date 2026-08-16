@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { LOCALE_COOKIE, isLocale } from "../../lib/i18n";
 
-/** Явный выбор языка живёт год: он важнее Accept-Language при каждом заходе. */
+/** An explicit language choice lives a year: it outranks Accept-Language on every visit. */
 export const GET: APIRoute = ({ url, cookies, redirect }) => {
   const to = url.searchParams.get("to");
   if (isLocale(to)) {
@@ -12,7 +12,7 @@ export const GET: APIRoute = ({ url, cookies, redirect }) => {
     });
   }
 
-  // Возвращаем только на свой же путь — открытый редирект тут не нужен
+  // Only ever return to a path of our own — an open redirect has no place here
   const back = url.searchParams.get("back");
   return redirect(back && back.startsWith("/") && !back.startsWith("//") ? back : "/");
 };

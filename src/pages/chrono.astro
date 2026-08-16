@@ -19,7 +19,7 @@ const [data, heartbeat, before] = await Promise.all([
 
 const dateFormat = locale === "en" ? "en-GB" : "ru-RU";
 
-/** Часы для блока «до трекера»: там минуты не значат ничего, точность лишняя. */
+/** Hours for the pre-tracker block: minutes mean nothing there, the precision is noise. */
 function hours(minutes: number): string {
   return `${Math.round(minutes / 60)} ${locale === "en" ? "h" : "ч"}`;
 }
@@ -37,9 +37,10 @@ const monthPeak = Math.max(...before.months.map((month) => month.minutes), 1);
 const gamePeak = Math.max(...before.games.map((game) => game.minutes), 1);
 
 /*
- * Раскладку по дням, часам и неделям делает браузер: границы суток зависят от
- * часового пояса игрока, а сервер живёт в UTC и знал бы их неправильно.
- * Отсюда и форма выгрузки — плоский список событий с абсолютным временем.
+ * The browser is what lays things out by day, hour and week: day boundaries
+ * depend on the player's timezone, and the server lives in UTC and would get
+ * them wrong. Hence the shape of the payload — a flat list of events with
+ * absolute timestamps.
  */
 const payload = {
   since: data.since?.toISOString() ?? null,
@@ -61,10 +62,10 @@ const payload = {
 };
 
 /*
- * Название игры приходит из Steam и попадает в <script> как есть. Закрывающий
- * тег внутри строки закрыл бы блок, а всё за ним браузер прочитал бы как
- * разметку — поэтому угловая скобка уезжает в escape-последовательность,
- * которую JSON понимает, а разборщик html уже нет.
+ * The game title comes from Steam and lands inside <script> as is. A closing
+ * tag within the string would end the block, and the browser would read
+ * everything after it as markup — so the angle bracket turns into an escape
+ * sequence, which JSON understands and the html parser no longer does.
  */
 function json(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
@@ -72,7 +73,7 @@ function json(value: unknown): string {
 
 const hasData = data.sessions.length > 0 || data.gains.length > 0;
 
-// Сутки молчания при живом опросе означают поломку, а не отдых от игр
+// A day of silence while polling is alive means something broke, not a break from games
 const silent =
   hasData && heartbeat !== null && Date.now() - heartbeat.getTime() > 24 * 60 * 60 * 1000;
 
@@ -143,9 +144,10 @@ const sinceLabel = data.since
 
         {
           /*
-           * Карта и топ игр стоят рядом: обе отвечают на «как выглядит игра
-           * вообще», и порознь каждая оставляла половину широкой строки
-           * пустой. Дни и сессии идут во всю ширину — им нужна длина оси.
+           * The heatmap and the top games sit side by side: both answer "what
+           * does playing look like in general", and apart each of them left
+           * half of a wide row empty. Days and sessions run the full width —
+           * they need the length of the axis.
            */
         }
         <div class="grid items-start gap-6 lg:grid-cols-2">
@@ -183,10 +185,10 @@ const sinceLabel = data.since
 
   {
     /*
-     * Отдельным блоком, а не строчкой в общих итогах: восстановленные часы
-     * знают дату, но не час, и стоять рядом с тепловой картой им нельзя.
-     * Живёт вне ветки hasData — дневник старше трекера, и в первые дни этот
-     * блок будет единственным непустым на странице.
+     * A block of its own rather than a line in the overall totals: recovered
+     * hours know the date but not the hour, so they cannot stand next to the
+     * heatmap. Lives outside the hasData branch — the diary is older than the
+     * tracker, and in the first days this block is the only non-empty one here.
      */
     before.totalMinutes > 0 && (
       <section class="mt-10 border-t border-gray-800 pt-8">
@@ -263,12 +265,14 @@ const sinceLabel = data.since
 
 <script>
   /*
-   * Вся раскладка по времени — здесь, потому что здесь известен часовой пояс.
+   * All the time-of-day layout lives here, because this is where the timezone
+   * is known.
    *
-   * Минуты сессии считаются по счётчику Steam, если он успел их подтвердить, и
-   * по часам на стене, если нет: смешивать в одном графике две меры нельзя, а
-   * подтверждённая точнее. Растягиваются они по часам пропорционально длине
-   * сессии — внутри вечера Steam всё равно не знает, когда именно шла игра.
+   * Session minutes come from the Steam counter if it managed to confirm them,
+   * and from the wall clock if it did not: two different measures cannot be
+   * mixed in one chart, and the confirmed one is more accurate. They are spread
+   * across the hours in proportion to the session's length — within an evening
+   * Steam has no idea when exactly the playing happened anyway.
    */
   const root = document.querySelector<HTMLElement>("[data-chrono]");
   const payloadTag = document.querySelector("[data-chrono-payload]");
@@ -297,7 +301,7 @@ const sinceLabel = data.since
     const HOUR = 3600_000;
     const DAY = 24 * HOUR;
 
-    /** Отрезок реального времени с приписанными ему минутами. */
+    /** A stretch of real time with the minutes credited to it. */
     const blocks: Block[] = [];
 
     for (const session of data.sessions) {
@@ -307,9 +311,10 @@ const sinceLabel = data.since
       const minutes = session.gain > 0 ? session.gain : session.m;
       if (minutes <= 0 && !live) continue;
       /*
-       * Отрезок не короче тех минут, что за ним числятся: опрос мог застать
-       * сессию один раз, и по часам она нулевая, а играли четыре минуты — их
-       * надо разложить по времени, а не сваливать в одну точку.
+       * The stretch is never shorter than the minutes credited to it: polling
+       * may have caught the session just once, so by the clock it is zero long
+       * while four minutes were actually played — those have to be spread over
+       * time, not dumped into a single point.
        */
       blocks.push({
         game: session.g,
@@ -321,9 +326,10 @@ const sinceLabel = data.since
     }
 
     /*
-     * Прирост без сессии границ не имеет: Steam досчитал минуты, а кто и когда
-     * сидел в игре, опрос не видел. Кладём их назад от момента замера на их
-     * собственную длину — это ближе к правде, чем свалить всё в одну минуту.
+     * A gain with no session has no boundaries: Steam counted the minutes, but
+     * polling never saw who was in the game or when. We lay them backwards from
+     * the moment of measurement across their own length — closer to the truth
+     * than dumping everything into a single minute.
      */
     for (const gain of data.gains) {
       const to = new Date(gain.t).getTime();
@@ -375,7 +381,7 @@ const sinceLabel = data.since
       return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
     }
 
-    /** Минуты блока по часам местного времени: длинный вечер делится честно. */
+    /** Block minutes across local-time hours: a long evening is split fairly. */
     function spread(block: Block, onto: (at: number, minutes: number) => void) {
       const span = Math.max(block.to - block.from, 60_000);
       const rate = block.minutes / span;
@@ -415,7 +421,7 @@ const sinceLabel = data.since
       let streak = 0;
       for (let cursor = startOfDay(new Date(now)).getTime(); ; cursor -= DAY) {
         if (days.has(dayKey(cursor))) streak += 1;
-        // Сегодняшний день ещё не прожит: пустой сегодня серию не рвёт
+        // Today is not lived through yet: an empty today does not break the streak
         else if (cursor !== startOfDay(new Date(now)).getTime()) break;
         if (cursor < from) break;
       }
@@ -434,7 +440,7 @@ const sinceLabel = data.since
     }
 
     function heatmap(shown: Block[]) {
-      // Понедельник первым: воскресный ноль getDay() уезжает в конец недели
+      // Monday first: getDay()'s Sunday zero gets moved to the end of the week
       const grid: number[][] = Array.from({ length: 24 }, () => Array(7).fill(0));
       for (const block of shown) {
         spread(block, (at, minutes) => {
@@ -448,14 +454,14 @@ const sinceLabel = data.since
       box.innerHTML = "";
 
       /*
-       * Часы по горизонтали, дни недели по вертикали. Наоборот получалась
-       * узкая полоса в двадцать четыре ряда: неделя читается слева направо, а
-       * сутки — это ось, вдоль которой ищут вечерний горб.
+       * Hours across, weekdays down. The other way round gave a narrow strip
+       * twenty-four rows tall: a week reads left to right, and the day is the
+       * axis along which you look for the evening hump.
        */
       const table = document.createElement("div");
       table.className = "grid gap-[2px]";
-      // Ячейки тянутся по ширине карточки: фиксированный размер оставлял
-      // половину строки пустой, а на узком экране вылезал за край
+      // Cells stretch to the width of the card: a fixed size left half the row
+      // empty, and on a narrow screen it spilled past the edge
       table.style.gridTemplateColumns = "1.75rem repeat(24, minmax(0, 1fr))";
 
       table.appendChild(cell(""));
@@ -479,7 +485,7 @@ const sinceLabel = data.since
       box.appendChild(scale());
     }
 
-    /** Одна шкала одного тона: чем темнее, тем меньше. Радуга тут врёт. */
+    /** One scale in one hue: the darker, the less. A rainbow would lie here. */
     function shade(ratio: number): string {
       if (ratio <= 0) return "rgb(31 41 55 / 0.45)";
       const alpha = 0.18 + Math.min(1, Math.sqrt(ratio)) * 0.82;
@@ -533,9 +539,9 @@ const sinceLabel = data.since
       box.innerHTML = "";
 
       /*
-       * Подписи ставим не на каждый столбец — не влезут, — а редко и считая с
-       * конца: последний день подписан всегда, потому что именно от него глаз
-       * и отсчитывает «это было позавчера».
+       * Labels go not on every column — they would not fit — but sparsely and
+       * counted from the end: the last day is always labelled, because that is
+       * the one the eye counts back from to place "that was two days ago".
        */
       const step = Math.max(1, Math.ceil(days.length / 8));
 
@@ -547,7 +553,7 @@ const sinceLabel = data.since
         plot.className = "flex w-full flex-1 items-end";
 
         const bar = document.createElement("div");
-        // Пустой день оставляет след линией: провал должен быть виден
+        // An empty day still leaves a line behind: the gap has to be visible
         bar.className =
           day.minutes > 0
             ? "w-full rounded-t-[4px] bg-emerald-400/80"
@@ -609,11 +615,11 @@ const sinceLabel = data.since
         const game = data.games[session.g];
 
         /*
-         * Диапазон рисуем, только если конец действительно видели. Опрос раз в
-         * три минуты застаёт короткую сессию один раз, и по часам она выходит
-         * нулевой длины — а счётчик Steam при этом насчитал четыре минуты.
-         * «00:36–00:36, 4 мин» — это сложение двух разных источников в одной
-         * строке; честнее показать момент начала и длительность отдельно.
+         * We draw a range only if the end was actually seen. Polling every
+         * three minutes catches a short session once, and by the clock it comes
+         * out zero long — while the Steam counter meanwhile credited four
+         * minutes. "00:36–00:36, 4 min" adds up two different sources in one
+         * line; showing the start and the duration separately is more honest.
          */
         const observed = end !== null && session.m > 0;
         const when = observed ? `${clock(start)}–${clock(end!)}` : clock(start);

@@ -21,9 +21,9 @@ const json = (body: unknown, status = 200) =>
   });
 
 /**
- * Единственный эндпоинт записи мнения. Заменил complete, note, game-note,
- * retrospective, quick-verdict и demo-review POST — все они отличались
- * набором обязательных полей, а не сутью.
+ * The one and only endpoint for recording an opinion. It replaced the complete,
+ * note, game-note, retrospective, quick-verdict and demo-review POSTs — all of
+ * which differed in their set of required fields, not in substance.
  */
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -39,12 +39,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   if (verdict != null && !isValidVerdict(verdict)) return json({ error: s.errors.badVerdict }, 400);
   if (tier != null && !isValidTier(tier)) return json({ error: s.errors.badTier }, 400);
-  // Клиент шлёт 1-5, но роут — публичный вход, и полагаться на него нельзя
+  // The client sends 1-5, but the route is a public entrance and cannot rely on that
   if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
     return json({ error: s.errors.badRating }, 400);
   }
 
-  // Демка — единственный режим, где игры может ещё не быть в базе
+  // A demo is the only mode where the game may not be in the database yet
   if (mode === "demo") {
     const appId = parseAppId(String(appIdOrUrl ?? ""));
     if (!appId) return json({ error: s.errors.needAppId }, 400);
@@ -69,7 +69,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return json({ ok: true });
   }
 
-  // Для остальных режимов нужно наигранное время — от него считается дельта
+  // The other modes need the playtime — the delta is counted from it
   let targetGameId: number | undefined = gameId;
   let currentPlaytime = 0;
 
@@ -95,7 +95,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!game) return json({ error: s.errors.gameNotFound }, 404);
 
   if (mode === "slot-first") {
-    // Закрытие контракта опирается на факт: 20 минут должны быть настоящими
+    // Closing a contract rests on fact: those 20 minutes have to be real
     const user = await db
       .select({ steamId: users.steamId })
       .from(users)
@@ -123,7 +123,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   if ("error" in result) return json(result, 400);
 
-  // Разбор текста идёт в фоне: ответ на сохранение он задерживать не должен
+  // Text analysis runs in the background: it must not hold up the save response
   if (result.entryId) queueEntryAnalysis(result.entryId);
 
   return json({ ok: true });

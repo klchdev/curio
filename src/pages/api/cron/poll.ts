@@ -11,15 +11,16 @@ import {
 } from "../../../lib/tracker-scheduler";
 
 /**
- * Внешний вход в трекер.
+ * The tracker's entry point from outside.
  *
- * Нужен по двум причинам. Первая: контейнер при старте дёргает её сам
- * (scripts/start.mjs) — так таймеры заводятся не при первом заходе человека на
- * сайт, а сразу, иначе за сутки без посетителей не записалось бы ничего.
- * Вторая: если веб-служба всё-таки засыпает, опрос можно повесить на крон
- * Railway или любой внешний пинговалку — ручке безразлично, кто её позвал.
+ * It exists for two reasons. First: the container hits it itself on startup
+ * (scripts/start.mjs) — that way the timers start immediately rather than on
+ * the first human visit, otherwise a day without visitors would record nothing
+ * at all. Second: if the web service does fall asleep anyway, polling can be
+ * hung off Railway's cron or any external pinger — the endpoint does not care
+ * who called it.
  *
- * Без job только заводит таймеры и отвечает, что они живы.
+ * With no job it only starts the timers and reports that they are alive.
  */
 export const prerender = false;
 
@@ -49,7 +50,7 @@ const handle: APIRoute = async ({ request, url }) => {
 
   const requested = url.searchParams.get("job");
   if (!requested) {
-    // Без job ручка отвечает за здоровье: сколько прогонов было и когда
+    // With no job the endpoint reports health: how many runs there were and when
     return json({ scheduler: wasRunning ? "already running" : "started", jobs: trackerState() });
   }
 
@@ -61,7 +62,7 @@ const handle: APIRoute = async ({ request, url }) => {
   const closed = await closeStaleSessions();
   const results: Record<string, unknown> = { closedStaleSessions: closed };
   for (const job of jobs) {
-    // null значит «такой опрос уже идёт» — второй поверх него не нужен
+    // null means "that poll is already running" — no need for a second one on top
     results[job] = (await runJob(job)) ?? "already running";
   }
 

@@ -1,16 +1,17 @@
 /**
- * Возвращает перенесённым из Steam отзывам дату, под которой они написаны.
+ * Gives reviews imported from Steam back the date they were actually written on.
  *
- * Первые импорты дату не читали, и весь профиль лёг в дневник одним днём
- * переноса. Приложение чинит это при повторном импорте, но там же заново
- * тянется профиль ради тех записей, которые уже на месте — а скрипт делает
- * ровно одну вещь и виден в логах.
+ * The first imports didn't read the date, so an entire profile landed in the
+ * journal dated with the day of the import. The app fixes this on a repeated
+ * import, but that also pulls the profile again for the sake of entries that are
+ * already in place — whereas this script does exactly one thing and shows up in
+ * the logs.
  *
- * Идемпотентен: запись, у которой дата уже совпадает с профилем, не трогается.
+ * Idempotent: an entry whose date already matches the profile is left alone.
  *
  *   DATABASE_URL=... npx tsx scripts/backfill-steam-dates.ts [--apply]
  *
- * Без --apply только показывает, что бы изменилось.
+ * Without --apply it only shows what would change.
  */
 import { Client } from "pg";
 import { fetchOwnReviews } from "../src/lib/steam-profile";
@@ -23,7 +24,7 @@ function formatDate(value: Date): string {
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("Нужен DATABASE_URL");
+  if (!connectionString) throw new Error("DATABASE_URL is required");
 
   const db = new Client({ connectionString });
   await db.connect();
@@ -35,7 +36,7 @@ async function main() {
   for (const user of users) {
     const reviews = await fetchOwnReviews(user.steam_id);
     const dated = reviews.filter((review) => review.postedAt);
-    console.log(`\n${user.username}: отзывов на профиле ${reviews.length}, с датой ${dated.length}`);
+    console.log(`\n${user.username}: ${reviews.length} reviews on the profile, ${dated.length} with a date`);
     if (dated.length === 0) continue;
 
     let moved = 0;
@@ -44,9 +45,9 @@ async function main() {
 
     for (const review of dated) {
       /*
-       * Двигаем самую раннюю запись ленты — это и есть перенос из Steam.
-       * Всё, что человек дописал в приложении, лежит после и остаётся на
-       * своих датах.
+       * We move the earliest entry of the thread — that one is the import from
+       * Steam. Everything a person added later in the app comes after it and
+       * keeps its own dates.
        */
       const { rows } = await db.query<{
         entry_id: number;
@@ -98,12 +99,12 @@ async function main() {
     }
 
     console.log(
-      `  ${apply ? "передатировано" : "будет передатировано"}: ${moved}, уже верных: ${alreadyRight}, не импортировано: ${notImported}`
+      `  ${apply ? "redated" : "would be redated"}: ${moved}, already correct: ${alreadyRight}, not imported: ${notImported}`
     );
   }
 
   await db.end();
-  if (!apply) console.log("\nЭто прогон вхолостую. Повтори с --apply, чтобы записать.");
+  if (!apply) console.log("\nThis was a dry run. Repeat with --apply to write.");
 }
 
 main().catch((err) => {

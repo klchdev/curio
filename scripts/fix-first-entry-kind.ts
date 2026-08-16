@@ -1,18 +1,18 @@
 /**
- * Чинит вид самой ранней записи в ленте игры.
+ * Fixes the kind of the earliest entry in a game's thread.
  *
- * Миграция на game_entries переносила старые slot_notes и game_notes видом
- * «дополнение» — без разбора, была ли до них хоть одна запись. У игр, где
- * заметка была единственной, тред теперь открывается «дополнением», хотя
- * дополнять там было нечего.
+ * The migration to game_entries carried the old slot_notes and game_notes over
+ * as "update" entries, without checking whether there had been any entry before
+ * them at all. For games where the note was the only one, the thread now opens
+ * with an "update", even though there was nothing to update.
  *
- * Правится только явный случай: в ленте нет ни одного «первого впечатления»,
- * а самая ранняя запись — «дополнение». Ленты, где первая запись уже на
- * месте, и советы модели не трогаются.
+ * Only the unambiguous case gets fixed: the thread has no "first impression" at
+ * all, and its earliest entry is an "update". Threads where the first entry is
+ * already in place, and the model's advice, are left alone.
  *
  *   DATABASE_URL=... npx tsx scripts/fix-first-entry-kind.ts [--apply]
  *
- * Без --apply только показывает, что бы изменилось.
+ * Without --apply it only shows what would change.
  */
 import { Client } from "pg";
 
@@ -37,7 +37,7 @@ const TARGETS = `
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("Нужен DATABASE_URL");
+  if (!connectionString) throw new Error("DATABASE_URL is required");
 
   const db = new Client({ connectionString });
   await db.connect();
@@ -46,7 +46,7 @@ async function main() {
   for (const row of rows) {
     console.log(`  ${row.at.toISOString().slice(0, 10)}  ${row.title}`);
   }
-  console.log(`${apply ? "исправлено" : "будет исправлено"}: ${rows.length}`);
+  console.log(`${apply ? "fixed" : "would be fixed"}: ${rows.length}`);
 
   if (apply && rows.length > 0) {
     await db.query("update game_entries set kind = 'first' where id = any($1::int[])", [
@@ -55,7 +55,7 @@ async function main() {
   }
 
   await db.end();
-  if (!apply) console.log("Это прогон вхолостую. Повтори с --apply, чтобы записать.");
+  if (!apply) console.log("This was a dry run. Repeat with --apply to write.");
 }
 
 main().catch((err) => {

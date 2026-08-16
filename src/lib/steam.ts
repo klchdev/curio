@@ -15,8 +15,9 @@ function getRelyingParty(returnUrl: string): openid.RelyingParty {
 }
 
 /**
- * Пакет отдаёт в колбэк не Error, а свой объект с одним полем message —
- * поэтому наружу отдаём настоящий Error, чтобы стек и `instanceof` работали.
+ * The package hands the callback its own object with a single `message` field
+ * instead of an Error — so we re-wrap it into a real one and keep stack traces
+ * and `instanceof` working.
  */
 function toError(err: openid.OpenIdError | null, fallback: string): Error {
   return new Error(err?.message ?? fallback);
@@ -79,10 +80,10 @@ export interface SteamGame {
 }
 
 /**
- * Ответ Steam на библиотеку в тысячу игр весит сотни килобайт, а запрашивают
- * её пачками подряд (закрыть контракт, обновить время, записать заметку).
- * Короткий кэш убирает повторные скачивания, не влияя на свежесть: за минуту
- * наигранное время всё равно не меняется.
+ * Steam's answer for a thousand-game library weighs hundreds of kilobytes, and
+ * it gets asked for several times in a row (close a contract, refresh playtime,
+ * save a note). A short cache removes the repeat downloads at no cost to
+ * freshness: playtime doesn't move within a minute anyway.
  */
 const OWNED_GAMES_TTL_MS = 60_000;
 const ownedGamesCache = new Map<string, { at: number; games: SteamGame[] }>();
@@ -121,13 +122,13 @@ export interface StoreAppDetails {
   appid: number;
   name: string;
   headerImage: string | null;
-  /** game / dlc / software / video / music / demo — чем игра не является. */
+  /** game / dlc / software / video / music / demo — what this is when it isn't a game. */
   type: string | null;
   shortDescription: string | null;
   genres: string | null;
   categories: string | null;
   releaseDate: string | null;
-  /** Софт, а не игра: вердикт «прошёл/бросил» к нему неприменим. */
+  /** Software, not a game: a "finished/dropped" verdict doesn't apply to it. */
   isSoftware: boolean;
 }
 
@@ -159,7 +160,7 @@ export async function getStoreAppDetails(
       (entry.data.header_image as string) ??
       `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
     type,
-    // Описание приходит с html-сущностями и иногда с тегами
+    // The description arrives with html entities and sometimes with tags
     shortDescription: cleanText(entry.data.short_description),
     genres: genres.join(", ") || null,
     categories: categories.join(", ") || null,
@@ -181,10 +182,10 @@ function cleanText(value: unknown): string | null {
 }
 
 /**
- * Наигранное время из Steam. Нужно только там, где решение зависит от факта:
- * закрытие контракта требует настоящих 20 минут, а кнопка обновления на то и
- * кнопка. Для записи в дневник хватает сохранённого значения из user_games —
- * иначе каждая заметка тянула всю библиотеку.
+ * Playtime straight from Steam. Only needed where the decision hangs on the
+ * real number: closing a contract demands an honest 20 minutes, and a refresh
+ * button is a refresh button. A diary entry does fine with the stored value
+ * from user_games — otherwise every note pulled the whole library.
  */
 export async function getRecentPlaytime(
   steamId: string,
@@ -197,7 +198,7 @@ export async function getRecentPlaytime(
 }
 
 
-/* ---------- Опрос для трекера ---------- */
+/* ---------- Polling for the tracker ---------- */
 
 export interface RecentGame {
   appid: number;
@@ -207,14 +208,15 @@ export interface RecentGame {
 }
 
 /**
- * Игры за последние две недели — тот же счётчик, что в библиотеке, но ответ
- * весит килобайт вместо сотен. Библиотеку целиком опрашивать раз в полчаса
- * нельзя: тысяча игр на каждый заход ради пяти изменившихся строк.
+ * Games from the last two weeks — the same counter the library reports, but the
+ * response weighs a kilobyte instead of hundreds. Polling the whole library
+ * every half hour is not an option: a thousand games per pass for five rows
+ * that changed.
  *
- * Из-за этого у трекера слепое пятно: игра, заброшенная больше двух недель
- * назад и запущенная снова, попадёт сюда только после первого же запуска —
- * то есть с первым замером. Промахнуться можно лишь мимо той сессии, которая
- * шла в момент опроса, и её всё равно поймает следующий.
+ * This leaves the tracker a blind spot: a game abandoned more than two weeks
+ * ago and picked up again lands here only after it has been launched once —
+ * that is, with the very first snapshot. The only thing that can slip past is
+ * the session running at the moment of the poll, and the next poll catches it.
  */
 export async function getRecentlyPlayedGames(steamId: string): Promise<RecentGame[]> {
   const url = `${STEAM_API_BASE}/IPlayerService/GetRecentlyPlayedGames/v0001/?key=${STEAM_API_KEY}&steamid=${steamId}&format=json`;
@@ -234,23 +236,24 @@ export async function getRecentlyPlayedGames(steamId: string): Promise<RecentGam
 
 export interface Presence {
   steamId: string;
-  /** appid запущенной прямо сейчас игры; null — не играет либо статус скрыт. */
+  /** appid of the game running right now; null — not playing, or status hidden. */
   appId: number | null;
   gameName: string | null;
 }
 
-/** Больше за раз Valve не отдаёт — на список игроков делим пачками. */
+/** Valve won't return more in one call — so the player list goes out in batches. */
 const SUMMARIES_BATCH = 100;
 
 /**
- * Кто во что играет прямо сейчас.
+ * Who is playing what right now.
  *
- * Это единственный способ узнать настоящие границы сессии: счётчик времени
- * фиксирует факт, а не момент. Ответ пустой, если профиль закрыт или игрок в
- * невидимке — тогда сессий не будет, останутся только замеры счётчика.
+ * This is the only way to learn the real boundaries of a session: the playtime
+ * counter records the fact, not the moment. The answer comes back empty for a
+ * private profile or a player in invisible mode — then there will be no
+ * sessions, only counter snapshots.
  *
- * Один запрос покрывает до сотни игроков, поэтому частый опрос стоит дёшево
- * даже когда пользователей станет много.
+ * A single request covers up to a hundred players, so polling often stays cheap
+ * even once there are many users.
  */
 export async function getPlayersPresence(steamIds: string[]): Promise<Presence[]> {
   const out: Presence[] = [];
@@ -264,9 +267,9 @@ export async function getPlayersPresence(steamIds: string[]): Promise<Presence[]
 
     for (const player of data?.response?.players ?? []) {
       /*
-       * Ярлык на чужую игру даёт gameid далеко за пределами диапазона appid —
-       * такую «игру» в каталог тянуть некуда, и мы считаем, что игрок не в
-       * игре, а не выдумываем ей карточку.
+       * A shortcut to a non-Steam game reports a gameid far outside the appid
+       * range — there is nowhere in the catalog to put such a "game", so we
+       * treat the player as not in a game instead of inventing a card for it.
        */
       const raw = Number(player.gameid);
       const appId = Number.isSafeInteger(raw) && raw > 0 && raw < 100_000_000 ? raw : null;
@@ -281,13 +284,13 @@ export async function getPlayersPresence(steamIds: string[]): Promise<Presence[]
   return out;
 }
 
-/* ---------- Отзывы игроков ---------- */
+/* ---------- Player reviews ---------- */
 
 export interface SteamReview {
   text: string;
   positive: boolean;
   votes: number;
-  /** Наиграно на момент отзыва — тот же штамп, на котором построена наша лента. */
+  /** Playtime at the moment of the review — the stamp our own timeline is built on. */
   hoursAtReview: number;
 }
 
@@ -298,9 +301,9 @@ export interface AppReviews {
   reviews: SteamReview[];
 }
 
-/** Короче — мем или «+rep», толку в разборе от них нет. */
+/** Anything shorter is a meme or "+rep" — the analysis gets nothing from them. */
 const MIN_REVIEW_LENGTH = 150;
-/** Длинные простыни режем: смысл в первых абзацах, а токены не бесплатны. */
+/** Long walls get cut: the point sits in the first paragraphs, and tokens cost money. */
 const MAX_REVIEW_LENGTH = 1200;
 
 async function fetchReviewPage(
@@ -332,11 +335,12 @@ async function fetchReviewPage(
 }
 
 /**
- * Отзывы для разбора одной игры. Steam не сортирует выдачу по полезности и
- * отдаёт плюс и минус в пропорции рейтинга — у хорошей игры на сотню отзывов
- * приходит пять отрицательных. Поэтому тянем обе стороны отдельно и
- * сортируем сами: для подбора под вкус отрицательные ценнее, в них
- * конкретика, которая ложится на известные нелюбови игрока.
+ * Reviews for analysing a single game. Steam doesn't sort its output by
+ * helpfulness and hands back positives and negatives in proportion to the
+ * rating — for a good game, a hundred reviews come with five negative ones. So
+ * we fetch both sides separately and sort them ourselves: for matching someone
+ * to their taste the negative ones are worth more, they carry the specifics
+ * that line up with the player's known dislikes.
  */
 export async function getAppReviews(
   appId: number,

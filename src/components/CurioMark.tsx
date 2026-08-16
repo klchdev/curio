@@ -1,7 +1,7 @@
 /**
- * Знак Кьюрио. Ставится там, где говорит он, а не приложение: обоснование
- * совета, портрет, спор, разбор. Геометрия та же, что в шапке — одна
- * подсвеченная ячейка среди четырёх, «выбранное из многого».
+ * Curio's mark. It goes wherever Curio is speaking rather than the app itself:
+ * the reasoning behind a suggestion, a portrait, an argument, a deep dive. Same
+ * geometry as in the header — one lit cell out of four, "picked from many".
  */
 export default function CurioMark({ className = "h-5 w-5" }: { className?: string }) {
   return (

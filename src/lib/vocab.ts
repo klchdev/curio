@@ -1,21 +1,22 @@
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 
 /**
- * Единственный источник правды по тирам, вердиктам, оценкам и порогам.
+ * The single source of truth for tiers, verdicts, ratings and thresholds.
  *
- * Раньше эти таблицы были скопированы по 5-8 раз каждая, и копии успели
- * разойтись: «Продолжаю» против «Жду релиз», «Вернусь» против «Вернусь позже».
- * Цвета и иконки от языка не зависят, поэтому стиль и текст разделены.
+ * These tables used to be copy-pasted 5-8 times each, and the copies had
+ * already drifted apart: "Playing" against "Awaiting release", "Back" against
+ * "Back later". Colors and icons don't depend on the language, so style and
+ * text are kept apart.
  *
- * Без импортов db и react — модуль нужен и на сервере, и в островах.
+ * No db or react imports — the module is needed on the server and in islands.
  */
 
-/* ---------- Тиры ---------- */
+/* ---------- Tiers ---------- */
 
 export const TIER_VALUES = ["S", "A", "B", "C", "D", "F"] as const;
 export type Tier = (typeof TIER_VALUES)[number];
 
-/** Советчик не оперирует тиром F: это оценка сыгранного, а не прогноз. */
+/** The advisor has no tier F: that rates what was played, it isn't a forecast. */
 export const ADVISOR_TIER_VALUES = ["S", "A", "B", "C", "D"] as const;
 export type AdvisorTier = (typeof ADVISOR_TIER_VALUES)[number];
 
@@ -33,7 +34,7 @@ const TIER_HINT: Record<Locale, Record<Tier, string>> = {
   en: { S: "Masterpiece", A: "Great", B: "Good", C: "Fine", D: "Meh", F: "Awful" },
 };
 
-/** Что тир значит в рекомендации — это прогноз, а не оценка сыгранного. */
+/** What a tier means in a recommendation — a forecast, not a rating of play. */
 const ADVISOR_HINT: Record<Locale, Record<AdvisorTier, string>> = {
   ru: {
     S: "Бросай текущее",
@@ -72,12 +73,12 @@ export function isValidTier(value: unknown): value is Tier {
   return typeof value === "string" && (TIER_VALUES as readonly string[]).includes(value);
 }
 
-/* ---------- Вердикты ---------- */
+/* ---------- Verdicts ---------- */
 
 /*
- * `endless` — игра, которая не кончается: Dota, PUBG, песочницы. «Прошёл» к
- * ним неприменим, а «продолжаю» врёт, потому что описывает временное
- * состояние, а не то, что человек возвращается сюда годами.
+ * `endless` — a game that never ends: Dota, PUBG, sandboxes. "Finished" doesn't
+ * apply to them, and "playing" lies, because it describes a temporary state
+ * rather than the fact that someone keeps coming back here for years.
  */
 export const VERDICT_VALUES = ["finished", "endless", "playing", "dropped", "later"] as const;
 export type Verdict = (typeof VERDICT_VALUES)[number];
@@ -107,7 +108,7 @@ const VERDICT_LABEL: Record<Locale, Record<Verdict, string>> = {
   },
 };
 
-/** У демок те же вердикты значат другое: играть ещё нечего, релиза нет. */
+/** For demos the same verdicts mean other things: nothing to play yet, no release. */
 const DEMO_VERDICT_LABEL: Record<Locale, Record<Verdict, string>> = {
   ru: {
     finished: "Прошёл",
@@ -125,10 +126,10 @@ const DEMO_VERDICT_LABEL: Record<Locale, Record<Verdict, string>> = {
   },
 };
 
-/** Порядок для выбора в интерфейсе: сначала частые исходы. */
+/** Order for the picker in the UI: the common outcomes first. */
 const VERDICT_ORDER: Verdict[] = ["finished", "endless", "playing", "dropped", "later"];
 
-/** У демки нет «ротации»: играть там пока нечего, релиза нет. */
+/** A demo has no "rotation": there is nothing to play there yet, no release. */
 const DEMO_VERDICT_ORDER: Verdict[] = ["finished", "playing", "dropped", "later"];
 
 export function verdicts(locale: Locale = DEFAULT_LOCALE, options?: { demo?: boolean }) {
@@ -153,7 +154,7 @@ export function isValidVerdict(value: unknown): value is Verdict {
   return typeof value === "string" && (VERDICT_VALUES as readonly string[]).includes(value);
 }
 
-/* ---------- Оценка «стоило ли времени» ---------- */
+/* ---------- The "was it worth the time" rating ---------- */
 
 const WORTH_LABEL: Record<Locale, readonly string[]> = {
   ru: ["Зря потратил время", "Скорее нет", "Нормально", "Скорее да", "Рад что попробовал"],
@@ -180,12 +181,12 @@ export function worthLabels(locale: Locale = DEFAULT_LOCALE): readonly string[] 
   return WORTH_LABEL[locale];
 }
 
-/** rating приходит 1..5, а массивы нулевые — единственное место, где это знают. */
+/** rating arrives as 1..5, the arrays are zero-based — the only place that knows. */
 export function worthLabel(rating: number, locale: Locale = DEFAULT_LOCALE): string {
   return WORTH_LABEL[locale][Math.min(Math.max(rating, 1), 5) - 1]!;
 }
 
-/* ---------- Время ---------- */
+/* ---------- Time ---------- */
 
 export function formatPlaytime(minutes: number, locale: Locale = DEFAULT_LOCALE): string {
   const hours = Math.floor(minutes / 60);
@@ -195,26 +196,26 @@ export function formatPlaytime(minutes: number, locale: Locale = DEFAULT_LOCALE)
   return hours > 0 ? `${hours} ${h} ${mins} ${m}` : `${mins} ${m}`;
 }
 
-/* ---------- Правила формы впечатления ---------- */
+/* ---------- Impression sheet rules ---------- */
 
 /**
- * Один лист впечатления вместо шести почти одинаковых модалок. Режим задаёт
- * не отдельную форму, а набор правил — и таблица лежит здесь, чтобы клиент и
- * сервер проверяли ввод по одному и тому же источнику, а не по двум копиям.
+ * One impression sheet instead of six near-identical modals. A mode defines not
+ * a separate form but a set of rules — and the table lives here so that client
+ * and server validate input against one source rather than two copies.
  */
 export type ImpressionMode = "slot-first" | "entry" | "retro" | "quick" | "demo";
 
 export interface SheetRule {
-  /** Минимальная длина заметки, когда она вообще заполняется. */
+  /** Minimum note length, when the note is filled in at all. */
   minNote: number;
-  /** Без заметки сохранять нельзя. */
+  /** Saving without a note is not allowed. */
   noteRequired: boolean;
   verdictRequired: boolean;
   showTier: boolean;
   showRating: boolean;
-  /** Только для демок: игры ещё нет в библиотеке, нужен appid или ссылка. */
+  /** Demos only: the game isn't in the library yet, so an appid or link is needed. */
   showAppIdInput: boolean;
-  /** У демок свои значения вердиктов: «Жду релиз» вместо «Продолжаю». */
+  /** Demos word their verdicts differently: "Awaiting release" instead of "Playing". */
   demoLabels: boolean;
   celebrate: boolean;
   title: Record<Locale, string>;
@@ -284,19 +285,19 @@ export const SHEET_RULES: Record<ImpressionMode, SheetRule> = {
   },
 };
 
-/* ---------- Пороги ---------- */
+/* ---------- Thresholds ---------- */
 
 export const THRESHOLDS = {
-  /** Считаем игру нетронутой, пока наиграно не больше этого. */
+  /** A game counts as untouched while its playtime stays at or below this. */
   UNPLAYED_MAX_MINUTES: 15,
   MAX_ACTIVE_SLOTS: 3,
-  /** Минимум, чтобы закрыть контракт отзывом. */
+  /** The minimum needed to close a contract with a review. */
   MIN_PLAYTIME_TO_REVIEW: 20,
-  /** С какой добавки считаем, что игру стоит дополнить в дневнике. */
+  /** How much added playtime makes a game worth another diary entry. */
   STILL_PLAYING_DELTA: 30,
-  /** Кандидаты в советы: только нетронутое, вкус ещё не сформирован. */
+  /** Advice candidates: untouched games only, no taste formed about them yet. */
   CANDIDATE_MAX_MINUTES: 20,
-  /** Разбор: сыграно ощутимо, но вердикта нет. */
+  /** Triage: played a noticeable amount, but there is no verdict. */
   TRIAGE_MIN_MINUTES: 20,
   TRIAGE_PAGE_SIZE: 24,
   MIN_REVIEWS_FOR_AI: 10,

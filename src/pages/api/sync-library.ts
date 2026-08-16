@@ -7,9 +7,9 @@ import { eq, isNull } from "drizzle-orm";
 import { recordPlaytime } from "../../lib/playtime-tracker";
 
 /*
- * Сколько карточек магазина дозапрашиваем за один синк. Валве лимиты не
- * публикует, поэтому берём понемногу: библиотека дозаполнится за несколько
- * заходов, а разовый бэкофилл делает scripts/fetch-app-details.ts.
+ * How many store cards we backfill per sync. Valve does not publish its rate
+ * limits, so we take a little at a time: the library fills in over several
+ * runs, and scripts/fetch-app-details.ts handles a one-off backfill.
  */
 const DETAILS_PER_SYNC = 20;
 
@@ -33,10 +33,11 @@ export const POST: APIRoute = async ({ cookies }) => {
   }
 
   /*
-   * 1. Библиотека в базу — той же дорогой, что и опрос трекера: разница между
-   * прошлым известным временем и нынешним записывается в историю. Раньше синк
-   * просто затирал `playtime_minutes`, и всё, что человек наиграл между двумя
-   * заходами, исчезало бесследно.
+   * 1. The library into the database — by the same road the tracker's polling
+   * takes: the difference between the last known playtime and the current one
+   * is written into history. The sync used to simply overwrite
+   * `playtime_minutes`, and everything played between two runs vanished
+   * without a trace.
    */
   const synced = await recordPlaytime(
     userId,
@@ -52,7 +53,7 @@ export const POST: APIRoute = async ({ cookies }) => {
     "sync"
   );
 
-  // 2. Дозаполняем карточки магазина у новых игр — по ним отличается софт
+  // 2. Backfill store cards for new games — that is how software is told apart
   const pending = await db
     .select({ id: games.id, steamAppId: games.steamAppId })
     .from(games)
@@ -65,8 +66,8 @@ export const POST: APIRoute = async ({ cookies }) => {
       await db
         .update(games)
         .set({
-          // Страницы может не быть вовсе — время попытки ставим в любом случае,
-          // иначе будем спрашивать про неё при каждом синке
+          // The page may not exist at all — we stamp the attempt either way,
+          // otherwise we would ask about it on every single sync
           detailsFetchedAt: new Date(),
           ...(details
             ? {
@@ -81,7 +82,7 @@ export const POST: APIRoute = async ({ cookies }) => {
         })
         .where(eq(games.id, game.id));
     } catch {
-      // Steam моргнул — попробуем при следующем синке
+      // Steam blinked — we will try again on the next sync
     }
   }
 
@@ -93,7 +94,7 @@ export const POST: APIRoute = async ({ cookies }) => {
   return new Response(
     JSON.stringify({
       synced: steamGames.length,
-      // Сколько игр приросло со времён прошлого синка — по ним пошли замеры
+      // How many games gained playtime since the last sync — those got measurements
       tracked: synced,
       detailsFetched: pending.length,
     }),

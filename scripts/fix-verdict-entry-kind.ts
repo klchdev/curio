@@ -1,16 +1,17 @@
 /**
- * Помечает видом «смена вердикта» записи, которые его меняли.
+ * Marks entries that changed the verdict with the "verdict change" kind.
  *
- * Вид записи раньше зависел только от того, первая она в треде или нет, так
- * что «прошёл» после пяти дополнений выглядел шестым дополнением. Вид
- * `verdict` в схеме был с самого начала — его просто никто не проставлял.
+ * An entry's kind used to depend only on whether it was first in the thread, so
+ * a "finished" after five updates looked like a sixth update. The `verdict` kind
+ * had been in the schema from the start — nobody was just ever setting it.
  *
- * Правится только явный случай: у записи есть вердикт, и он отличается от
- * вердикта предыдущей записи треда. Первые записи не трогаются.
+ * Only the unambiguous case gets fixed: the entry has a verdict, and it differs
+ * from the verdict of the previous entry in the thread. First entries are left
+ * alone.
  *
  *   DATABASE_URL=... npx tsx scripts/fix-verdict-entry-kind.ts [--apply]
  *
- * Без --apply только показывает, что бы изменилось.
+ * Without --apply it only shows what would change.
  */
 import { Client } from "pg";
 
@@ -42,7 +43,7 @@ async function main() {
   await client.connect();
 
   const { rows } = await client.query(TARGETS);
-  console.log(`Записей к правке: ${rows.length}${apply ? "" : " (сухой прогон)"}\n`);
+  console.log(`Entries to fix: ${rows.length}${apply ? "" : " (dry run)"}\n`);
 
   for (const row of rows) {
     console.log(`  #${row.id} ${row.title}: ${row.prev ?? "—"} → ${row.verdict_at}`);
@@ -53,7 +54,7 @@ async function main() {
       `update game_entries set kind = 'verdict' where id = any($1::int[])`,
       [rows.map((row) => row.id)]
     );
-    console.log(`\nПоправлено: ${rows.length}`);
+    console.log(`\nFixed: ${rows.length}`);
   }
 
   await client.end();

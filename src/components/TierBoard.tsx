@@ -29,7 +29,7 @@ function rowHint(row: Row, locale: Locale): string {
   return row === "unranked" ? UNRANKED_HINT[locale] : tierHint(row as Tier, locale);
 }
 
-/** Обложка с запасным вариантом: её может не быть в базе или она может не догрузиться. */
+/** Cover art with a fallback: it may be missing from the database or fail to load. */
 function Cover({ title, image }: { title: string; image: string | null }) {
   const [broken, setBroken] = useState(false);
 
@@ -70,7 +70,7 @@ export default function TierBoard({
 }: {
   games: Game[];
   locale?: Locale;
-  /** Перестановка сохраняется сразу; без обработчика доска остаётся демонстрационной. */
+  /** A move is saved immediately; without a handler the board stays a demonstration. */
   onChange?: (gameId: number, tier: string | null) => void;
 }) {
   const s = t(locale);

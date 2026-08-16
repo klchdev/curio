@@ -19,10 +19,11 @@ const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
 /*
- * Дневник собирается в треды по играм. Плоская лента разносила записи об
- * одной игре по всей странице, и то, ради чего дневник вообще заведён —
- * как менялось мнение — приходилось собирать глазами. Внутри треда записи
- * идут снизу вверх по времени: сверху первое впечатление, дальше правки.
+ * The diary is grouped into per-game threads. A flat feed scattered entries
+ * about one game across the whole page, and the very thing the diary exists
+ * for — how an opinion changed — had to be pieced together by eye. Inside a
+ * thread entries run bottom-up in time: the first impression on top, edits
+ * after it.
  */
 const [timeline, mentions, entryTags] = await Promise.all([
   getHistory(user.id),
@@ -41,7 +42,7 @@ interface Thread {
   image: string | null;
   steamAppId: number | null;
   items: Item[];
-  /** Последняя активность: по ней треды и выстраиваются. */
+  /** Last activity: this is what threads are ordered by. */
   touchedAt: number;
   playtimeMinutes: number;
   verdict: string | null;
@@ -74,8 +75,8 @@ for (const item of timeline) {
   thread.touchedAt = Math.max(thread.touchedAt, at);
 
   /*
-   * Итог игры берём из первой встреченной записи: лента приходит от новых
-   * к старым, значит это и есть текущее состояние карточки.
+   * The game's bottom line comes from the first entry we meet: the feed
+   * arrives newest-first, so that one is the card's current state.
    */
   if (item.type === "reviewed") {
     thread.steamAppId ??= item.steamAppId;
@@ -92,12 +93,13 @@ for (const item of timeline) {
 
 const grouped = [...threads.values()]
   .map((thread) => {
-    // Внутри треда — от старого к новому: так читается развитие мнения
+    // Inside a thread — oldest to newest: that is how an opinion reads as it evolves
     const items = [...thread.items].reverse();
 
     /*
-     * Готовый вердикт переспрашивать незачем, если с тех пор человек ничего
-     * не дописал: ответ будет тот же, а стоить будет как новый.
+     * There is no point re-asking for a verdict that already exists if the
+     * person has written nothing since: the answer will be the same, and it
+     * would cost as much as a fresh one.
      */
     const own = items.filter((item) => item.type === "reviewed" && item.kind !== "advisor");
     const take = [...items]
@@ -116,15 +118,15 @@ const grouped = [...threads.values()]
   .sort((a, b) => b.touchedAt - a.touchedAt);
 
 /*
- * Упоминания живут отдельно от текста записи: в базе лежат дословный кусок и
- * его позиция, а сам текст не трогается никогда. Здесь разметка только
- * накладывается на отрисовку — и накладывается лишь тогда, когда кусок на
- * своём месте совпал посимвольно.
+ * Mentions live apart from the entry's text: the database holds the verbatim
+ * fragment and its offset, and the text itself is never touched. Here the
+ * markup is only laid over the rendering — and only when the fragment at its
+ * recorded offset matches character for character.
  */
 type Mention = (typeof mentions)[number];
 
 const mentionsByEntry = new Map<number, Mention[]>();
-/** Обратная сторона: где эту игру вспоминали, говоря о других. */
+/** The other direction: where this game was brought up while talking about others. */
 const mentionsOfGame = new Map<number, Mention[]>();
 
 for (const mention of mentions) {
@@ -146,7 +148,7 @@ for (const tag of entryTags) {
   else tagsByEntry.set(tag.entryId, [tag]);
 }
 
-/** У игр с собственным тредом ссылка ведёт в дневник, у остальных — в магазин. */
+/** Games with a thread of their own link into the diary, the rest link to the store. */
 const threadIds = new Set(grouped.map((thread) => thread.gameId));
 
 function linkFor(gameId: number | null, steamAppId: number | null): string | null {
@@ -169,7 +171,7 @@ function splitNote(note: string, found: Mention[]): Segment[] {
   for (const mention of ordered) {
     const start = mention.startOffset;
     const end = start + mention.surface.length;
-    // Разметка старше текста быть не может, но проверка дешевле съехавшей подсветки
+    // The markup cannot be older than the text, but the check is cheaper than a slipped highlight
     if (start < cursor || note.slice(start, end) !== mention.surface) continue;
 
     const href = linkFor(mention.targetGameId, mention.targetSteamAppId);
@@ -193,7 +195,7 @@ const KIND_LABEL: Record<string, string> = {
   advisor: s.pages.entryAdvisor,
 };
 
-/** Вердикты, которыми тред закрывается: такая запись — итог, а не правка. */
+/** Verdicts that close a thread: such an entry is the bottom line, not an edit. */
 const CLOSING_VERDICTS = new Set(["finished", "dropped", "endless"]);
 
 function entryLabel(kind: string, verdict: string | null): string {
@@ -283,10 +285,10 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
             </div>
 
             {/*
-              Конец у игры редко бывает явным: её бросают молча, держат в
-              «продолжаю» месяцами или проходят, забыв переставить вердикт.
-              Ждать закрывающего вердикта значило бы не сказать ничего почти
-              никогда — поэтому спросить можно в любой момент.
+              A game rarely ends explicitly: it gets dropped in silence, sits
+              in "still playing" for months, or gets finished while the verdict
+              is left untouched. Waiting for a closing verdict would mean
+              saying nothing almost ever — so asking is allowed at any moment.
             */}
             <button
               type="button"
@@ -407,11 +409,11 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
                     </p>
 
                     {/*
-                      Теги предложены разбором и правятся тапом: снять —
-                      крестик, добавить — плюс. Ни подтверждений, ни состояния
-                      «на рассмотрении»: неверный тег стоит одного движения, а
-                      необходимость подтверждать каждый стоила бы желания
-                      вообще писать.
+                      Tags are proposed by the analysis and edited with a tap:
+                      the cross removes, the plus adds. No confirmations, no
+                      "pending review" state: a wrong tag costs one gesture,
+                      while having to confirm every one of them would cost the
+                      willingness to write anything at all.
                     */}
                     <div class="tag-row mt-2 flex flex-wrap items-center gap-1.5" data-entry={entry.entryId}>
                       {(tagsByEntry.get(entry.entryId) ?? []).map((tag) => (
@@ -477,9 +479,10 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
 
 <script>
   /*
-   * Правка тегов делегированием, а не островом на каждую запись: записей в
-   * дневнике сотни, и триста реактивных островов ради двух кнопок — цена без
-   * выгоды. Разметку рисует сервер, здесь только клики.
+   * Tag editing runs through delegation rather than an island per entry: the
+   * diary holds hundreds of entries, and three hundred reactive islands for
+   * the sake of two buttons is a cost with no upside. The server renders the
+   * markup, this handles only the clicks.
    */
   const ENDPOINT = "/api/entry-tag";
 
@@ -562,9 +565,10 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
   }
 
   /**
-   * Вердикт показывается модалкой, а не вставкой в ленту: в треде он лежит
-   * как запись и никуда не денется, но читать его человек идёт сейчас, и
-   * искать его глазами по длинной странице ему незачем.
+   * The verdict is shown in a modal rather than inlined into the feed: it is
+   * stored in the thread as an entry and is not going anywhere, but the person
+   * is going to read it right now, and there is no reason to make them hunt
+   * for it down a long page.
    */
   function showTake(title: string, text: string, failed = false) {
     const overlay = document.createElement("div");
@@ -587,7 +591,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     body.className = failed
       ? "text-sm leading-relaxed whitespace-pre-line text-rose-300/80"
       : "text-sm leading-relaxed whitespace-pre-line text-gray-200";
-    // Текст ставим свойством, а не разметкой: он пришёл от модели
+    // Set the text as a property, not as markup: it came from the model
     body.textContent = text;
 
     const close = document.createElement("button");
@@ -622,8 +626,8 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     if (ask) {
       const title = ask.dataset.title ?? "";
 
-      // Готовый вердикт, к которому человек с тех пор ничего не дописал,
-      // переспрашивать незачем: ответ будет тот же, а стоить будет как новый
+      // No point re-asking for a verdict that already exists and to which the
+      // person has added nothing since: same answer, price of a fresh one
       if (ask.dataset.take) {
         showTake(title, ask.dataset.take);
         return;
@@ -634,9 +638,10 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
       ask.disabled = true;
 
       /*
-       * Вердикт думает полминуты и дольше. Без счётчика «читает» и «повисло»
-       * с той стороны экрана выглядят одинаково, а это тот случай, когда
-       * человек уже нажал и ему остаётся только верить.
+       * A verdict takes half a minute of thinking, often longer. Without a
+       * counter, "reading" and "hung" look exactly alike from the other side
+       * of the screen, and this is the case where the person has already
+       * clicked and all that is left for them is to trust.
        */
       let seconds = 0;
       ask.textContent = `${busy} 0 с`;

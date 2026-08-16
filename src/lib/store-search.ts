@@ -1,15 +1,15 @@
 import { normalizeTitle } from "./titles";
 
 /**
- * Поиск игры в магазине по названию.
+ * Looking a game up in the store by title.
  *
- * Каталог `games` общий и не привязан к людям: `user_games` говорит, чья
- * игра, а сама карточка — просто то, что мы про эту игру знаем. Поэтому
- * упоминание игры, которой нет ни у кого, — не тупик, а повод завести
- * карточку: тогда у ссылки появляется цель, а у советчика — кандидат.
+ * The `games` catalog is shared and not tied to people: `user_games` says whose
+ * game it is, while the card itself is simply what we know about that game. So
+ * a mention of a game nobody owns is not a dead end but a reason to create a
+ * card: the link then has somewhere to point, and the advisor gains a candidate.
  *
- * Без импортов astro:env и db: модуль нужен и серверу, и разовым скриптам.
- * Ключ Steam здесь не требуется, витрина отвечает всем.
+ * No astro:env or db imports: the module is needed by the server and by one-off
+ * scripts alike. No Steam key is required here — the storefront answers anyone.
  */
 
 const SEARCH_URL = "https://store.steampowered.com/api/storesearch/";
@@ -27,12 +27,12 @@ interface SearchItem {
 }
 
 /**
- * Совпадение считается только точное.
+ * Only an exact match counts.
  *
- * Витрина всегда возвращает что-нибудь: на «Pathologic» первым идёт
- * «Pathologic 3», хотя человек имел в виду оригинал. Взять первое попавшееся
- * — значит проставить ссылку не на ту игру, а это хуже отсутствия ссылки:
- * непроставленная видна как обычный текст, а неверная врёт молча.
+ * The storefront always returns something: for "Pathologic" the first hit is
+ * "Pathologic 3", even though the person meant the original. Taking whatever
+ * comes first means linking to the wrong game, and that is worse than no link
+ * at all: a missing link reads as plain text, a wrong one lies quietly.
  */
 export async function findStoreGame(title: string): Promise<StoreHit | null> {
   const wanted = normalizeTitle(title);
@@ -47,8 +47,8 @@ export async function findStoreGame(title: string): Promise<StoreHit | null> {
     const data = (await res.json()) as { items?: SearchItem[] };
     items = data.items ?? [];
   } catch {
-    // Поиск — необязательная роскошь: не ответил магазин, упоминание просто
-    // останется без карточки, и разбор записи из-за этого падать не должен
+    // Search is an optional luxury: if the store doesn't answer, the mention
+    // just stays without a card, and parsing the entry must not fail over it
     return null;
   }
 

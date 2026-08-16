@@ -1,32 +1,31 @@
 /**
- * Данные для страницы «Хронология».
+ * Data for the "Chronology" page.
  *
- * Считать здесь почти нечего, и это намеренно: границы дня, часа и недели
- * зависят от часового пояса игрока, а сервер о нём не знает — на Railway он
- * живёт в UTC. Поэтому наружу отдаются события с абсолютным временем, а по
- * дням, часам и неделям их раскладывает браузер, которому пояс известен
- * точно. Сервер отвечает только за выборку и за то, чтобы одни и те же минуты
- * не попали в ответ дважды.
+ * Almost nothing is computed here, and that is deliberate: the boundaries of a
+ * day, an hour and a week depend on the player's time zone, and the server has
+ * no idea what it is — on Railway it lives in UTC. So what goes out are events
+ * with absolute timestamps, and the browser, which knows the zone for certain,
+ * lays them out by day, hour and week. The server answers only for the query
+ * and for keeping the same minutes out of the response twice.
  */
 import { and, asc, desc, eq, gte, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "../db";
 import { games, playSessions, playtimeSnapshots } from "../db/schema";
 
-/** Сессия: когда сидел в игре и сколько за это насчитал Steam. */
+/** A session: when the player sat in the game and what Steam counted for it. */
 export interface TrackedSession {
   gameId: number;
   startedAt: Date;
   endedAt: Date | null;
-  /** Часы на стене, из опроса статуса. */
+  /** Wall-clock time, from the status poll. */
   minutes: number;
-  /** Минуты по счётчику Steam. Ноль — замер ещё не пришёл. */
+  /** Minutes from Steam's counter. Zero — the snapshot hasn't arrived yet. */
   gainMinutes: number;
 }
 
 /**
- * Прирост счётчика, не привязанный ни к одной сессии: играли, пока опрос
- * статуса ничего не видел. Времени начала у него нет — только момент, когда
- * прирост заметили.
+ * A counter gain tied to no session: someone played while the status poll saw
+ * nothing. It has no start time — only the moment the gain was noticed.
  */
 export interface TrackedGain {
   gameId: number;
@@ -42,21 +41,21 @@ export interface TrackedGame {
 }
 
 export interface TrackerData {
-  /** Первый след в истории. Раньше него графики пусты не потому, что не играл. */
+  /** First trace in the history. Before it, empty charts don't mean nobody played. */
   since: Date | null;
   sessions: TrackedSession[];
   gains: TrackedGain[];
   games: TrackedGame[];
-  /** Идёт прямо сейчас — сессия без конца. */
+  /** Running right now — a session with no end. */
   playingNow: TrackedSession | null;
 }
 
 /**
- * Только то, что трекер видел сам.
+ * Only what the tracker saw for itself.
  *
- * Восстановленные из дневника строки знают дату, но не час, и в графиках по
- * времени суток превращаются в ложь с уверенным видом: два часа, набежавшие
- * за девять дней, встали бы в ту минуту, когда человек дописал отзыв.
+ * Rows reconstructed from the diary know the date but not the hour, and in
+ * time-of-day charts they turn into confident-looking lies: two hours picked up
+ * over nine days would land on the minute the person finished the review.
  */
 const live = ne(playtimeSnapshots.source, "backfill");
 
@@ -87,7 +86,7 @@ export async function getTrackerData(userId: number, days = 120): Promise<Tracke
         and(
           eq(playtimeSnapshots.userId, userId),
           gte(playtimeSnapshots.takenAt, from),
-          // Привязанные к сессии минуты уже посчитаны в самой сессии
+          // Minutes tied to a session are already counted inside that session
           isNull(playtimeSnapshots.sessionId),
           live
         )
@@ -138,10 +137,10 @@ export async function getTrackerData(userId: number, days = 120): Promise<Tracke
 }
 
 /**
- * Здоровье трекера: когда он в последний раз что-то видел.
+ * Tracker health: when it last saw anything.
  *
- * Отдельный вопрос от статистики: пустые графики значат либо «не играл», либо
- * «опрос стоит», и человек должен видеть, какое из двух.
+ * A separate question from the statistics: empty charts mean either "didn't
+ * play" or "polling is down", and the person has to see which of the two.
  */
 export async function getTrackerHeartbeat(userId: number): Promise<Date | null> {
   const [last] = await db
@@ -153,7 +152,7 @@ export async function getTrackerHeartbeat(userId: number): Promise<Date | null> 
   return last?.at ?? null;
 }
 
-/** Месяц как `2026-04` — ключ, по которому складываются восстановленные часы. */
+/** A month as `2026-04` — the key the reconstructed hours are summed under. */
 function monthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
@@ -167,12 +166,13 @@ export interface PreTracker {
 }
 
 /**
- * История до трекера: восстановленные из дневника интервалы.
+ * History from before the tracker: intervals reconstructed from the diary.
  *
- * По играм суммируется точно — тут ничего не гадается. По месяцам минуты
- * размазываются равномерно по интервалу: девятидневный отрезок иногда лежит на
- * границе месяцев, и приписать его целиком одному было бы хуже, чем поделить.
- * Мельче месяца дробить нечего — данные такой точности не содержат.
+ * Per game the sum is exact — nothing is guessed there. Per month the minutes
+ * are smeared evenly across the interval: a nine-day stretch sometimes straddles
+ * a month boundary, and charging it wholly to one month would be worse than
+ * splitting it. Finer than a month there is nothing to split — the data doesn't
+ * hold that precision.
  */
 export async function getPreTrackerHistory(userId: number): Promise<PreTracker> {
   const rows = await db
@@ -200,7 +200,7 @@ export async function getPreTrackerHistory(userId: number): Promise<PreTracker> 
     const from = row.sinceAt ?? row.takenAt;
     const span = Math.max(row.takenAt.getTime() - from.getTime(), 1);
 
-    // Идём по месяцам интервала, отдавая каждому его долю времени
+    // Walk the months of the interval, giving each one its share of the time
     let cursor = from;
     while (cursor < row.takenAt) {
       const nextMonth = new Date(

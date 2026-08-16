@@ -2,10 +2,10 @@
 
 
 /*
- * Горизонтальные плёнки (советы, демки). Полоса прокрутки была полностью
- * скрыта, и ряд не выглядел прокручиваемым: обрезанная у края обложка
- * читалась как конец списка. Маску сюда ставить нельзя — она накрывает и
- * саму полосу, поэтому просто делаем её тонкой и постоянно видимой.
+ * Horizontal filmstrips (suggestions, demos). The scrollbar used to be hidden
+ * entirely, and the row didn't look scrollable: cover art cut off at the edge
+ * read as the end of the list. A mask is no good here — it covers the scrollbar
+ * too, so we simply make the bar thin and permanently visible.
  */
 .filmstrip {
   scrollbar-width: thin;
@@ -30,10 +30,11 @@
 }
 
 /*
- * Обложки Steam приходят ровно 460×215. Коробки под них набирались на глаз
- * (h-24, h-28), и object-cover срезал картинке макушку вместе с логотипом.
- * Теперь высоту задаёт сама пропорция обложки — ширину по-прежнему ставит
- * вёрстка. object-fit оставлен на случай, если у игры окажется нестандарт.
+ * Steam header images arrive at exactly 460×215. The boxes holding them were
+ * eyeballed (h-24, h-28), and object-cover sliced the top off the picture along
+ * with the logo. Now the height comes from the image's own aspect ratio — the
+ * width is still set by the layout. object-fit stays in case a game turns out
+ * to have a non-standard image.
  */
 .header-art {
   aspect-ratio: 460 / 215;

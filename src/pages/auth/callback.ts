@@ -17,9 +17,9 @@ export const GET: APIRoute = async ({ url, request, cookies, redirect }) => {
   const returnUrl = new URL("/auth/callback", origin).toString();
 
   /*
-   * За обратным прокси url.origin — внутренний адрес контейнера, а Steam
-   * подписал утверждение для публичного. При strict-проверке openid это
-   * расходится и авторизация падает, поэтому склеиваем публичный URL сами.
+   * Behind a reverse proxy url.origin is the container's internal address,
+   * while Steam signed the assertion for the public one. Under openid's strict
+   * check the two disagree and auth fails, so we assemble the public URL here.
    */
   const publicUrl = new URL(`${url.pathname}${url.search}`, origin).toString();
 
@@ -28,8 +28,8 @@ export const GET: APIRoute = async ({ url, request, cookies, redirect }) => {
     try {
       steamId = await verifyAssertion(returnUrl, publicUrl);
     } catch (first) {
-      // Проверка stateless-режима ходит на сервер Steam — одна сетевая осечка
-      // роняла весь вход, и он проходил только со второй попытки.
+      // Stateless verification calls out to Steam's server — a single network
+      // hiccup took the whole sign-in down, and it only worked on a retry.
       console.warn("Steam verify failed, retrying once:", first);
       steamId = await verifyAssertion(returnUrl, publicUrl);
     }
@@ -69,7 +69,7 @@ export const GET: APIRoute = async ({ url, request, cookies, redirect }) => {
 
     return redirect("/dashboard");
   } catch (e) {
-    // Логируем оба адреса: расхождение между ними — самая частая причина отказа
+    // Log both addresses: a mismatch between them is the most common cause of failure
     console.error("Steam auth error:", e, { returnUrl, publicUrl, rawUrl: url.toString() });
     return redirect("/?error=auth_failed");
   }

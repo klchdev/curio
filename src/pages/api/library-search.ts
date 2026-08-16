@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { getUserId } from "../../lib/auth";
 import { searchLibrary } from "../../lib/queries";
 
-/** Поиск по своей библиотеке: чтобы спросить мнение про игру, которой нет в советах. */
+/** Search your own library: to ask about a game that is not among the picks. */
 export const GET: APIRoute = async ({ url, cookies }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });

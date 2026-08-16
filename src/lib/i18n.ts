@@ -1,6 +1,6 @@
 /**
- * Определение языка. Держим отдельно от словаря, чтобы vocab.ts оставался
- * без зависимостей от Astro и годился и для SSR, и для клиентских островов.
+ * Locale detection. Kept apart from the dictionary so that vocab.ts stays free
+ * of Astro dependencies and works both in SSR and in client islands.
  */
 
 export const LOCALES = ["ru", "en"] as const;
@@ -13,7 +13,7 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 }
 
-/** Первый поддерживаемый язык из Accept-Language, иначе значение по умолчанию. */
+/** First supported language from Accept-Language, otherwise the default. */
 export function localeFromHeader(header: string | null): Locale {
   if (!header) return DEFAULT_LOCALE;
 
@@ -37,7 +37,7 @@ export function localeFromHeader(header: string | null): Locale {
   return DEFAULT_LOCALE;
 }
 
-/** Явный выбор пользователя важнее заголовка браузера. */
+/** An explicit user choice outranks the browser header. */
 export function resolveLocale(
   cookieValue: string | undefined,
   acceptLanguage: string | null
@@ -47,8 +47,8 @@ export function resolveLocale(
 }
 
 /**
- * Язык запроса. Отдельная функция, чтобы каждая страница и каждый роут
- * решали это одинаково, а не по-своему.
+ * Locale of a request. A separate function so that every page and every route
+ * resolves it the same way instead of each inventing its own.
  */
 export function localeFrom(
   cookies: { get(name: string): { value: string } | undefined },

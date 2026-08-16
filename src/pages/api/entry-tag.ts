@@ -9,11 +9,11 @@ const json = (body: unknown, status = 200) =>
   });
 
 /**
- * Правка тегов записи.
+ * Editing an entry's tags.
  *
- * Снятие и добавление — одна ручка: с точки зрения человека это одно и то же
- * движение по одной и той же полоске чипсов, и разносить его на два маршрута
- * значило бы описывать интерфейс через устройство хранения.
+ * Removing and adding share one endpoint: from the person's point of view it
+ * is the same gesture across the same strip of chips, and splitting it into
+ * two routes would mean describing the interface in terms of storage layout.
  */
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);

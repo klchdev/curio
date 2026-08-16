@@ -1,18 +1,18 @@
 /**
- * Дозаполняет карточки игр данными из магазина Steam: тип, описание, жанры,
- * категории и вердикт «софт или игра».
+ * Fills in game cards with data from the Steam store: type, description, genres,
+ * categories and the "software or game" verdict.
  *
- * Идёт по одной игре с паузой — лимиты Valve не публикует, а нас никто не
- * торопит. Скрипт возобновляемый: берёт только те строки, где деталей ещё нет,
- * поэтому его можно прервать и запустить снова.
+ * Goes one game at a time with a pause — Valve doesn't publish its limits, and
+ * nobody is rushing us. The script is resumable: it only takes rows that have no
+ * details yet, so it can be interrupted and started again.
  *
- *   DATABASE_URL=... npx tsx scripts/fetch-app-details.ts [лимит]
+ *   DATABASE_URL=... npx tsx scripts/fetch-app-details.ts [limit]
  */
 import { Client } from "pg";
 import { classifyAsSoftware } from "../src/lib/store-classify";
 
 const DELAY_MS = 1200;
-/** Пауза после отказа: если Steam начал резать, спешить точно не надо. */
+/** Pause after a rejection: once Steam starts throttling, hurrying is pointless. */
 const COOLDOWN_MS = 20_000;
 
 function cleanText(value: unknown): string | null {
@@ -45,7 +45,7 @@ async function main() {
     [limit]
   );
 
-  console.log(`К заполнению: ${rows.length}`);
+  console.log(`To fill in: ${rows.length}`);
   let ok = 0;
   let software = 0;
   let missing = 0;
@@ -57,7 +57,7 @@ async function main() {
       );
 
       if (res.status === 429 || res.status === 403) {
-        console.log(`  лимит Steam (${res.status}) — жду ${COOLDOWN_MS / 1000} с`);
+        console.log(`  Steam rate limit (${res.status}) — waiting ${COOLDOWN_MS / 1000} s`);
         await sleep(COOLDOWN_MS);
         continue;
       }
@@ -67,9 +67,9 @@ async function main() {
 
       if (!entry?.success || !entry.data) {
         /*
-         * Страницы может не быть вовсе: игру убрали из магазина или это
-         * служебный пакет. Помечаем время попытки, иначе застрянем на ней
-         * при каждом следующем прогоне.
+         * There may be no page at all: the game was pulled from the store, or
+         * this is a service package. We stamp the time of the attempt anyway,
+         * otherwise every following run gets stuck on it.
          */
         await client.query(`update games set details_fetched_at = now() where id = $1`, [game.id]);
         missing += 1;
@@ -104,20 +104,20 @@ async function main() {
         ok += 1;
         if (isSoftware) {
           software += 1;
-          console.log(`  софт: ${game.title} [${genres.join(", ") || "без жанров"}]`);
+          console.log(`  software: ${game.title} [${genres.join(", ") || "no genres"}]`);
         }
       }
     } catch (err) {
-      console.log(`  ошибка на ${game.title}: ${err instanceof Error ? err.message : err}`);
+      console.log(`  error on ${game.title}: ${err instanceof Error ? err.message : err}`);
     }
 
     if ((index + 1) % 50 === 0) {
-      console.log(`${index + 1} / ${rows.length} · заполнено ${ok}, софт ${software}, без страницы ${missing}`);
+      console.log(`${index + 1} / ${rows.length} · filled ${ok}, software ${software}, no page ${missing}`);
     }
     await sleep(DELAY_MS);
   }
 
-  console.log(`\nГотово. Заполнено ${ok}, из них софта ${software}. Без страницы в магазине: ${missing}.`);
+  console.log(`\nDone. Filled ${ok}, of which software ${software}. No store page: ${missing}.`);
   await client.end();
 }
 

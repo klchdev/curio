@@ -2,9 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
-  /** Задержка каскада, мс */
+  /** Cascade delay, ms */
   delay?: number;
-  /** Откуда выезжает */
+  /** Which side it slides in from */
   from?: "up" | "down" | "left" | "scale";
   className?: string;
 }
@@ -17,8 +17,8 @@ const OFFSET: Record<NonNullable<Props["from"]>, string> = {
 };
 
 /**
- * Появление с задержкой. Ставится на mount, поэтому смена `key` у родителя
- * перезапускает анимацию — этим и переключаются герои.
+ * A delayed appearance. It fires on mount, so changing the `key` on the parent
+ * restarts the animation — that's how the heroes are switched.
  */
 export default function Reveal({ children, delay = 0, from = "up", className = "" }: Props) {
   const [shown, setShown] = useState(false);

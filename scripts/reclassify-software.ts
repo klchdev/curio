@@ -1,9 +1,9 @@
 /**
- * Пересчитывает флаг «софт» по уже сохранённым жанрам и категориям.
+ * Recomputes the "software" flag from the genres and categories already stored.
  *
- * Сырые данные магазина в базе, поэтому менять правило можно без повторного
- * похода в Steam — а править его придётся: первая версия классификатора
- * записала в софт пять настоящих игр.
+ * The raw store data is in the database, so the rule can be changed without
+ * another trip to Steam — and change it we will have to: the first version of
+ * the classifier filed five genuine games as software.
  *
  *   DATABASE_URL=... npx tsx scripts/reclassify-software.ts
  */
@@ -35,14 +35,14 @@ async function main() {
     if (next === game.is_software) continue;
 
     await client.query(`update games set is_software = $2 where id = $1`, [game.id, next]);
-    console.log(`${next ? "→ софт" : "→ игра"}: ${game.title} [${game.type}, ${game.genres ?? "без жанров"}]`);
+    console.log(`${next ? "→ software" : "→ game"}: ${game.title} [${game.type}, ${game.genres ?? "no genres"}]`);
     changed += 1;
   }
 
   const { rows: totals } = await client.query(
     `select count(*) filter (where is_software) software, count(*) total from games where details_fetched_at is not null`
   );
-  console.log(`\nПересчитано ${rows.length}, изменено ${changed}. Софта: ${totals[0].software} из ${totals[0].total}.`);
+  console.log(`\nRecomputed ${rows.length}, changed ${changed}. Software: ${totals[0].software} of ${totals[0].total}.`);
   await client.end();
 }
 

@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
 /**
- * Маркдаун из ответов модели.
+ * Markdown coming out of the model's answers.
  *
- * Она размечает две разные вещи: `**жирным**` — мысль абзаца, `*звёздочкой*`
- * — названия игр. Раньше и то и другое рисовалось одинаково белым, и портрет
- * читался как сплошная подсветка: целое предложение выглядело названием.
- * Поэтому мысль — просто светлее и плотнее, а название — своим оттенком.
+ * It marks up two different things: `**bold**` is the point of a paragraph,
+ * `*a single asterisk*` is a game title. Both used to render the same white,
+ * and a portrait read as one solid highlight: a whole sentence looked like a
+ * title. So the point is merely lighter and denser, and a title gets its own hue.
  */
 const TOKEN = /(\*\*[^*]+\*\*|\*[^*]+\*|\[\[[^\]]+\]\])/g;
 
@@ -23,7 +23,7 @@ export default function RichText({ text, className = "" }: { text: string; class
           );
         }
 
-        // Модель иногда размечает названия по-викисловарному: [[Metro Exodus]]
+        // The model sometimes marks titles up wiki-style: [[Metro Exodus]]
         const title = /^\*([^*]+)\*$/.exec(part) ?? /^\[\[([^\]]+)\]\]$/.exec(part);
         if (title) {
           return (

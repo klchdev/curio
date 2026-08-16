@@ -3,15 +3,17 @@ import { db } from "../db";
 import { gameEntries, gameRecords, entryAnalyses } from "../db/schema";
 
 /**
- * Что человек должен видеть перед тем, как писать следующую запись.
+ * What the player should see before writing the next entry.
  *
- * Две вещи, и обе — про его собственный текст, а не про игру. Первая: как он
- * говорил об этой игре раньше, своими словами и со штампом времени. Вторая:
- * не разошлась ли оценка с тем, как звучат последние записи.
+ * Two things, and both are about their own text rather than about the game.
+ * First: how they talked about this game before, in their own words and with a
+ * playtime stamp. Second: whether the rating has drifted away from how the
+ * latest entries sound.
  *
- * Черновик за человека здесь не пишется намеренно: единственная ценность
- * дневника — что текст его, и подсовывать готовые формулировки значит эту
- * ценность уничтожить. Показываем сказанное, писать он будет сам.
+ * Nothing here drafts the entry for them, and that is deliberate: the only
+ * value of the diary is that the words are theirs, and slipping them ready-made
+ * phrasings destroys exactly that. We show what was said; the writing is on
+ * them.
  */
 
 export interface EntryQuote {
@@ -20,11 +22,11 @@ export interface EntryQuote {
 }
 
 export interface ToneDrift {
-  /** Оценка, которая стоит сейчас. */
+  /** The rating currently set. */
   rating: number;
-  /** Что предлагаем вместо неё. */
+  /** What we suggest in its place. */
   suggested: number;
-  /** Сколько записей подряд оценка не двигалась. */
+  /** How many entries in a row the rating has not moved. */
   entries: number;
 }
 
@@ -33,7 +35,7 @@ export interface EntryContext {
   drift: ToneDrift | null;
 }
 
-/** Из записи берём начало абзаца: цитата — напоминание, а не перечитывание. */
+/** We take the opening paragraph: a quote is a reminder, not a re-read. */
 function excerpt(text: string, limit = 120): string {
   const line = text.split("\n").find((part) => part.trim().length > 0)?.trim() ?? "";
   if (line.length <= limit) return line;
@@ -43,15 +45,16 @@ function excerpt(text: string, limit = 120): string {
 }
 
 /**
- * Тон в оценку переводится грубо и намеренно: −2 это 1 из 5, 2 это 5 из 5.
- * Точность тут не нужна — нужен вопрос «ты уверен», а не новая шкала.
+ * Tone maps to a rating crudely, and on purpose: −2 is 1 out of 5, 2 is 5 out
+ * of 5. Precision is not the point here — the point is the question "are you
+ * sure?", not a second scale.
  */
 function toneToRating(tone: number): number {
   return Math.max(1, Math.min(5, tone + 3));
 }
 
 const MIN_ENTRIES_WITHOUT_CHANGE = 3;
-/** Ниже двух ступеней расхождение — шум: люди пишут резче, чем думают. */
+/** A gap under two steps is noise: people write more sharply than they think. */
 const MIN_GAP = 2;
 
 export async function getEntryContext(userId: number, gameId: number): Promise<EntryContext> {
@@ -77,7 +80,7 @@ export async function getEntryContext(userId: number, gameId: number): Promise<E
     .where(eq(gameEntries.recordId, record.id))
     .orderBy(desc(gameEntries.createdAt));
 
-  // Советы модели — не его слова, цитировать их ему обратно незачем
+  // The model's advice is not their words — no point quoting it back at them
   const own = entries.filter((entry) => entry.kind !== "advisor");
 
   const quotes: EntryQuote[] = own
@@ -96,8 +99,8 @@ function findDrift(
   if (!currentRating) return null;
 
   /*
-   * Считаем, сколько записей подряд оценка стоит на месте. Записи идут от
-   * новых к старым, поэтому первое же расхождение обрывает счёт.
+   * Count how many entries in a row the rating has stayed put. Entries run
+   * newest to oldest, so the very first mismatch ends the count.
    */
   let unchanged = 0;
   for (const entry of entries) {
@@ -111,7 +114,7 @@ function findDrift(
     .map((entry) => entry.tone)
     .filter((tone): tone is number => tone !== null);
 
-  // Тон есть не у всех записей: разбор мог не дойти или упасть
+  // Not every entry has a tone: the analysis may not have run, or may have failed
   if (recent.length < MIN_ENTRIES_WITHOUT_CHANGE) return null;
 
   const average = recent.reduce((sum, tone) => sum + tone, 0) / recent.length;

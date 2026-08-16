@@ -4,7 +4,7 @@ import { t } from "../../lib/strings";
 import { getUserId } from "../../lib/auth";
 import { takeContract } from "../../lib/queries";
 
-/** Взять контракт на конкретную игру — из совета ИИ или по жребию между ними. */
+/** Take a contract on a specific game — from an AI pick or by drawing lots among them. */
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });

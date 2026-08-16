@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 
 /*
- * Остался только DELETE: демки создаются через общий /api/impression в режиме
- * demo, и второй путь записи существовал вхолостую.
+ * Only DELETE is left: demos are created through the shared /api/impression in
+ * demo mode, and a second write path was carrying no load.
  */
 import { getUserId } from "../../lib/auth";
 import { deleteDemoReview } from "../../lib/queries";

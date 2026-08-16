@@ -1,23 +1,24 @@
 /**
- * Отзывы, которые игрок писал в самом Steam.
+ * Reviews the player wrote inside Steam itself.
  *
- * Web API их не отдаёт: ни в ISteamUser, ни в IPlayerService такого метода
- * нет, а искать свой отзыв через appreviews каждой игры — тысяча запросов
- * ради полусотни находок. Остаётся страница профиля.
+ * The Web API doesn't hand them over: neither ISteamUser nor IPlayerService
+ * has such a method, and hunting for your own review through every game's
+ * appreviews means a thousand requests for fifty hits. That leaves the
+ * profile page.
  *
- * Значит парсинг HTML со всеми его рисками: вёрстка поменяется — импорт
- * сломается. Поэтому парсер устроен так, чтобы ломаться тихо: не нашли
- * блок — пропустили отзыв, а не уронили импорт целиком.
+ * Which means parsing HTML, with every risk that carries: the markup changes
+ * and the import breaks. So the parser is built to fail quietly — a block we
+ * can't find is one review skipped, not the whole import brought down.
  */
 
 export interface OwnReview {
   steamAppId: number;
-  /** Палец вверх или вниз — единственная оценка, которую Steam хранит. */
+  /** Thumbs up or down — the only rating Steam keeps. */
   positive: boolean;
-  /** Наиграно на момент отзыва, минуты. */
+  /** Playtime at the moment of the review, in minutes. */
   playtimeMinutes: number;
   text: string;
-  /** Когда отзыв написан в Steam. null — если дату не удалось разобрать. */
+  /** When the review was posted on Steam. null if the date couldn't be parsed. */
   postedAt: Date | null;
 }
 
@@ -39,9 +40,9 @@ const MONTHS = [
 ];
 
 /*
- * Steam пишет дату по-английски и в двух видах: «15 March, 2024», а для
- * отзывов этого года год опускает — «15 March». Год в таком случае текущий.
- * Порядок «March 15» встречается на части страниц, поэтому ловим оба.
+ * Steam writes the date in English and in two shapes: "15 March, 2024", and for
+ * reviews from this year it drops the year — "15 March", meaning the current
+ * one. The "March 15" order shows up on some pages, so we catch both.
  */
 export function parsePostedDate(raw: string, now = new Date()): Date | null {
   const text = raw.toLowerCase();
@@ -71,7 +72,7 @@ function decodeEntities(value: string): string {
     .trim();
 }
 
-/** Разбирает одну страницу профиля. Возвращает отзывы и признак «есть ещё». */
+/** Parses one profile page. Returns the reviews and the "there is more" marker. */
 export function parseReviewPage(html: string): { reviews: OwnReview[]; total: number | null } {
   const blocks = html.split('class="review_box"').slice(1);
   const reviews: OwnReview[] = [];
@@ -85,7 +86,7 @@ export function parseReviewPage(html: string): { reviews: OwnReview[]; total: nu
     const body = decodeEntities(text);
     if (!body) continue;
 
-    // «Posted 28 July.» и «Posted 16 December, 2025.» — двоеточия Steam не ставит
+    // "Posted 28 July." and "Posted 16 December, 2025." — Steam puts no colon there
     const posted = block.match(/class="posted"[^>]*>\s*Posted:?\s*([^<]+)/i)?.[1];
 
     reviews.push({
@@ -102,8 +103,9 @@ export function parseReviewPage(html: string): { reviews: OwnReview[]; total: nu
 }
 
 /**
- * Все отзывы профиля. Профиль может быть закрыт — тогда страница отдаётся,
- * но отзывов в ней нет, и отличить это от «человек не писал отзывов» нельзя.
+ * Every review on a profile. The profile may be private — then the page is
+ * still served but holds no reviews, and there is no telling that apart from
+ * "this person never wrote any".
  */
 export async function fetchOwnReviews(steamId: string): Promise<OwnReview[]> {
   const all: OwnReview[] = [];
@@ -123,11 +125,11 @@ export async function fetchOwnReviews(steamId: string): Promise<OwnReview[]> {
     all.push(...reviews);
     if (expected !== null && all.length >= expected) break;
 
-    // Профиль — обычная страница сообщества, долбить её пачкой незачем
+    // The profile is an ordinary community page; no reason to hammer it in bursts
     await new Promise((resolve) => setTimeout(resolve, 700));
   }
 
-  // Один и тот же отзыв не должен приехать дважды при съезжающей пагинации
+  // The same review must not arrive twice when pagination shifts under us
   const seen = new Set<number>();
   return all.filter((review) => {
     if (seen.has(review.steamAppId)) return false;

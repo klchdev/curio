@@ -11,9 +11,10 @@ interface Props {
 }
 
 /**
- * Причина уезжает на сервер кодом, а не текстом. Раньше сервер решал, стыдный
- * скип или нет, сравнением с русскими строками — при переводе интерфейса
- * любая уважительная причина стала бы позорной.
+ * The reason travels to the server as a code, not as text. The server used to
+ * decide whether a skip was shameful by comparing against Russian strings —
+ * translating the interface would have turned every legitimate reason into a
+ * disgraceful one.
  */
 export const SKIP_CODES = ["not-a-game", "wont-launch", "not-owned"] as const;
 export type SkipCode = (typeof SKIP_CODES)[number] | "custom";
@@ -78,7 +79,7 @@ export default function SkipModal({
       setError(s.skip.writeReason);
       return;
     }
-    // Текст нужен для дневника, код — для решения «стыдный или нет»
+    // The text is for the diary, the code is for deciding "shameful or not"
     const label = selected === "custom" ? customText.trim() : REASONS.find((r) => r.code === selected)!.label;
     send({ reasonCode: selected, reason: label });
   }

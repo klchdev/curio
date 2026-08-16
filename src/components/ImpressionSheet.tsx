@@ -16,7 +16,7 @@ import Celebration from "./Celebration";
 import CurioMark from "./CurioMark";
 import RichText from "./RichText";
 
-/** Вердикты, после которых отзыв считается закрытым. */
+/** Verdicts after which the review counts as closed. */
 const CLOSING_VERDICTS = new Set(["finished", "dropped", "endless"]);
 
 interface Props {
@@ -25,7 +25,7 @@ interface Props {
   gameImage?: string | null;
   slotId?: number;
   gameId?: number;
-  /** Абсолютное наигранное время; для слота — сколько прошло с начала контракта. */
+  /** Absolute playtime; for a slot — how much has passed since the contract began. */
   currentPlaytime?: number;
   lastRecordedPlaytime?: number;
   currentVerdict?: string | null;
@@ -37,9 +37,9 @@ interface Props {
 }
 
 /**
- * Один лист вместо шести модалок. Режим не создаёт отдельную форму — он лишь
- * включает и выключает блоки по таблице SHEET_RULES, той же, по которой
- * проверяет сервер.
+ * One sheet instead of six modals. The mode doesn't create a separate form — it
+ * only switches blocks on and off according to the SHEET_RULES table, the same
+ * one the server validates against.
  */
 export default function ImpressionSheet({
   mode,
@@ -70,10 +70,10 @@ export default function ImpressionSheet({
   const [error, setError] = useState("");
 
   /*
-   * Свои же прошлые слова об этой игре и расхождение оценки с тоном последних
-   * записей. И то и другое — про уже написанное, поэтому подтягивается один
-   * раз при открытии и ничего не блокирует: не ответил сервер — лист работает
-   * как раньше.
+   * Your own past words about this game, and the drift between the score and the
+   * tone of the latest entries. Both are about what has already been written, so
+   * they are pulled once on open and block nothing: if the server doesn't answer,
+   * the sheet works exactly as it did before.
    */
   const [quotes, setQuotes] = useState<Array<{ playtimeMinutes: number; text: string }>>([]);
   const [drift, setDrift] = useState<{ rating: number; suggested: number; entries: number } | null>(
@@ -163,9 +163,10 @@ export default function ImpressionSheet({
       }
 
       /*
-       * Закрыли игру — самое время спросить про то, чего в отзыве нет: она
-       * ещё в голове. Вопросы приходят из фона, и если их нет или модель не
-       * ответила, лист просто закрывается, как раньше.
+       * The game has just been closed out — the perfect moment to ask about what
+       * the review left out, while it's still fresh in mind. The questions come
+       * from the background, and if there are none or the model didn't answer,
+       * the sheet simply closes, as it used to.
        */
       if (gameId && verdict && CLOSING_VERDICTS.has(verdict)) {
         const closing = await fetch("/api/entry-closing", {
@@ -196,7 +197,7 @@ export default function ImpressionSheet({
     }
   }
 
-  /** Ответ на вопрос — обычная запись дневника, только с вопросом рядом. */
+  /** An answer to a question is an ordinary diary entry, just with the question beside it. */
   async function submitAnswer(question: string) {
     const text = answer.trim();
     if (text.length < rule.minNote) return;
@@ -351,9 +352,10 @@ export default function ImpressionSheet({
 
           {quotes.length > 1 && (
             /*
-             * Не черновик, а свои же слова со штампом времени: финал перестаёт
-             * писаться по памяти и дублировать сказанное в середине. Готовых
-             * формулировок тут нет намеренно — текст должен остаться его.
+             * Not a draft but your own words with a timestamp on them: the final
+             * review stops being written from memory and repeating what was said
+             * halfway through. There are deliberately no ready-made phrasings
+             * here — the text has to stay the person's own.
              */
             <div className="mb-5 rounded-xl border border-gray-800/70 bg-gray-900/30 p-3">
               <p className="mb-2 text-xs text-gray-500">{s.sheet.quotesLede}</p>
@@ -417,9 +419,9 @@ export default function ImpressionSheet({
 
               {drift && rating === drift.rating && (
                 /*
-                 * Не баннер и не модалка: строка под самой оценкой, в момент,
-                 * когда человек и так решает, что ставить. Один тап — и она
-                 * исчезает вместе с вопросом.
+                 * Neither a banner nor a modal: a line right under the score
+                 * itself, at the moment the person is deciding what to give
+                 * anyway. One tap and it disappears along with the question.
                  */
                 <p className="mt-2 text-xs leading-relaxed text-amber-300/70">
                   {s.sheet.driftHint(drift.rating, drift.suggested, drift.entries)}{" "}
