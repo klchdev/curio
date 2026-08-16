@@ -5,7 +5,18 @@
 
 export const LOCALES = ["ru", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
-export const DEFAULT_LOCALE: Locale = "ru";
+
+/**
+ * English is the fallback, not Russian.
+ *
+ * Russian is the language this was written in, but it is the narrower audience:
+ * the fallback is what someone gets when nothing about them is known, and for a
+ * public repository that someone is far more likely to read English. Russian
+ * still wins whenever there is an actual reason for it — an explicit choice in
+ * the cookie, or a browser that ranks Russian above English — so nobody who
+ * wants it has to ask twice.
+ */
+export const DEFAULT_LOCALE: Locale = "en";
 
 export const LOCALE_COOKIE = "br_lang";
 
@@ -13,7 +24,11 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 }
 
-/** First supported language from Accept-Language, otherwise the default. */
+/**
+ * The highest-weighted supported language from Accept-Language, otherwise the
+ * default. Ranking by weight rather than by order is what keeps this honest:
+ * `en-US,en;q=0.9,ru;q=0.3` means the person reads both and prefers English.
+ */
 export function localeFromHeader(header: string | null): Locale {
   if (!header) return DEFAULT_LOCALE;
 
