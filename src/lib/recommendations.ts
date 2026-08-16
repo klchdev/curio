@@ -1,15 +1,14 @@
-import { Type } from "@google/genai";
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { CandidateGame, ReviewCorpusItem, TasteTag } from "./queries";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
-import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
+import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
 
 export const MAX_PICKS = 40;
 
 export const GROUNDING_VALUES = ["known", "from-description", "guess"] as const;
 export type Grounding = (typeof GROUNDING_VALUES)[number];
 
-/** Совет по всей библиотеке идёт потоком и до минуты — обычного срока мало. */
+/** Advice over a whole library streams for up to a minute — the usual timeout won't do. */
 const STREAM_TIMEOUT_MS = 300_000;
 
 const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по его собственным отзывам и советуешь, что запустить из его библиотеки Steam.
@@ -43,14 +42,6 @@ const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по
 
 Завышенный тир дороже заниженного: по нему человек бросит то, что уже играет.
 
-## abandoned — разбор брошенного
-Берутся только из списка БРОШЕННОГО: игрок сам пометил их как брошенные. Их НЕЛЬЗЯ добавлять в picks.
-Для каждой выбери позицию:
-- stance="agree" — брошено по делу. Объясни, ЧЕМ ИМЕННО игра противоречит его вкусу, опираясь на его отзывы. Не пересказывай очевидное, назови конкретную механику или свойство.
-- stance="disagree" — ты считаешь, что он неправ и стоит вернуться. Спорь прямо и с аргументом: покажи, что именно он не успел увидеть за наигранное время, и почему это попадает в его вкус. Можно с иронией, но по делу.
-Не подстраивайся: если есть основания спорить — спорь. Ставь disagree там, где реально видишь ошибку, а не для баланса.
-Разбери 6-12 игр, text — 1-3 предложения.
-
 Про каждого кандидата ты видишь жанры, дату релиза и описание из магазина. Если игру ты знаешь — опирайся на знание. Если не знаешь (инди, свежий релиз) — опирайся на описание и честно ставь grounding. Придуманная деталь хуже честного «сужу по описанию»: игрок потратит на неё вечер.
 
 grounding: known — игру действительно знаешь; from-description — судишь по описанию и жанрам; guess — не знаешь и описания нет.
@@ -62,69 +53,57 @@ profile — 4-7 пунктов маркдауна о том, какой это �
 `;
 
 /*
- * Сама инструкция остаётся русской: это внутренний промпт, модель работает
- * с ним одинаково. От языка пользователя зависит только то, на чём написан
- * ответ, который он увидит.
+ * The instruction itself stays in Russian: it is an internal prompt, and the
+ * model works with it just the same either way. The user's language decides
+ * only one thing — what the answer they see is written in.
  */
 const OUTPUT_LANGUAGE: Record<Locale, string> = {
   ru: "Пиши по-русски.",
   en: "Write in English, even though these instructions are in Russian. The player's reviews may be in Russian — quote and paraphrase them in English.",
 };
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+/*
+ * The key order here carries meaning: the reasoning comes after the verdict,
+ * and the model writes its answer left to right. There is no separate
+ * `propertyOrdering` any more — the adapter derives it from the field order of
+ * the schema.
+ */
+const RESPONSE_SCHEMA: JsonSchema = {
+  type: "object",
   properties: {
     profile: {
-      type: Type.STRING,
+      type: "string",
       description: "Портрет игрока: 4-7 пунктов маркдауна, каждый со ссылкой на конкретные игры",
     },
     picks: {
-      type: Type.ARRAY,
+      type: "array",
       items: {
-        type: Type.OBJECT,
+        type: "object",
         properties: {
-          steamAppId: { type: Type.INTEGER, description: "steamAppId строго из списка кандидатов" },
-          tier: { type: Type.STRING, enum: [...ADVISOR_TIER_VALUES] },
-          reason: { type: Type.STRING, description: "1-2 предложения со ссылкой на отзывы игрока" },
+          steamAppId: { type: "integer", description: "steamAppId строго из списка кандидатов" },
+          tier: { type: "string", enum: [...ADVISOR_TIER_VALUES] },
+          reason: { type: "string", description: "1-2 предложения со ссылкой на отзывы игрока" },
           grounding: {
-            type: Type.STRING,
+            type: "string",
             enum: ["known", "from-description", "guess"],
             description:
               "known — игру знаю; from-description — сужу по описанию из магазина; guess — не знаю игру",
           },
         },
         required: ["steamAppId", "tier", "reason", "grounding"],
-        propertyOrdering: ["steamAppId", "tier", "reason"],
-      },
-    },
-    abandoned: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          steamAppId: { type: Type.INTEGER, description: "steamAppId строго из списка брошенного" },
-          stance: {
-            type: Type.STRING,
-            enum: ["agree", "disagree"],
-            description: "agree — брошено по делу, disagree — стоит вернуться",
-          },
-          text: { type: Type.STRING, description: "1-3 предложения с аргументом" },
-        },
-        required: ["steamAppId", "stance", "text"],
-        propertyOrdering: ["steamAppId", "stance", "text"],
       },
     },
   },
-  required: ["profile", "picks", "abandoned"],
-  propertyOrdering: ["profile", "picks", "abandoned"],
+  required: ["profile", "picks"],
 };
 
 /**
- * Профиль тегами — выжимка из тех же отзывов, только уже сведённая.
+ * The tag profile — a squeeze of the same reviews, only already rolled up.
  *
- * Модель способна вывести это и сама, но выводит каждый раз заново и каждый
- * раз чуть иначе. Готовая сводка держит её на одних и тех же словах и
- * показывает охват: претензия из семи игр весит иначе, чем из одной.
+ * The model can derive this on its own, but it derives it from scratch every
+ * time and slightly differently every time. A ready-made summary keeps it on
+ * the same words and shows the reach: a complaint drawn from seven games
+ * carries a different weight than one drawn from a single game.
  */
 function formatProfile(profile: TasteTag[]): string {
   if (profile.length === 0) return "Тегов пока нет — суди по текстам отзывов.";
@@ -152,9 +131,10 @@ function formatReviews(reviews: ReviewCorpusItem[]): string {
 }
 
 /**
- * Кандидат уезжает с жанрами и описанием из магазина. Раньше в промпте было
- * только название, и всё содержание игры модель добирала из памяти — по инди
- * и по свежим релизам это давало уверенно звучащую выдумку.
+ * A candidate ships with its genres and store description. The prompt used to
+ * carry the title and nothing else, so the model filled in what the game
+ * actually is from memory — for indies and fresh releases that produced
+ * confident-sounding fiction.
  */
 function formatCandidates(candidates: CandidateGame[]): string {
   return candidates
@@ -166,7 +146,7 @@ function formatCandidates(candidates: CandidateGame[]): string {
       const facts = [
         game.genres,
         game.releaseDate,
-        // Описание длинное, а нужен только предмет разговора
+        // The description runs long, and all we need is what the game is about
         game.description ? game.description.slice(0, 220) : null,
       ]
         .filter(Boolean)
@@ -185,10 +165,9 @@ export interface GeneratedRecommendations {
     reason: string;
     grounding: Grounding;
   }[];
-  abandoned: { steamAppId: number; stance: "agree" | "disagree"; text: string }[];
 }
 
-/** Сколько игр модель уже выдала — считаем по накопленному куску JSON. */
+/** How many games the model has produced — counted off the JSON accumulated so far. */
 function countReadyPicks(text: string): number {
   return (text.match(/"steamAppId"/g) ?? []).length;
 }
@@ -196,9 +175,8 @@ function countReadyPicks(text: string): number {
 export async function generateRecommendations(
   reviews: ReviewCorpusItem[],
   candidates: CandidateGame[],
-  abandonedGames: CandidateGame[],
   profile: TasteTag[],
-  keys: GeminiKeys,
+  creds: LlmCredentials | null,
   locale: Locale = DEFAULT_LOCALE,
   onProgress?: (picksReady: number) => void
 ): Promise<GeneratedRecommendations> {
@@ -214,50 +192,44 @@ export async function generateRecommendations(
     "Формат: steamAppId<TAB>название<TAB>наиграно<TAB>последний запуск, следующей строкой — жанры, дата релиза и описание из магазина",
     formatCandidates(candidates),
     "",
-    `# Брошенное — отсюда берётся abandoned (${abandonedGames.length})`,
-    "Поиграл и забросил без отзыва. В picks не добавлять.",
-    formatCandidates(abandonedGames),
-    "",
     "Разбери вкус, раздай тиры кандидатам и вынеси вердикт по брошенному.",
   ].join("\n");
 
-  const raw = await withGemini(
-    keys,
-    async (ai) => {
-      const stream = await ai.models.generateContentStream({
-        model: GEMINI_MODEL,
-        contents: prompt,
-        config: {
-          systemInstruction: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      });
-
-      // Счётчик готовых советов живёт внутри попытки: оборвался поток —
-      // прогресс начинается заново, иначе он поедет вверх на повторе
+  const raw = await withLlm(
+    creds,
+    async (client) => {
+      // The ready-picks counter lives inside the attempt: if the stream breaks,
+      // progress starts over, otherwise it would creep upward on the retry.
+      // We accumulate the chunks ourselves: "steamAppId" can split across them
       let text = "";
       let lastReported = 0;
-      for await (const chunk of stream) {
-        text += chunk.text ?? "";
-        const ready = countReadyPicks(text);
-        if (onProgress && ready > lastReported) {
-          lastReported = ready;
-          onProgress(ready);
+
+      return client.streamJson(
+        {
+          system: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
+          prompt,
+          schema: RESPONSE_SCHEMA,
+        },
+        (delta) => {
+          text += delta;
+          const ready = countReadyPicks(text);
+          if (onProgress && ready > lastReported) {
+            lastReported = ready;
+            onProgress(ready);
+          }
         }
-      }
-      return text;
+      );
     },
     { timeoutMs: STREAM_TIMEOUT_MS }
   );
 
-  if (!raw) throw new Error("Gemini вернул пустой ответ");
+  if (!raw) throw new Error("The model returned an empty response");
 
   let parsed: GeneratedRecommendations;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("Gemini вернул невалидный JSON");
+    throw new Error("The model returned invalid JSON");
   }
 
   const allowed = new Set(candidates.map((c) => c.steamAppId));
@@ -270,22 +242,13 @@ export async function generateRecommendations(
       return true;
     })
     .slice(0, MAX_PICKS)
-    // Молчание про источник знания приравниваем к догадке, а не к знанию
+    // Silence about the source of knowledge counts as a guess, not as knowledge
     .map((pick) => ({
       ...pick,
       grounding: GROUNDING_VALUES.includes(pick.grounding) ? pick.grounding : "guess",
     }));
 
-  if (picks.length === 0) throw new Error("Gemini не вернул ни одной валидной игры");
+  if (picks.length === 0) throw new Error("The model returned no valid games");
 
-  const allowedAbandoned = new Set(abandonedGames.map((g) => g.steamAppId));
-  const seenAbandoned = new Set<number>();
-  const abandoned = (parsed.abandoned ?? []).filter((item) => {
-    if (!allowedAbandoned.has(item.steamAppId) || seenAbandoned.has(item.steamAppId)) return false;
-    if (item.stance !== "agree" && item.stance !== "disagree") return false;
-    seenAbandoned.add(item.steamAppId);
-    return true;
-  });
-
-  return { profile: parsed.profile ?? "", picks, abandoned };
+  return { profile: parsed.profile ?? "", picks };
 }

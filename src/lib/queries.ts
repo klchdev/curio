@@ -98,8 +98,9 @@ export async function getUnplayedGames(userId: number) {
 }
 
 /**
- * Контракт на конкретную игру. Рулетка выбирает вслепую, советчик — по
- * вкусу, но обязательство одно и то же: 20 минут и первое впечатление.
+ * A contract on one specific game. The roulette picks blind and the advisor
+ * picks by taste, but the commitment is the same either way: 20 minutes and a
+ * first impression.
  */
 export async function takeContract(userId: number, gameId: number) {
   if (!(await canSpin(userId))) {
@@ -181,9 +182,9 @@ export async function spinRoulette(userId: number) {
 }
 
 /**
- * Сохранённое наигранное время. Записи в дневник им и обходятся: тянуть ради
- * одного числа всю библиотеку из Steam незачем, а актуализируют её синк,
- * кнопка обновления и закрытие контракта.
+ * The stored playtime. Diary entries make do with it: pulling the whole library
+ * from Steam for the sake of one number makes no sense, and the sync, the
+ * refresh button and closing a contract keep it current anyway.
  */
 export async function getStoredPlaytime(userId: number, gameId: number): Promise<number> {
   const row = await db
@@ -197,12 +198,12 @@ export async function getStoredPlaytime(userId: number, gameId: number): Promise
 }
 
 /**
- * Единая очередь «требует внимания» вместо четырёх списков с четырьмя
- * порогами. Раньше игра с 70 минутами и без вердикта попадала и в список
- * дашборда, и в триаж на странице советов — это не два состояния, а одно.
+ * One "needs attention" queue instead of four lists with four thresholds. A
+ * game with 70 minutes and no verdict used to land both in the dashboard list
+ * and in triage on the advice page — that is one state, not two.
  *
- * triage — сыграно ощутимо, но вердикта нет вообще
- * update — отзыв есть, но с тех пор наиграно заметно больше
+ * triage — played a noticeable amount, but no verdict at all
+ * update — there is a review, but a lot more playtime has piled up since
  */
 export type AttentionItem =
   | {
@@ -213,12 +214,12 @@ export type AttentionItem =
       headerImage: string | null;
       playtimeMinutes: number;
       lastPlayedAt: string | null;
-      /** Текст уже есть (например, перенесён из Steam) — не хватает вердикта. */
+      /** The text is already there (imported from Steam, say) — the verdict is missing. */
       hasReview: boolean;
     }
   | {
       reason: "update";
-      /** Откуда отзыв: он определяет, какой формой его дополнять. */
+      /** Where the review came from: it decides which form extends it. */
       source: "game" | "slot";
       slotId: number | null;
       gameId: number;
@@ -283,7 +284,7 @@ export async function getAttentionQueue(
         and(
           eq(userGames.userId, userId),
           eq(games.isDemo, false),
-          // Blender и Wallpaper Engine наиграны сотнями часов, но «прошёл» им не подходит
+          // Blender and Wallpaper Engine rack up hundreds of hours, but "finished" makes no sense
           eq(games.isSoftware, false),
           gt(userGames.playtimeMinutes, TRIAGE_MIN_MINUTES)
         )
@@ -292,9 +293,9 @@ export async function getAttentionQueue(
   ]);
 
   /*
-   * В разбор попадает и то, по чему запись уже есть, но вердикта нет:
-   * так приходят отзывы, перенесённые из Steam. Иначе они исчезали бы из
-   * очереди, не получив ни «прошёл», ни «бросил».
+   * Triage also takes games that already have a record but no verdict: that is
+   * how reviews imported from Steam arrive. Otherwise they would vanish from
+   * the queue without ever getting a "finished" or a "dropped".
    */
   const reviewedGameIds = new Set(
     records.filter((r) => r.verdict !== null).map((r) => r.gameId)
@@ -348,8 +349,8 @@ export async function getAttentionQueue(
       })
     )
     /*
-     * Сначала те, где текст уже написан: им не хватает одного клика, а среди
-     * четырёх сотен нетронутых игр они иначе просто утонут.
+     * The ones that already have text go first: they are a single click short,
+     * and among four hundred untouched games they would otherwise just sink.
      */
     .sort((a, b) => Number(b.hasReview) - Number(a.hasReview));
 
@@ -360,8 +361,8 @@ export async function getAttentionQueue(
 }
 
 /**
- * Метка бесплатного скипа в slot_skips. Это данные, а не текст интерфейса:
- * по ней считаются потраченные скипы, поэтому она не переводится.
+ * The free-skip marker in slot_skips. This is data, not interface text: spent
+ * skips are counted by it, which is why it is never translated.
  */
 export const FREE_SKIP_MARKER = "Бесплатный скип";
 
@@ -422,8 +423,9 @@ export async function skipSlot(
 }
 
 /**
- * Дневник: лента записей об играх плюс пропуски контрактов. Раньше здесь
- * склеивались три источника с разными формами строк и ручной дедупликацией.
+ * The diary: the feed of game entries plus skipped contracts. This used to glue
+ * together three sources with three different row shapes and deduplication by
+ * hand.
  */
 export async function getHistory(userId: number) {
   const [entries, skips] = await Promise.all([
@@ -446,7 +448,7 @@ export async function getHistory(userId: number) {
         currentVerdict: gameRecords.verdict,
         currentRating: gameRecords.rating,
         currentTier: gameRecords.tier,
-        /** Откуда текст: перенесённый из Steam честнее пометить. */
+        /** Where the text came from: an import from Steam is more honest when marked. */
         origin: gameRecords.origin,
       })
       .from(gameEntries)
@@ -496,7 +498,7 @@ export async function getTierList(userId: number) {
     .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, false)));
 }
 
-/** Тир живёт в одной таблице, поэтому путь тоже один. */
+/** The tier lives in a single table, so there is a single path to it. */
 export async function setTier(
   userId: number,
   gameId: number,
@@ -586,9 +588,9 @@ export async function createDemoReview(
 }
 
 /**
- * Статистика по единой модели. Раньше считались только слотовые отзывы,
- * поэтому профиль показывал 14 игр вместо 139 и «наиграно» означало не
- * общее время, а время после спинов.
+ * Stats over the unified model. Only slot reviews used to be counted, so the
+ * profile showed 14 games instead of 139 and "playtime" meant not the total
+ * time but the time logged after the spins.
  */
 export async function getDemoReviews(userId: number) {
   return db
@@ -610,7 +612,7 @@ export async function getDemoReviews(userId: number) {
     .orderBy(desc(gameRecords.createdAt));
 }
 
-/** Запись уносит свою ленту каскадом, отдельная чистка заметок не нужна. */
+/** The record takes its feed down by cascade, so notes need no separate cleanup. */
 export async function deleteDemoReview(userId: number, gameId: number) {
   await db
     .delete(gameRecords)
@@ -677,7 +679,7 @@ export async function getStats(userId: number) {
 
   const byVerdict = (verdict: string) => records.filter((r) => r.verdict === verdict).length;
 
-  // Серия: сколько дней подряд появляются новые записи, без провалов
+  // Streak: how many days in a row new entries show up, with no gaps
   const days = [...new Set(records.map((r) => new Date(r.createdAt).toDateString()))]
     .map((d) => new Date(d).getTime())
     .sort((a, b) => b - a);
@@ -700,7 +702,7 @@ export async function getStats(userId: number) {
     excludedCount: excludedRow[0]?.n ?? 0,
     activeCount: activeRow[0]?.n ?? 0,
     skippedCount: skippedRow[0]?.n ?? 0,
-    // Сколько мнений перенесено из Steam, а сколько написано здесь
+    // How many opinions were imported from Steam and how many were written here
     steamCount: records.filter((r) => r.origin === "steam").length,
     finishedCount: byVerdict("finished"),
     endlessCount: byVerdict("endless"),
@@ -722,11 +724,11 @@ export interface ReviewCorpusItem {
   hours: number;
   isDemo: boolean;
   note: string | null;
-  /** Что разбор вынес из записей об этой игре: «душный гринд», «живые персонажи». */
+  /** What the analysis drew from this game's entries: "stifling grind", "living cast". */
   labels: string[];
 }
 
-/** Свойство, за которое человек хвалит или ругает игры, с охватом по играм. */
+/** A property the player praises or curses games for, with its reach in games. */
 export interface TasteTag {
   label: string;
   kind: string;
@@ -734,11 +736,11 @@ export interface TasteTag {
 }
 
 /**
- * Профиль вкуса тегами.
+ * The taste profile, in tags.
  *
- * Тег, встреченный в одной игре, — случайность; встреченный в семи — свойство
- * вкуса. Поэтому охват считается по играм, а не по записям: пять записей об
- * одной игре не делают претензию системной.
+ * A tag met in one game is an accident; met in seven, it is a property of
+ * taste. That is why reach is counted in games rather than entries: five
+ * entries about one game do not make a complaint systematic.
  */
 export async function getTasteProfile(userId: number, limit = 25): Promise<TasteTag[]> {
   return db
@@ -773,10 +775,10 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
     .where(eq(gameRecords.userId, userId));
 
   /*
-   * Записи вида «совет ИИ» в корпус не идут. Это слова Кьюрио, а не игрока:
-   * с тех пор как его вердикты сохраняются в ленту, модель, читая корпус,
-   * принимала бы собственные суждения за вкус человека и укреплялась в них
-   * с каждым прогоном.
+   * Entries of the "advisor" kind stay out of the corpus. Those are Curio's
+   * words, not the player's: ever since its takes are saved into the feed, a
+   * model reading the corpus would take its own judgements for the player's
+   * taste and dig itself deeper into them with every run.
    */
   const entries = await db
     .select({
@@ -815,9 +817,9 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
   return records.map((record) => {
     const timeline = byRecord.get(record.recordId) ?? [];
     /*
-     * Модель видит всю ленту, а не одну первую заметку — ради этого и
-     * затевалось объединение. Штамп наигранного показывает, на каком часу
-     * мнение менялось.
+     * The model sees the whole feed, not just the first note — that is what the
+     * unification was started for. The playtime stamp shows at which hour the
+     * opinion shifted.
      */
     const note = timeline
       .map((entry) => {
@@ -855,9 +857,9 @@ export interface CandidateGame {
   hours: number;
   lastPlayedAt: Date | null;
   /*
-   * Жанры и описание из магазина. Без них модель знала о кандидате только
-   * название и всё остальное восстанавливала по памяти — для инди и для
-   * всего, что вышло после её обучения, это выдумка.
+   * Genres and description from the store. Without them the model knew nothing
+   * about a candidate but its title and reconstructed the rest from memory —
+   * for indies, and for anything released after its training, that is fiction.
    */
   genres: string | null;
   description: string | null;
@@ -865,10 +867,11 @@ export interface CandidateGame {
 }
 
 /**
- * Поиск игры в своей библиотеке по части названия.
+ * Searching your own library by part of a title.
  *
- * Софт не прячем: спросить мнение про Blender странно, но это выбор
- * человека, а не наше дело — фильтр нужен там, где приложение решает само.
+ * Software is not hidden: asking for an opinion on Blender is odd, but that is
+ * the player's call and none of our business — filtering belongs where the app
+ * decides on its own.
  */
 export async function searchLibrary(userId: number, query: string) {
   const rows = await db
@@ -893,7 +896,7 @@ export async function searchLibrary(userId: number, query: string) {
         sql`${games.title} ilike ${"%" + query + "%"}`
       )
     )
-    // Сначала то, во что играл: скорее всего спрашивают про знакомое
+    // What was played comes first: the question is most likely about something known
     .orderBy(desc(userGames.playtimeMinutes))
     .limit(12);
 
@@ -905,8 +908,9 @@ export async function searchLibrary(userId: number, query: string) {
 }
 
 /**
- * Что последний прогон сказал об этой игре. Разбор без этого судил с нуля,
- * хотя инструкция велела ему считать первый проход точкой отсчёта.
+ * What the latest run said about this game. Without it the deep dive judged
+ * from scratch, even though its instruction told it to treat the first pass as
+ * the baseline.
  */
 export async function getFirstPassPick(
   userId: number,
@@ -930,11 +934,11 @@ export async function getFirstPassPick(
   return row?.tier ? { tier: row.tier, reason: row.reason } : null;
 }
 
-/** Нетронутое и едва начатое: то, что имеет смысл советовать. */
+/** Untouched and barely started: the games worth recommending at all. */
 export async function getRecommendationCandidates(userId: number): Promise<CandidateGame[]> {
   const reviewedIds = await getReviewedGameIds(userId);
 
-  // Игра под активным контрактом уже выбрана — советовать её незачем
+  // A game under an active contract is already chosen — no point recommending it
   const underContract = new Set(
     (
       await db
@@ -983,63 +987,6 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
     }));
 }
 
-/**
- * Брошенное — только по ЯВНОМУ вердикту игрока. Раньше сюда попадало всё
- * сыгранное без отзыва, из-за чего пройденные игры разбирались как брошенные.
- */
-export async function getAbandonedGames(userId: number): Promise<CandidateGame[]> {
-  const rows = await db
-    .select({
-      gameId: games.id,
-      steamAppId: games.steamAppId,
-      title: games.title,
-      genres: games.genres,
-      description: games.shortDescription,
-      releaseDate: games.releaseDate,
-      minutes: userGames.playtimeMinutes,
-      lastPlayedAt: userGames.lastPlayedAt,
-    })
-    .from(gameRecords)
-    .innerJoin(games, eq(gameRecords.gameId, games.id))
-    .innerJoin(
-      userGames,
-      and(eq(userGames.gameId, games.id), eq(userGames.userId, userId))
-    )
-    .where(
-      and(
-        eq(gameRecords.userId, userId),
-        eq(gameRecords.verdict, "dropped"),
-        eq(games.isDemo, false),
-        eq(games.isSoftware, false),
-        eq(userGames.excluded, false),
-        /*
-         * Спор, на который уже ответили, не поднимается снова — иначе модель
-         * спорит об одном и том же каждый прогон. Но если с тех пор игру
-         * запускали, разговор снова осмыслен: аргумент проверяли делом.
-         */
-        sql`not exists (
-          select 1 from ${gameEntries}
-          where ${gameEntries.recordId} = ${gameRecords.id}
-            and ${gameEntries.kind} = 'advisor'
-            and ${gameEntries.playtimeTotalMinutes} >= ${userGames.playtimeMinutes}
-        )`
-      )
-    )
-    .orderBy(desc(userGames.playtimeMinutes))
-    .limit(ABANDONED_LIMIT);
-
-  return rows.map((row) => ({
-    gameId: row.gameId,
-    steamAppId: row.steamAppId,
-    title: row.title,
-    hours: Math.round((row.minutes / 60) * 10) / 10,
-    lastPlayedAt: row.lastPlayedAt,
-    genres: row.genres,
-    description: row.description,
-    releaseDate: row.releaseDate,
-  }));
-}
-
 async function getReviewedGameIds(userId: number): Promise<Set<number>> {
   const rows = await db
     .select({ gameId: gameRecords.gameId })
@@ -1049,7 +996,7 @@ async function getReviewedGameIds(userId: number): Promise<Set<number>> {
   return new Set(rows.map((r) => r.gameId));
 }
 
-/** Прогон, зависший дольше этого, считаем сорванным (процесс мог перезапуститься). */
+/** A run stuck longer than this counts as broken (the process may have restarted). */
 export const RUN_STALE_MS = 5 * 60 * 1000;
 
 export type RunStage = "collecting" | "thinking" | "saving";
@@ -1083,30 +1030,18 @@ export async function completeRecommendationRun(
       reason: string;
       grounding: "known" | "from-description" | "guess";
     }[];
-    abandoned: { gameId: number; stance: "agree" | "disagree"; text: string }[];
   }
 ) {
-  const rows = [
-    ...data.items.map((item, index) => ({
-      runId,
-      gameId: item.gameId,
-      kind: "pick" as const,
-      tier: item.tier,
-      stance: null,
-      rank: index,
-      reason: item.reason,
-      grounding: item.grounding,
-    })),
-    ...data.abandoned.map((item, index) => ({
-      runId,
-      gameId: item.gameId,
-      kind: "abandoned" as const,
-      tier: null,
-      stance: item.stance,
-      rank: index,
-      reason: item.text,
-    })),
-  ];
+  const rows = data.items.map((item, index) => ({
+    runId,
+    gameId: item.gameId,
+    kind: "pick" as const,
+    tier: item.tier,
+    stance: null,
+    rank: index,
+    reason: item.reason,
+    grounding: item.grounding,
+  }));
 
   if (rows.length > 0) {
     await db.insert(recommendations).values(rows);
@@ -1133,7 +1068,7 @@ export async function failRecommendationRun(runId: number, message: string) {
     .where(eq(recommendationRuns.id, runId));
 }
 
-/** true, если у пользователя уже крутится незавершённый прогон. */
+/** true if the user already has an unfinished run going. */
 export async function hasActiveRun(userId: number): Promise<boolean> {
   const run = await db
     .select({ createdAt: recommendationRuns.createdAt })
@@ -1188,10 +1123,10 @@ export async function getLatestRecommendations(userId: number) {
   if (!run) return null;
 
   /*
-   * Игры, по которым контракт уже взят или закрыт отзывом. Совет по ним
-   * бессмысленен: решение принято, а карточка продолжала звать «взять
-   * контракт» на то, что уже лежит в работе. Пропущенные не в счёт — к ним
-   * можно вернуться.
+   * Games whose contract is already taken or closed with a review. Advice on
+   * them is pointless: the decision is made, yet the card kept inviting you to
+   * "take a contract" on something already in progress. Skipped ones do not
+   * count — those can be come back to.
    */
   const decided = new Set(
     (
@@ -1220,9 +1155,10 @@ export async function getLatestRecommendations(userId: number) {
       grounding: recommendations.grounding,
       hours: userGames.playtimeMinutes,
       /*
-       * Разбор, если он уже делался. Без него тир на карточке и вердикт
-       * разбора расходились бы до первого клика: первый проход судит по
-       * описанию, разбор — по механике из отзывов.
+       * The deep dive, if one was ever run. Without it the tier on the card and
+       * the deep dive's verdict would disagree until the first click: the first
+       * pass judges by the description, the deep dive by the mechanics pulled
+       * out of reviews.
        */
       deepFit: deepDives.fit,
       deepTier: deepDives.tier,
@@ -1261,21 +1197,10 @@ export async function getLatestRecommendations(userId: number) {
         deepTier: item.deepTier,
         hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
       })),
-    abandoned: items
-      .filter((item) => item.kind === "abandoned" && item.stance)
-      .map((item) => ({
-        gameId: item.gameId,
-        steamAppId: item.steamAppId,
-        title: item.title,
-        headerImage: item.headerImage,
-        stance: item.stance!,
-        text: item.reason,
-        hours: Math.round(((item.hours ?? 0) / 60) * 10) / 10,
-      })),
   };
 }
 
-/** Незавершённый прогон — чтобы страница подхватила прогресс после перезагрузки. */
+/** An unfinished run — so the page picks the progress back up after a reload. */
 export async function getActiveRun(userId: number) {
   const run = await db
     .select({
@@ -1299,7 +1224,7 @@ export async function getActiveRun(userId: number) {
 }
 
 
-/* ================= Единая запись впечатления ================= */
+/* ================= The unified impression entry ================= */
 
 export interface ImpressionInput {
   mode: ImpressionMode;
@@ -1309,11 +1234,11 @@ export interface ImpressionInput {
   tier?: Tier | null;
   rating?: number | null;
   note?: string | null;
-  /** Вопрос советчика, если запись пишется в ответ на него. */
+  /** The advisor's question, if the entry is written in answer to one. */
   promptedBy?: string | null;
-  /** Абсолютное наигранное время: слот считает дельту от начала контракта. */
+  /** Absolute playtime: the slot works out the delta from the contract's start. */
   currentPlaytime: number;
-  /** Что было в записи до правки — чтобы отличить «не трогали» от «сбросили». */
+  /** What the record held before the edit — to tell "left alone" from "cleared". */
   previous?: {
     verdict?: string | null;
     rating?: number | null;
@@ -1322,21 +1247,22 @@ export interface ImpressionInput {
 }
 
 /**
- * Единственная точка записи мнения об игре.
+ * The one place where an opinion about a game gets written.
  *
- * Раньше это делали шесть модалок через шесть эндпоинтов с разными
- * правилами. Сейчас функция раскладывает вход по существующим операциям;
- * на Шаге 2, когда slot_reviews / game_reviews / slot_notes сольются в одну
- * модель, поменяется только её тело — вызывающий код останется прежним.
+ * Six modals used to do this through six endpoints with six sets of rules. The
+ * function now spreads its input across the existing operations; at Step 2,
+ * when slot_reviews / game_reviews / slot_notes merge into a single model, only
+ * its body changes — the calling code stays as it is.
  */
 type SaveResult = { ok: true; entryId?: number } | { error: string };
 
 /**
- * Единственная точка записи мнения об игре — теперь прямо в единую модель.
+ * The one place where an opinion about a game gets written — now straight into
+ * the unified model.
  *
- * Шесть модалок писали в три таблицы по разным правилам. Здесь один путь:
- * запись обновляется, лента дополняется, а разница между контрактом и
- * ретроспективой сводится к полю origin.
+ * Six modals wrote into three tables under different rules. Here there is a
+ * single path: the record is updated, the feed is extended, and the difference
+ * between a contract and a retrospective comes down to the origin field.
  */
 export async function saveImpression(
   userId: number,
@@ -1358,7 +1284,7 @@ export async function saveImpression(
     return { error: "Оценка от 1 до 5" };
   }
 
-  // Закрытие контракта: время считается от старта, и оно должно быть настоящим
+  // Closing a contract: the time counts from the start, and it has to be real
   if (input.mode === "slot-first") {
     if (!input.slotId) return { error: "Не указан контракт" };
 
@@ -1417,7 +1343,7 @@ export async function saveImpression(
 
   const recordId = await upsertRecord(userId, gameId, {
     verdict: input.verdict,
-    // Быстрый вердикт не трогает остальные поля
+    // A quick verdict leaves the other fields alone
     tier: input.mode === "quick" ? undefined : input.tier,
     rating: input.mode === "quick" ? undefined : input.rating,
     origin: input.mode === "quick" ? "triage" : "retro",
@@ -1433,9 +1359,10 @@ export async function saveImpression(
       .then((rows) => rows[0]);
 
     /*
-     * Запись, меняющая вердикт, — не дополнение: это поворотная точка треда.
-     * Раньше вид зависел только от того, первая она или нет, и «прошёл» после
-     * пяти дополнений выглядел шестым дополнением.
+     * An entry that changes the verdict is not an update: it is the turning
+     * point of the thread. The kind used to depend only on whether the entry
+     * was the first one, so a "finished" after five updates looked like a sixth
+     * update.
      */
     const verdictChanged =
       !!input.verdict && input.verdict !== (input.previous?.verdict ?? null);
@@ -1456,24 +1383,24 @@ export async function saveImpression(
   return { ok: true };
 }
 
-/* ================= Ядро единой модели ================= */
+/* ================= Core of the unified model ================= */
 
 interface RecordPatch {
   verdict?: Verdict | null;
   tier?: Tier | null;
   rating?: number | null;
-  /** steam — отзыв перенесён с профиля, а не написан здесь. */
+  /** steam — the review was imported from the profile, not written here. */
   origin?: "roulette" | "retro" | "triage" | "demo" | "steam";
   slotId?: number | null;
   playtimeMinutes: number;
-  /** Дата записи, если она не «сейчас»: перенос из Steam датируется задним числом. */
+  /** The entry's date when it is not "now": a Steam import is backdated. */
   at?: Date;
 }
 
 /**
- * Создаёт или обновляет запись об игре. Переданные поля перезаписывают
- * старые, непереданные остаются как были — то же различие «не трогали» /
- * «сбросили», что и в форме впечатления.
+ * Creates or updates the record for a game. Fields that are passed overwrite
+ * the old ones, fields that are not stay as they were — the same "left alone" /
+ * "cleared" distinction as in the impression form.
  */
 async function upsertRecord(
   userId: number,
@@ -1491,7 +1418,7 @@ async function upsertRecord(
 
   if (existing) {
     const update: Record<string, unknown> = {
-      // Запись задним числом не должна отматывать «последнюю» назад
+      // A backdated entry must not wind the "latest" one backwards
       lastEntryAt: sql`greatest(${gameRecords.lastEntryAt}, ${now})`,
       playtimeAtLastEntry: sql`greatest(${gameRecords.playtimeAtLastEntry}, ${patch.playtimeMinutes})`,
     };
@@ -1524,7 +1451,7 @@ async function upsertRecord(
   return created!.id;
 }
 
-/** Добавляет запись в ленту со снимком мнения на этот момент. */
+/** Appends an entry to the feed with a snapshot of the opinion at that moment. */
 async function addEntry(
   recordId: number,
   data: {
@@ -1535,7 +1462,7 @@ async function addEntry(
     rating?: number | null;
     tier?: string | null;
     promptedBy?: string | null;
-    /** Когда запись появилась на самом деле: у перенесённых из Steam это не «сейчас». */
+    /** When the entry actually appeared: for Steam imports that is not "now". */
     at?: Date;
   }
 ): Promise<number> {
@@ -1567,20 +1494,20 @@ async function addEntry(
 }
 
 /**
- * Переносит отзывы, написанные в Steam, в корпус приложения.
+ * Imports reviews written on Steam into the app's corpus.
  *
- * Вердикт не выставляется: палец вверх в Steam не значит «прошёл», а вниз —
- * «бросил», и придумывать за игрока нельзя. Запись без вердикта остаётся в
- * очереди разбора, и человек проставит его сам — зато текст и штамп времени
- * уже на месте.
+ * No verdict is set: a thumbs up on Steam does not mean "finished" and a thumbs
+ * down does not mean "dropped", and inventing one for the player is off limits.
+ * A record without a verdict stays in the triage queue for them to fill in —
+ * but the text and the playtime stamp are already in place.
  *
- * Игры, по которым в приложении уже есть запись, не трогаем: написанное
- * здесь свежее и подробнее.
+ * Games that already have a record in the app are left alone: what was written
+ * here is fresher and more detailed.
  */
 /**
- * Ставит перенесённому отзыву дату, под которой он написан в Steam.
- * Двигаем самую раннюю запись ленты — это и есть перенос; всё, что человек
- * дописал в приложении, идёт после и остаётся на своих датах.
+ * Stamps an imported review with the date it was written under on Steam.
+ * We move the earliest entry of the feed — that one is the import; anything the
+ * player added in the app comes after and keeps its own date.
  */
 async function redateSteamImport(recordId: number, postedAt: Date): Promise<boolean> {
   const first = await db
@@ -1592,7 +1519,7 @@ async function redateSteamImport(recordId: number, postedAt: Date): Promise<bool
     .then((rows) => rows[0]);
 
   if (!first) return false;
-  // Повторный импорт не должен «чинить» уже починенное
+  // A repeat import must not "fix" what is already fixed
   if (new Date(first.createdAt).toDateString() === postedAt.toDateString()) return false;
 
   await db
@@ -1660,7 +1587,7 @@ export async function importSteamReviews(
   const byAppId = new Map(owned.map((row) => [row.steamAppId, row]));
 
   let imported = 0;
-  /** Что завели — чтобы вызывающий отправил это на разбор. */
+  /** What we created — so the caller can send it off for analysis. */
   const entryIds: number[] = [];
   let skippedExisting = 0;
   let notOwned = 0;
@@ -1674,10 +1601,10 @@ export async function importSteamReviews(
     }
     if (target.recordId !== null) {
       /*
-       * Первые импорты проставляли записям дату переноса, и весь профиль
-       * ложился в дневник одним сегодняшним днём. Повторный запуск чинит
-       * это на месте: свой текст не трогаем, двигаем только дату у того,
-       * что пришло из Steam.
+       * The first imports stamped entries with the date of the import itself,
+       * so a whole Steam profile landed in the diary under a single today.
+       * Running it again fixes that in place: the player's own text is left
+       * alone, only what came from Steam gets its date moved.
        */
       if (target.origin === "steam" && review.postedAt) {
         redated += (await redateSteamImport(target.recordId, review.postedAt)) ? 1 : 0;
@@ -1707,11 +1634,11 @@ export async function importSteamReviews(
 }
 
 /**
- * Вердикт Curio по закрытой игре — записью в ленту этой игры.
+ * Curio's take on a closed game, written as an entry in that game's feed.
  *
- * Это его слова, поэтому вид записи «совет ИИ»: разбору она не отдаётся, в
- * цитаты человеку обратно не попадает и в его собственный корпус мнений не
- * засчитывается.
+ * These are its words, hence the "advisor" kind: the entry is not sent for
+ * analysis, never comes back to the player as a quote, and does not count
+ * towards their own corpus of opinions.
  */
 export async function saveCurioTake(
   userId: number,
@@ -1734,47 +1661,8 @@ export async function saveCurioTake(
   });
 }
 
-/**
- * Ответ на аргумент советчика. Сам аргумент ложится в ленту игры: потом
- * видно, что модель звала вернуться, что ты решил и чем это кончилось.
- */
-export async function recordAdvisorResponse(
-  userId: number,
-  gameId: number,
-  data: { argument: string; accepted: boolean; stance?: "agree" | "disagree" }
-): Promise<SaveResult> {
-  const record = await db
-    .select({ id: gameRecords.id, playtime: gameRecords.playtimeAtLastEntry })
-    .from(gameRecords)
-    .where(and(eq(gameRecords.userId, userId), eq(gameRecords.gameId, gameId)))
-    .limit(1)
-    .then((rows) => rows[0]);
 
-  if (!record) return { error: "Запись об игре не найдена" };
-
-  /*
-   * Спор бывает двух видов, и «не согласился» подходит только к одному.
-   * Когда модель согласна с вердиктом, спорить не с чем — запись об этом
-   * раньше выходила враньём: человек нажимал «записать в дневник», а в
-   * ленте появлялось, что он с чем-то не согласился.
-   */
-  const decision =
-    data.stance === "agree"
-      ? "Модель согласна с вердиктом."
-      : data.accepted
-        ? "Согласился дать второй шанс."
-        : "Не согласился: вердикт остаётся.";
-
-  await addEntry(record.id, {
-    kind: "advisor",
-    text: `${data.argument.trim()}\n\n— ${decision}`,
-    playtimeMinutes: record.playtime,
-  });
-
-  return { ok: true };
-}
-
-/** Лента впечатлений об одной игре. */
+/** The feed of impressions for a single game. */
 export async function getGameTimeline(userId: number, gameId: number) {
   return db
     .select({

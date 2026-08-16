@@ -4,7 +4,6 @@ import {
   getReviewCorpus,
   getRecommendationCandidates,
   getReviewCorpusSize,
-  getAbandonedGames,
   createRecommendationRun,
   updateRunProgress,
   completeRecommendationRun,
@@ -13,13 +12,13 @@ import {
   getTasteProfile,
 } from "../../lib/queries";
 import { generateRecommendations } from "../../lib/recommendations";
-import { GEMINI_MODEL, errorCode } from "../../lib/gemini";
-import { GEMINI_KEYS } from "../../lib/gemini-env";
+import { adapterFor, LlmAuthError, type LlmCredentials } from "../../lib/llm";
+import { getLlmCredentials } from "../../lib/llm/credentials";
 import { THRESHOLDS } from "../../lib/vocab";
 import { localeFrom, type Locale } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
-/** Прогресс в БД пишем не чаще, чем раз в столько мс. */
+/** Progress is written to the database no more often than once per this many ms. */
 const PROGRESS_THROTTLE_MS = 1500;
 
 const json = (body: unknown, status = 200) =>
@@ -29,15 +28,20 @@ const json = (body: unknown, status = 200) =>
   });
 
 /**
- * Генерация идёт до минуты и дольше, поэтому крутится в фоне: роут только
- * заводит прогон и сразу отдаёт его id, клиент опрашивает статус.
+ * Generation takes up to a minute and more, so it runs in the background: the
+ * route only starts a run and returns its id immediately, and the client polls
+ * for status.
  */
-async function runInBackground(runId: number, userId: number, locale: Locale) {
+async function runInBackground(
+  runId: number,
+  userId: number,
+  locale: Locale,
+  creds: LlmCredentials
+) {
   try {
-    const [reviews, candidates, abandonedGames, profile] = await Promise.all([
+    const [reviews, candidates, profile] = await Promise.all([
       getReviewCorpus(userId),
       getRecommendationCandidates(userId),
-      getAbandonedGames(userId),
       getTasteProfile(userId),
     ]);
 
@@ -47,9 +51,8 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
     const result = await generateRecommendations(
       reviews,
       candidates,
-      abandonedGames,
       profile,
-      GEMINI_KEYS,
+      creds,
       locale,
       (picksReady) => {
         const now = Date.now();
@@ -61,9 +64,7 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
 
     await updateRunProgress(runId, { stage: "saving" });
 
-    const byAppId = new Map(
-      [...candidates, ...abandonedGames].map((g) => [g.steamAppId, g.gameId])
-    );
+    const byAppId = new Map(candidates.map((g) => [g.steamAppId, g.gameId]));
 
     await completeRecommendationRun(runId, {
       profile: result.profile,
@@ -75,25 +76,22 @@ async function runInBackground(runId: number, userId: number, locale: Locale) {
         reason: pick.reason,
         grounding: pick.grounding,
       })),
-      abandoned: result.abandoned.map((item) => ({
-        gameId: byAppId.get(item.steamAppId)!,
-        stance: item.stance,
-        text: item.text,
-      })),
     });
   } catch (err) {
     console.error("[recommendations]", err);
     /*
-     * В message от SDK лежит сырой JSON провайдера — пользователю он
-     * бесполезен, а на экране выглядит как простыня. Переводим известные
-     * коды в человеческий текст, остальное отдаём как есть.
+     * The SDK's message carries the provider's raw JSON — useless to the user
+     * and a wall of text on screen. Known kinds of failure are turned into
+     * human wording, the rest is passed through as is: our own errors (empty
+     * response, invalid JSON) are already written in words.
      */
     const s = t(locale).errors;
-    const code = errorCode(err);
-    const message =
-      code === 429
+    const kind = adapterFor(creds.provider).classifyError(err).kind;
+    const message = err instanceof LlmAuthError
+      ? t(locale).llm.errorAuth
+      : kind === "rate_limit"
         ? s.modelQuota
-        : code === 500 || code === 503 || code === 504
+        : kind === "overloaded" || kind === "server"
           ? s.modelBusy
           : err instanceof Error && !err.message.trim().startsWith("{")
             ? err.message
@@ -113,6 +111,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: s.errors.runInProgress }, 409);
   }
 
+  /*
+   * Everyone brings their own key, and a missing one is not a failure but an
+   * unfilled setting. A separate code so the interface points at settings
+   * instead of showing "something went wrong".
+   */
+  const creds = await getLlmCredentials(userId);
+  if (!creds) return json({ error: "no_llm_key" }, 400);
+
   const [reviewCount, candidateCount] = await Promise.all([
     getReviewCorpusSize(userId),
     getRecommendationCandidates(userId).then((c) => c.length),
@@ -125,10 +131,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: s.errors.noCandidates }, 400);
   }
 
-  const runId = await createRecommendationRun(userId, GEMINI_MODEL);
+  // The run stores the model it was actually computed with
+  const runId = await createRecommendationRun(userId, creds.model);
 
-  // Намеренно не ждём: ответ уходит сразу, работа продолжается в процессе.
-  void runInBackground(runId, userId, locale);
+  // Deliberately not awaited: the response goes out at once, the work keeps going.
+  void runInBackground(runId, userId, locale, creds);
 
   return json({ ok: true, runId });
 };

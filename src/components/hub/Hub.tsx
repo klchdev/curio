@@ -21,7 +21,7 @@ import CurioMark from "../CurioMark";
 
 export interface Pick {
   grounding?: "known" | "from-description" | "guess" | null;
-  /** Итог разбора, если он делался: он может спорить с тиром первого прохода. */
+  /** The deep dive's outcome, if one was made: it may argue with the first pass's tier. */
   deepFit?: "yes" | "maybe" | "no" | null;
   deepTier?: string | null;
   gameId: number;
@@ -33,14 +33,6 @@ export interface Pick {
   hours: number;
 }
 
-export interface Abandoned {
-  gameId: number;
-  title: string;
-  headerImage: string | null;
-  stance: string;
-  text: string;
-  hours: number;
-}
 
 export interface Slot {
   slotId: number;
@@ -71,7 +63,7 @@ export interface DiaryEntry {
   tier: string | null;
 }
 
-/** Игра, по которой отзыв есть, но с тех пор наиграно заметно больше. */
+/** A game that has a review, but a lot more playtime has piled up since. */
 interface UpdateItem {
   gameId: number;
   title: string;
@@ -86,7 +78,6 @@ interface UpdateItem {
 
 export interface Props {
   picks: Pick[];
-  abandoned: Abandoned[];
   slots: Slot[];
   queue: QueueItem[];
   updates: UpdateItem[];
@@ -107,18 +98,18 @@ export interface Props {
   runProfile: string | null;
   runDate: string | null;
   activeRunId: number | null;
-  /** Состояние идущего прогона с сервера: первый кадр не должен врать про стадию. */
+  /** The running job's state from the server: the first frame must not lie about the stage. */
   activeRunProgress: RunProgressState | null;
   locale: Locale;
-  /** Зона из адреса: сюда приходят редиректы со старых страниц. */
+  /** The zone taken from the URL: redirects from the old pages land here. */
   initialZone: Zone;
-  /** Когда последний раз сверялись со Steam, в миллисекундах. */
+  /** When we last reconciled with Steam, in milliseconds. */
   lastSyncAt: number | null;
 }
 
 export type Zone = "choose" | "now" | "recap";
 
-/** «3 часа назад» на языке интерфейса — без своей таблицы склонений. */
+/** "3 hours ago" in the interface language — without a declension table of our own. */
 function ago(timestamp: number, locale: Locale): string {
   const minutes = Math.round((timestamp - Date.now()) / 60000);
   const rtf = new Intl.RelativeTimeFormat(locale === "en" ? "en" : "ru", { numeric: "auto" });
@@ -140,7 +131,7 @@ export default function Hub(props: Props) {
 
   const [zone, setZone] = useState<Zone>(props.initialZone);
 
-  /* Адрес должен переживать перезагрузку: половина действий делает reload. */
+  /* The URL has to survive a reload: half the actions here do one. */
   function goTo(next: Zone) {
     setZone(next);
     const url = new URL(window.location.href);
@@ -154,16 +145,17 @@ export default function Hub(props: Props) {
   const [runId, setRunId] = useState<number | null>(activeRunId);
   const [progress, setProgress] = useState<RunProgressState | null>(props.activeRunProgress);
   /*
-   * Взятые за эту сессию контракты. Раньше страница перезагружалась целиком
-   * ради одной карточки — теперь она просто дорисовывается, а человек видит
-   * подтверждение, не теряя того, что читал.
+   * Contracts taken during this session. The page used to reload in full for the
+   * sake of a single card — now the card is simply drawn in, and the person gets
+   * their confirmation without losing what they were reading.
    */
   const [taken, setTaken] = useState<Slot[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
   /*
-   * Синк живёт в оболочке, а не в зоне «Сейчас»: наигранное время трогает
-   * каждый экран, и человек ищет эту кнопку там, где заметил расхождение.
+   * The sync lives in the shell rather than in the "Now" zone: playtime touches
+   * every screen, and people look for this button wherever they noticed the
+   * discrepancy.
    */
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
@@ -193,7 +185,7 @@ export default function Hub(props: Props) {
 
   const allSlots = taken.length > 0 ? [...slots, ...taken] : slots;
 
-  /* Взятая игра тут же уходит из советов: решение по ней принято. */
+  /* A game once taken leaves the suggestions at once: it has been decided on. */
   const takenIds = new Set(taken.map((slot) => slot.gameId));
   const openPicks = takenIds.size > 0 ? picks.filter((p) => !takenIds.has(p.gameId)) : picks;
 
@@ -216,9 +208,9 @@ export default function Hub(props: Props) {
   }, [zone, picks.length]);
 
   /*
-   * Прогон идёт в фоне. Опрос забирает не только «готово или нет», но и
-   * стадию с числом разобранных игр — их бэкенд уже пишет в базу, а экран
-   * раньше показывал вместо этого статичную полоску.
+   * The run happens in the background. The poll picks up not just "done or not"
+   * but the stage and the number of games processed — the backend already writes
+   * those to the database, while the screen used to show a static bar instead.
    */
   useEffect(() => {
     if (runId === null) return;
@@ -247,7 +239,7 @@ export default function Hub(props: Props) {
           startedAt: data.startedAt ? Date.parse(data.startedAt) : Date.now(),
         });
       } catch {
-        // сеть моргнула — ждём следующего опроса
+        // the network blinked — wait for the next poll
       }
     }
 
@@ -280,8 +272,8 @@ export default function Hub(props: Props) {
   }
 
   /*
-   * Считаем на клиенте после монтирования: на сервере «час назад» застынет
-   * в кэше страницы и будет врать тем сильнее, чем дольше вкладка открыта.
+   * Computed on the client after mount: on the server "an hour ago" would freeze
+   * into the page cache and lie harder the longer the tab stays open.
    */
   const [syncFreshness, setSyncFreshness] = useState<string>("");
   useEffect(() => {
@@ -444,7 +436,7 @@ function DockTile({
   );
 }
 
-/* ================= ВЫБРАТЬ ================= */
+/* ================= CHOOSE ================= */
 
 type ZoneProps = Props & {
   busy: string | null;
@@ -483,18 +475,18 @@ function ChooseZone({
   const [dice, setDice] = useState<"idle" | "confirm" | "rolling">("idle");
   const [runError, setRunError] = useState<string | null>(null);
   const [dives, setDives] = useState<Record<number, DeepDive | "loading" | string>>({});
-  /** Игра, про которую спросили руками: её разбор показывается отдельно от советов. */
+  /** A game asked about by hand: its deep dive is shown apart from the suggestions. */
   const [asked, setAsked] = useState<LibraryGame | null>(null);
   const [askOpen, setAskOpen] = useState(false);
   const [sheet, setSheet] = useState<{ mode: "retro" | "entry"; item: LibraryGame } | null>(null);
 
-  /** Игра, в которую уже играли, просит отзыв, а не обязательство. */
+  /** A game already played asks for a review, not for a commitment. */
   function actionFor(game: { playtimeMinutes: number; hasRecord: boolean }) {
     if (game.playtimeMinutes < THRESHOLDS.MIN_PLAYTIME_TO_REVIEW) return null;
     return game.hasRecord ? ("entry" as const) : ("retro" as const);
   }
 
-  /* Разбор кэшируется на сервере по паре (игрок, игра) — второй клик бесплатен. */
+  /* The dive is cached on the server per (player, game) pair — a second click is free. */
   async function deepDive(gameId: number, refresh = false) {
     setDives((prev) => ({ ...prev, [gameId]: "loading" }));
     try {
@@ -518,9 +510,9 @@ function ChooseZone({
   const slotsLeft = THRESHOLDS.MAX_ACTIVE_SLOTS - slots.length;
 
   /*
-   * Раньше здесь был голый fetch без разбора ответа: любая ошибка — занятый
-   * прогон, нехватка отзывов, упавший сервер — оставляла экран нетронутым,
-   * и кнопка выглядела сломанной.
+   * This used to be a bare fetch that never looked at the response: any error —
+   * a run already busy, too few reviews, a server that fell over — left the
+   * screen untouched, and the button just looked broken.
    */
   async function startRun() {
     setBusy("run");
@@ -594,9 +586,10 @@ function ChooseZone({
   const pick = picks[Math.min(index, picks.length - 1)]!;
 
   /*
-   * Тир разбора важнее: он видит механику, а не рекламу. Свежий разбор из
-   * этой сессии — важнее сохранённого, иначе герой держит старую оценку до
-   * перезагрузки и спорит сам с собой: «S» сверху и «не твоя игра» снизу.
+   * The deep dive's tier wins: it sees the mechanics, not the marketing. A dive
+   * made in this session wins over a stored one, or else the hero card keeps the
+   * old rating until a reload and argues with itself: "S" up top and "not your
+   * kind of game" below.
    */
   function tierOf(item: Pick): Tier {
     const dive = dives[item.gameId];
@@ -638,9 +631,9 @@ function ChooseZone({
   }
 
   /*
-   * Жребий сразу создаёт контракт — иначе это просто перетасовка. Тир D
-   * значит «не трать время», поэтому выпадать он не должен: жребий решает,
-   * какую из хороших, а не какую-нибудь.
+   * The draw creates a contract straight away — otherwise it's just reshuffling.
+   * Tier D means "don't waste your time", so it must never come up: the draw
+   * decides which of the good ones, not which one at random.
    */
   const rollable = picks
     .map((item, i) => ({ item, i }))
@@ -829,7 +822,7 @@ function ChooseZone({
             <p className="max-w-lg text-lg leading-relaxed text-gray-400">
               <RichText text={pick.reason} />
             </p>
-            {/* Тихая пометка, а не баннер: важно знать, но не пугать */}
+            {/* A quiet note rather than a banner: worth knowing, not worth alarming over */}
             {shownTier !== pick.tier && (
               <p className="mt-3 text-xs text-sky-400/80">{s.deep.revised(pick.tier, shownTier)}</p>
             )}
@@ -864,8 +857,9 @@ function ChooseZone({
               </button>
             </div>
             {/*
-              Пока слоты свободны — правило игры. Когда заняты, правило уже
-              бесполезно: нужно сказать, почему кнопка мертва и куда идти.
+              While slots are free, this is the rule of the game. Once they're
+              taken the rule is useless: what's needed is why the button is dead
+              and where to go next.
             */}
             {slotsLeft <= 0 ? (
               <p className="mt-3 max-w-lg text-xs text-amber-400/90">
@@ -949,9 +943,10 @@ function ChooseZone({
 }
 
 /**
- * Модель отвечает маркдауном: заголовки решёткой, названия игр звёздочками.
- * Раньше решётки и одиночные звёздочки уезжали на экран как есть — вычищали
- * только `**`, и портрет начинался со строки «### Твой игровой портрет».
+ * The model answers in markdown: headings with hashes, game titles with
+ * asterisks. The hashes and single asterisks used to go out to the screen as-is
+ * — only `**` was stripped — and a portrait would open with the line
+ * "### Your gaming portrait".
  */
 function parseProfile(profile: string): { text: string; heading: boolean }[] {
   return profile
@@ -962,7 +957,7 @@ function parseProfile(profile: string): { text: string; heading: boolean }[] {
       const heading = /^#{1,6}\s+/.test(line);
       return {
         heading,
-        // Маркеры списка и решётки — разметка, а не текст
+        // List bullets and hashes are markup, not text
         text: line.replace(/^#{1,6}\s+/, "").replace(/^[-•]\s+/, "").replace(/^\d+[.)]\s+/, ""),
       };
     });
@@ -979,8 +974,8 @@ interface LibraryGame {
 }
 
 /**
- * Спросить мнение про любую игру библиотеки, а не только про то, что модель
- * сама вынесла в советы. Разбор тот же — отличается только способ выбора.
+ * Ask for an opinion on any game in the library, not only on what the model put
+ * forward as a suggestion. The dive is the same — only the way of picking differs.
  */
 function AskAnyGame({
   s,
@@ -1004,7 +999,7 @@ function AskAnyGame({
       setItems(null);
       return;
     }
-    // Печатают быстрее, чем отвечает сервер — ждём паузу и гасим устаревший ответ
+    // People type faster than the server answers — wait for a pause and drop stale replies
     let stale = false;
     const timer = setTimeout(async () => {
       try {
@@ -1089,9 +1084,10 @@ const FIT_STYLE: Record<DeepDive["fit"], string> = {
 };
 
 /**
- * Разбор идёт около десяти секунд, и всё это время экран не менялся вообще.
- * Стадии здесь не выдуманы: сначала два запроса в Steam за отзывами, потом
- * модель, поэтому подпись переключается по времени, а не по случайности.
+ * A dive takes about ten seconds, and for all that time the screen used not to
+ * change at all. The stages here aren't invented: first two requests to Steam
+ * for reviews, then the model, so the caption switches on time rather than at
+ * random.
  */
 function DeepDiveLoading({ s }: { s: Dict }) {
   const [elapsed, setElapsed] = useState(0);
@@ -1142,11 +1138,11 @@ function DeepDivePanel({
   value: DeepDive | string;
   s: Dict;
   onRefresh: () => void;
-  /** Разбор часто и есть решение — от него до контракта не должно быть пути через экран. */
+  /** The dive often is the decision — getting from it to a contract must not cross a screen. */
   onTake?: () => void;
   taking?: boolean;
   slotsLeft?: number;
-  /** Наиграно много — контракт бессмысленен, нужен отзыв. */
+  /** Plenty of playtime already — a contract is pointless, a review is what's needed. */
   onReview?: () => void;
   reviewLabel?: string;
 }) {
@@ -1245,13 +1241,14 @@ interface RunProgressState {
   startedAt: number;
 }
 
-/** Сколько игр обычно выдаёт прогон — по этому числу растёт полоса на разборе. */
+/** How many games a run usually yields — the bar grows against this number. */
 const EXPECTED_PICKS = 30;
 
 /*
- * Стадии занимают очень разное время: сбор и сохранение — секунды, разбор —
- * почти всю минуту. Поэтому на разбор отдано 75% полосы, и внутри неё она
- * движется по числу уже разобранных игр, а не по таймеру.
+ * The stages take wildly different amounts of time: collecting and saving are
+ * seconds, the thinking takes nearly the whole minute. So 75% of the bar is
+ * given to the thinking, and inside that span it moves by the number of games
+ * already processed rather than by a timer.
  */
 const STAGE_RANGE = {
   collecting: [0, 0.12],
@@ -1282,7 +1279,7 @@ function RunProgress({
   const within = stage === "thinking" ? Math.min(1, picks / EXPECTED_PICKS) : 0;
   const percent = Math.round((from + (to - from) * within) * 100);
 
-  // Прогон, который молчит дольше стального порога, уже не оживёт сам
+  // A run that has been silent past this threshold won't come back to life on its own
   const stuck = elapsed > 300;
 
   return (
@@ -1359,7 +1356,7 @@ function GateCard({
   );
 }
 
-/** Рулетка вслепую: без советов это единственный способ взять контракт. */
+/** The blind roulette: without suggestions it's the only way to take a contract. */
 function BlindSpin({
   poolSize,
   busy,
@@ -1423,14 +1420,13 @@ function EmptyCard({
   );
 }
 
-/* ================= СЕЙЧАС ================= */
+/* ================= NOW ================= */
 
 function NowZone({
   slots,
   queue,
   updates,
   queueTotal,
-  abandoned,
   poolSize,
   freeSkips,
   locale,
@@ -1444,7 +1440,6 @@ function NowZone({
   );
   const [skipping, setSkipping] = useState<Slot | null>(null);
   const [done, setDone] = useState<number[]>([]);
-  const [answered, setAnswered] = useState<number[]>([]);
 
   async function verdict(gameId: number, value: string, playtimeMinutes: number) {
     setBusy(`verdict-${gameId}`);
@@ -1458,27 +1453,11 @@ function NowZone({
     if (ok) setDone((prev) => [...prev, gameId]);
   }
 
-  /* Оба ответа кладут аргумент модели в ленту игры — потом видно, чем кончилось. */
-  async function answerAdvisor(item: Abandoned, accepted: boolean) {
-    setBusy(`advisor-${item.gameId}`);
-    await post("/api/advisor-response", {
-      gameId: item.gameId,
-      argument: item.text,
-      accepted,
-      stance: item.stance,
-    });
-    const ok = accepted ? await post("/api/contract", { gameId: item.gameId }) : true;
-    setBusy(null);
-    if (ok) {
-      if (accepted) window.location.reload();
-      else setAnswered((prev) => [...prev, item.gameId]);
-    }
-  }
 
   /*
-   * Наигранное время в базе двигает только этот запрос: остальное приложение
-   * читает сохранённое значение, чтобы не дёргать Steam на каждый чих. Без
-   * кнопки прогресс контракта стоял бы на месте вечно.
+   * This request is the only thing that moves playtime in the database: the rest
+   * of the app reads the stored value so as not to poke Steam over every little
+   * thing. Without the button a contract's progress would stand still forever.
    */
   async function refresh(slotId: number) {
     setBusy(`refresh-${slotId}`);
@@ -1620,71 +1599,6 @@ function NowZone({
         </section>
       )}
 
-      {abandoned.length > 0 && (
-        <section>
-          <Reveal delay={340}>
-            <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <h2 className="text-2xl font-bold text-amber-300">{s.now.dispute}</h2>
-              <span className="text-sm text-gray-500">{s.now.disputeHint}</span>
-            </div>
-          </Reveal>
-
-          <div className="space-y-2">
-            {abandoned.filter((item) => !answered.includes(item.gameId)).map((item, i) => (
-              <Reveal key={item.gameId} delay={360 + 40 * i} from="left">
-                <article
-                  className={`flex flex-wrap items-start gap-4 rounded-xl border p-4 ${
-                    item.stance === "disagree"
-                      ? "border-amber-900/70 bg-amber-950/20"
-                      : "border-gray-800 bg-gray-900/30"
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <p className="font-medium">{item.title}</p>
-                      <span className="text-xs text-gray-600">{s.choose.hoursShort(item.hours)}</span>
-                    </div>
-                    <div className="mt-1 flex gap-2.5">
-                      <CurioMark className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                      <p className="text-sm leading-relaxed text-gray-400">
-                        <RichText text={item.text} />
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {item.stance === "disagree" ? (
-                      <>
-                        <button
-                          onClick={() => answerAdvisor(item, true)}
-                          disabled={busy !== null}
-                          className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-amber-950 transition hover:bg-amber-400 disabled:opacity-40"
-                        >
-                          {s.now.secondChance}
-                        </button>
-                        <button
-                          onClick={() => answerAdvisor(item, false)}
-                          disabled={busy !== null}
-                          className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800 disabled:opacity-40"
-                        >
-                          {s.now.imRight}
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => answerAdvisor(item, false)}
-                        disabled={busy !== null}
-                        className="rounded-lg border border-gray-800 px-3 py-1.5 text-xs text-gray-500 transition hover:bg-gray-800 disabled:opacity-40"
-                      >
-                        {s.now.toDiary}
-                      </button>
-                    )}
-                  </div>
-                </article>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-      )}
 
       {sheet && (
         <ImpressionSheet
@@ -1719,11 +1633,12 @@ function NowZone({
 }
 
 /**
- * Строка очереди разбора.
+ * A row in the triage queue.
  *
- * Вердиктов пять, и вывести их все кнопками нельзя: четыре уже расплющили
- * карточку так, что от названия оставалось «PUB…». Поэтому одна кнопка,
- * а статусы — списком по клику; заодно доступны все пять, а не два частых.
+ * There are five verdicts, and laying them all out as buttons is impossible:
+ * four of them already squashed the card so hard that the title came out as
+ * "PUB…". Hence one button, with the statuses in a list on click; as a bonus all
+ * five are reachable, not just the two common ones.
  */
 function QueueCard({
   game,
@@ -1745,9 +1660,10 @@ function QueueCard({
   const [at, setAt] = useState<{ top: number; right: number } | null>(null);
 
   /*
-   * Меню живёт в портале, а не внутри карточки. Reveal анимирует transform и
-   * opacity, а каждый из них создаёт контекст наложения — z-index внутри него
-   * не работает наружу, и меню уезжало под соседнюю карточку.
+   * The menu lives in a portal, not inside the card. Reveal animates transform
+   * and opacity, and each of those creates a stacking context — a z-index inside
+   * it has no effect on the outside, and the menu slid under the neighbouring
+   * card.
    */
   useEffect(() => {
     if (!open) return;
@@ -1758,7 +1674,7 @@ function QueueCard({
     }
 
     place();
-    // Меню закреплено на экране, поэтому при прокрутке его надо двигать следом
+    // The menu is pinned to the viewport, so on scroll it has to be moved along
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
@@ -1792,7 +1708,7 @@ function QueueCard({
 
       {open && at && createPortal(
         <>
-          {/* Клик мимо закрывает меню — без этого оно ловится только повторным нажатием */}
+          {/* A click outside closes the menu — without this it only shuts on a second press */}
           <div className="fixed inset-0 z-50" onClick={() => setOpen(false)} />
           <div
             style={{ top: at.top, right: at.right }}
@@ -1830,7 +1746,7 @@ function QueueCard({
   );
 }
 
-/* ================= ИТОГИ ================= */
+/* ================= RECAP ================= */
 
 function RecapZone({
   stats,
@@ -1855,8 +1771,9 @@ function RecapZone({
         return;
       }
       /*
-       * Перенос и починка дат — два разных исхода, и «ничего не нашлось»
-       * после того, как сотне записей вернули их дату, читалось бы враньём.
+       * Importing and repairing dates are two different outcomes, and "nothing
+       * was found" right after a hundred entries got their dates back would read
+       * as a lie.
        */
       const parts = [
         data.imported > 0 ? s.recap.imported(data.imported) : null,
@@ -1883,7 +1800,7 @@ function RecapZone({
           {
             value: stats.totalGames,
             label: s.recap.statReviews,
-            // Импортированное — не то же самое, что написанное здесь
+            // What was imported is not the same as what was written here
             hint: stats.steamCount > 0
               ? s.recap.statSplit(stats.totalGames - stats.steamCount, stats.steamCount)
               : null,
