@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
+import { DEMO_TIER_LIST } from "../lib/demo-fixtures";
 
 const user = await getSessionUser(Astro);
 if (user) return Astro.redirect("/dashboard");
@@ -12,8 +13,8 @@ const authFailed = Astro.url.searchParams.get("error") === "auth_failed";
 
 const s = t(localeFrom(Astro.cookies, Astro.request));
 
-const GITHUB_URL = "https://github.com/KulacTM/curio";
-const COFFEE_URL = "https://buymeacoffee.com/CHANGEME";
+const GITHUB_URL = "https://github.com/klchdev/curio";
+const SPONSOR_URL = "https://github.com/sponsors/klchdev";
 
 /*
  * The three steps are literally the order a newcomer does things in, not a set
@@ -25,6 +26,30 @@ const STEPS = [
   { title: s.landing.step2Title, text: s.landing.step2Text },
   { title: s.landing.step3Title, text: s.landing.step3Text },
 ];
+
+/*
+ * The covers are the product's visual language, and the arc rhymes with the
+ * dice — from the first screen it reads as "your own library", not as another
+ * abstract service.
+ *
+ * They come from the demo fixtures and never from a real account: this page is
+ * public, and what somebody owns is their own business. Picked by tier rather
+ * than by position, because the fixture library keeps growing and a slice off
+ * the top would silently turn into whatever happens to be first.
+ */
+const FAN = DEMO_TIER_LIST.filter((game) => game.tier === "S" || game.tier === "A")
+  .slice(0, 6)
+  .map((game, index, picked) => {
+    const offset = index - (picked.length - 1) / 2;
+    return {
+      title: game.gameTitle,
+      image: game.gameImage,
+      // The drop grows with the square of the distance from the middle: linear
+      // would give a staircase, and only the curve reads as a hand of cards
+      rotate: offset * 7,
+      drop: offset * offset * 6,
+    };
+  });
 
 const FEATURES = [
   { title: s.landing.featureDiary, text: s.landing.featureDiaryText },
@@ -68,22 +93,63 @@ const FEATURES = [
     <div class="reveal reveal-3 mb-20">
       <div class="flex flex-wrap items-center gap-3">
         <a
-          href="/try"
-          class="rounded-xl border border-emerald-700/70 px-7 py-3.5 font-medium text-emerald-300 transition hover:border-emerald-500 hover:bg-emerald-500/10"
-        >
-          {s.landing.demoCta}
-        </a>
-        <a
           href="/auth/login"
           class="rounded-xl bg-white px-7 py-3.5 font-medium text-gray-950 transition hover:scale-[1.02]"
         >
           {s.landing.login}
         </a>
+        <a
+          href="/try"
+          class="rounded-xl border border-emerald-700/70 px-7 py-3.5 font-medium text-emerald-300 transition hover:border-emerald-500 hover:bg-emerald-500/10"
+        >
+          {s.landing.demoCta}
+        </a>
       </div>
       <p class="mt-3 text-xs text-gray-600">
-        {s.landing.demoHint} · {s.landing.loginHint}
+        {s.landing.loginHint} · {s.landing.demoHint}
+      </p>
+
+      <!--
+        Licence and source belong on the first screen, not in the footer: they are
+        what somebody checks before deciding whether this is usable at all. Kept to
+        one muted line so it stays an answer, not a banner.
+      -->
+      <p class="mt-5 text-xs text-gray-500">
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noreferrer noopener"
+          class="underline decoration-gray-700 underline-offset-4 transition hover:text-gray-300 hover:decoration-gray-500"
+        >
+          {s.landing.openSource}
+        </a>
       </p>
     </div>
+
+    <section class="-mx-6 mb-20 sm:mx-0">
+      <div
+        class="flex snap-x gap-3 overflow-x-auto px-6 pb-4 sm:justify-center sm:gap-0 sm:overflow-visible sm:px-0 sm:pt-2 sm:pb-14"
+      >
+        {FAN.map((cover, index) => (
+          <div
+            class="fan-slot reveal w-40 shrink-0 snap-center sm:w-44 sm:-ml-[4.75rem] sm:first:ml-0"
+            style={`animation-delay: ${(0.3 + index * 0.07).toFixed(2)}s`}
+          >
+            <div class="fan-card" style={`--rot: ${cover.rotate}deg; --drop: ${cover.drop}px`}>
+              <img
+                src={cover.image}
+                alt={cover.title}
+                width="460"
+                height="215"
+                loading={index < 2 ? "eager" : "lazy"}
+                decoding="async"
+                class="block w-full rounded-xl border border-gray-800 bg-gray-900 shadow-2xl shadow-black/60"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
 
     <section class="reveal reveal-4 mb-20">
       <h2 class="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">{s.landing.howTitle}</h2>
@@ -118,6 +184,23 @@ const FEATURES = [
       <p class="text-sm leading-relaxed text-gray-300">{s.landing.freeText}</p>
     </section>
 
+    <!--
+      Muted on purpose: the page has one call to action and it is "sign in with
+      Steam". This one only has to be findable by somebody already looking for it.
+    -->
+    <section class="reveal reveal-6 mb-20 rounded-2xl border border-gray-800 bg-gray-900/40 p-6">
+      <h2 class="mb-2 text-lg font-semibold text-gray-200">{s.landing.sponsorTitle}</h2>
+      <p class="mb-5 text-sm leading-relaxed text-gray-400">{s.landing.sponsorText}</p>
+      <a
+        href={SPONSOR_URL}
+        target="_blank"
+        rel="noreferrer noopener"
+        class="inline-block rounded-xl border border-gray-700 px-5 py-2.5 text-sm text-gray-300 transition hover:border-gray-500 hover:text-white"
+      >
+        {s.landing.sponsorCta} ↗
+      </a>
+    </section>
+
     <footer class="reveal reveal-6 border-t border-gray-800 pt-6 text-xs leading-relaxed text-gray-600">
       <div class="mb-3 flex flex-wrap gap-x-5 gap-y-1">
         <a
@@ -129,12 +212,12 @@ const FEATURES = [
           {s.landing.footerGithub} ↗
         </a>
         <a
-          href={COFFEE_URL}
+          href={SPONSOR_URL}
           target="_blank"
           rel="noreferrer noopener"
-          class="transition hover:text-amber-300"
+          class="transition hover:text-gray-300"
         >
-          {s.landing.footerCoffee} ↗
+          {s.landing.footerSponsor} ↗
         </a>
       </div>
       <p>{s.landing.footerDisclaimer}</p>
@@ -167,9 +250,40 @@ const FEATURES = [
     }
   }
 
+  /*
+   * The fan needs room to be a fan. Below 640px six overlapping covers turn to
+   * mush, so the same covers become a strip you swipe — no tilt, no overlap.
+   */
+  .fan-slot {
+    position: relative;
+  }
+
+  .fan-card {
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @media (min-width: 640px) {
+    .fan-card {
+      transform: translateY(var(--drop)) rotate(var(--rot));
+    }
+
+    /* Hovering the slot, not the card: the card is rotated out of its own box */
+    .fan-slot:hover {
+      z-index: 20;
+    }
+
+    .fan-slot:hover .fan-card {
+      transform: translateY(calc(var(--drop) - 1.25rem)) rotate(var(--rot)) scale(1.03);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .reveal {
       animation: none;
+    }
+
+    .fan-card {
+      transition: none;
     }
   }
 </style>

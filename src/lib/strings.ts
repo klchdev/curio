@@ -92,7 +92,8 @@ const RU = {
     authFailed: "Steam не подтвердил вход. Попробуй ещё раз — если повторится, напиши, посмотрю логи.",
     heroTop: "Библиотека на тысячу игр",
     heroAccent: "и нечего запустить",
-    lede: "Приложение превращает бэклог в обязательства и в дневник впечатлений — а потом разбирает написанное и говорит, что играть дальше. Не по жанрам, а по твоим словам.",
+    lede: "Приложение превращает бэклог в обязательства и в дневник впечатлений — а потом разбирает написанное и говорит, что играть дальше. Не по жанрам, а по твоим словам. Бесплатно.",
+    openSource: "Открытый код · лицензия MIT · работает на твоём ключе",
     login: "Войти через Steam",
     loginHint: "Нужен только открытый профиль — библиотека подтянется сама",
     demoCta: "Попробовать без аккаунта",
@@ -123,17 +124,39 @@ const RU = {
     freeTitle: "Бесплатно, открыто, на твоём ключе",
     freeText: "Подписки нет и не будет: за нейросеть платит твой ключ напрямую провайдеру, а не общий счёт сервиса. Ключ лежит зашифрованным и не показывается даже тебе. Код открыт — можно поднять свою копию и не доверять чужому серверу вовсе.",
 
+    /*
+     * Support must not read as buying anything. Beyond the tone, paying for
+     * access to Steam data is not allowed by the Steam Web API terms — so the
+     * wording says outright that money changes nothing, and no phrasing here
+     * may start hinting at perks later.
+     */
+    sponsorTitle: "Некоммерческий проект",
+    sponsorText:
+      "Curio не берёт денег с пользователей и не будет: за нейросеть платит твой ключ напрямую провайдеру, своих расходов на неё у сервиса нет. Остаются хостинг и домен — на них и уходит поддержка, если захочется её оказать. Взамен она не даёт ничего: ни функций, ни приоритета, ни доступа. Всё работает одинаково, заплатил ты или нет.",
+    sponsorCta: "Поддержать через GitHub Sponsors",
+
     footerDisclaimer:
       "Not affiliated with Valve Corporation. Steam and the Steam logo are trademarks of Valve Corporation.",
     footerGithub: "Исходники на GitHub",
-    footerCoffee: "Купить мне кофе",
+    footerSponsor: "Поддержать проект",
   },
 
   onboarding: {
     title: "Настройка",
     lede: "Четыре шага, минут пять. Без первого не работает ничего умного, без остальных Кьюрио нечего читать.",
-    progress: (current: number, total: number) => `Шаг ${current} из ${total}`,
     stepDone: "готово",
+
+    /*
+     * Short captions for the step pills. Separate from the `*Title` strings on
+     * purpose: the full name is already the card heading right below the pills,
+     * so the pill only has to say which of the four this is — and one word fits
+     * where a whole title had to be cut off.
+     */
+    keyShort: "Ключ",
+    libraryShort: "Библиотека",
+    reviewsShort: "Отзывы",
+    doneShort: "Готово",
+
     skip: "Пропустить и осмотреться",
     back: "Назад",
     next: "Дальше",
@@ -614,7 +637,8 @@ const EN: Dict = {
     authFailed: "Steam didn't confirm the login. Try again — if it keeps happening, tell me and I'll check the logs.",
     heroTop: "A thousand games in the library",
     heroAccent: "and nothing to launch",
-    lede: "The app turns your backlog into commitments and into a diary of impressions — then reads what you wrote and tells you what to play next. Not by genre, but by your own words.",
+    lede: "The app turns your backlog into commitments and into a diary of impressions — then reads what you wrote and tells you what to play next. Not by genre, but by your own words. It's free.",
+    openSource: "Open source · MIT licence · runs on your own key",
     login: "Sign in with Steam",
     loginHint: "All it needs is a public profile — the library comes in on its own",
     demoCta: "Try it without an account",
@@ -645,17 +669,27 @@ const EN: Dict = {
     freeTitle: "Free, open, running on your key",
     freeText: "There is no subscription and never will be: the AI is paid for by your key, straight to the provider, not from a shared bill. The key is stored encrypted and never shown back, even to you. The code is open — you can run your own copy and trust nobody else's server at all.",
 
+    sponsorTitle: "A non-commercial project",
+    sponsorText:
+      "Curio doesn't charge its users and won't: the model is paid for by your key, straight to the provider, so the service carries no inference bill of its own. What's left is hosting and a domain — that is where support goes, if you feel like giving any. It buys nothing in return: no features, no priority, no access. Everything works the same whether you paid or not.",
+    sponsorCta: "Sponsor via GitHub",
+
     footerDisclaimer:
       "Not affiliated with Valve Corporation. Steam and the Steam logo are trademarks of Valve Corporation.",
     footerGithub: "Source on GitHub",
-    footerCoffee: "Buy me a coffee",
+    footerSponsor: "Sponsor the project",
   },
 
   onboarding: {
     title: "Setup",
     lede: "Four steps, about five minutes. Without the first one nothing smart works; without the rest Curio has nothing to read.",
-    progress: (current: number, total: number) => `Step ${current} of ${total}`,
     stepDone: "done",
+
+    keyShort: "Key",
+    libraryShort: "Library",
+    reviewsShort: "Reviews",
+    doneShort: "Done",
+
     skip: "Skip and look around",
     back: "Back",
     next: "Next",
