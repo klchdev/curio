@@ -185,7 +185,7 @@ Three providers are supported:
 Gemini has a free tier, and it's enough to try everything except running a large
 journal through analysis in one go. Do keep in mind that on the free tier Google
 reserves the right to use the contents of your requests to improve its models;
-the details are in [PRIVACY.md](PRIVACY.md).
+the details are in [PRIVACY.md](docs/PRIVACY.md).
 
 ## Playtime tracker
 
@@ -240,12 +240,12 @@ the day would mean inventing it.
 ## Privacy
 
 What is stored, where it goes and how to delete all of it — in
-[PRIVACY.md](PRIVACY.md).
+[PRIVACY.md](docs/PRIVACY.md).
 
 ## Contributing
 
 Bugs and ideas go to issues, patches to pull requests. Details in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## License
 
