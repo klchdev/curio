@@ -563,6 +563,18 @@ const RU = {
     badRating: "Оценка от 1 до 5",
     needAppId: "Укажи Steam appid или ссылку на страницу демки",
     steamNotFound: "Не нашёл игру в Steam по этому appid",
+    gameNotOwned: "Игра не найдена в библиотеке",
+    contractExists: "Контракт на эту игру уже есть",
+    recordNotFound: "Запись об игре не найдена",
+    noVerdict: "Выбери вердикт",
+    noContract: "Не указан контракт",
+    noteTooShort: (min: number) => `Заметка минимум ${min} символов`,
+    notEnoughPlaytime: (need: number, played: number) =>
+      `Нужно наиграть минимум ${need} минут (сейчас ${played})`,
+    noEntry: "Не указана запись",
+    entryNotFound: "Запись не найдена",
+    noTag: "Не указан тег",
+    badTagLabel: "Тег от 2 до 60 знаков",
   },
 };
 
@@ -1087,6 +1099,18 @@ const EN: Dict = {
     badRating: "Rating must be 1 to 5",
     needAppId: "Enter a Steam appid or a link to the demo page",
     steamNotFound: "No game in Steam with that appid",
+    gameNotOwned: "That game isn't in your library",
+    contractExists: "You already have a contract on this game",
+    recordNotFound: "Nothing recorded for this game yet",
+    noVerdict: "Pick a verdict",
+    noContract: "No contract specified",
+    noteTooShort: (min: number) => `The note needs at least ${min} characters`,
+    notEnoughPlaytime: (need: number, played: number) =>
+      `Play at least ${need} minutes first — you're at ${played}`,
+    noEntry: "No entry specified",
+    entryNotFound: "Entry not found",
+    noTag: "No tag specified",
+    badTagLabel: "A tag is 2 to 60 characters",
   },
 };
 

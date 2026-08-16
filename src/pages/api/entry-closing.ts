@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   const body = await request.json().catch(() => ({}));
   const gameId = Number(body.gameId);
-  if (!Number.isInteger(gameId)) return json({ error: "Не указана игра" }, 400);
+  if (!Number.isInteger(gameId)) return json({ error: s.errors.noGame }, 400);
 
   /*
    * Everyone brings their own key, and a missing one is not a failure but an

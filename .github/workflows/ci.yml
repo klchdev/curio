@@ -1,0 +1,57 @@
+name: CI
+
+# Pull requests are the reason this exists: a stranger's branch has nothing
+# else standing between it and main. Pushes to main are checked too, so a
+# commit that went straight in — which is how this repository is normally
+# worked on — still gets the same reading.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Types and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Kept in step with the engines field in package.json
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # astro check is what actually reads the .astro files; tsc alone would
+      # walk past them
+      - run: npx astro check
+
+      # Every environment variable in this project is a runtime secret, so a
+      # build needs none of them — if that ever stops being true, this job is
+      # where it will show up first.
+      - run: npm run build
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The README offers this image as a way to run the project, so a
+      # Dockerfile that stopped building would be a broken promise rather than
+      # an internal problem. Build only — pushing it anywhere is not this
+      # workflow's business.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

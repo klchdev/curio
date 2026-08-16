@@ -7,6 +7,7 @@ import {
   createDemoReview,
   getStoredPlaytime,
 } from "../../lib/queries";
+import { errorText } from "../../lib/query-errors";
 import { getRecentPlaytime, parseAppId, getStoreAppDetails } from "../../lib/steam";
 import { queueEntryAnalysis } from "../../lib/entry-analysis";
 import { SHEET_RULES, isValidTier, isValidVerdict, type ImpressionMode } from "../../lib/vocab";
@@ -49,7 +50,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const appId = parseAppId(String(appIdOrUrl ?? ""));
     if (!appId) return json({ error: s.errors.needAppId }, 400);
     if (!note || String(note).length < rule.minNote) {
-      return json({ error: `Заметка минимум ${rule.minNote} символов` }, 400);
+      return json({ error: s.errors.noteTooShort(rule.minNote) }, 400);
     }
 
     const details = await getStoreAppDetails(appId);
@@ -121,7 +122,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     previous,
   });
 
-  if ("error" in result) return json(result, 400);
+  if ("error" in result) return json({ error: errorText(s, result.error) }, 400);
 
   // Text analysis runs in the background: it must not hold up the save response
   if (result.entryId) queueEntryAnalysis(result.entryId);

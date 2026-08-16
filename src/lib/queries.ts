@@ -21,6 +21,7 @@ import {
   type Tier,
   type ImpressionMode,
 } from "./vocab";
+import type { QueryError } from "./query-errors";
 
 const {
   UNPLAYED_MAX_MINUTES,
@@ -102,9 +103,12 @@ export async function getUnplayedGames(userId: number) {
  * picks by taste, but the commitment is the same either way: 20 minutes and a
  * first impression.
  */
-export async function takeContract(userId: number, gameId: number) {
+export async function takeContract(
+  userId: number,
+  gameId: number
+): Promise<{ ok: true; slotId: number } | { error: QueryError }> {
   if (!(await canSpin(userId))) {
-    return { error: "Все три контракта заняты" };
+    return { error: { code: "slotsFull" } };
   }
 
   const owned = await db
@@ -114,7 +118,7 @@ export async function takeContract(userId: number, gameId: number) {
     .limit(1)
     .then((rows) => rows[0]);
 
-  if (!owned) return { error: "Игра не найдена в библиотеке" };
+  if (!owned) return { error: { code: "gameNotOwned" } };
 
   const active = await db
     .select({ id: slots.id })
@@ -125,7 +129,7 @@ export async function takeContract(userId: number, gameId: number) {
     .limit(1)
     .then((rows) => rows[0]);
 
-  if (active) return { error: "Контракт на эту игру уже есть" };
+  if (active) return { error: { code: "contractExists" } };
 
   const [slot] = await db
     .insert(slots)
@@ -403,7 +407,7 @@ export async function skipSlot(
     .limit(1)
     .then((rows) => rows[0]);
 
-  if (!slot || slot.status !== "active") return { error: "Invalid slot" };
+  if (!slot || slot.status !== "active") return { error: { code: "contractNotFound" as const } };
 
   await db.update(slots)
     .set({ status: "skipped" })
@@ -511,7 +515,7 @@ export async function setTier(
     .limit(1)
     .then((rows) => rows[0]);
 
-  if (!existing) return { error: "Запись об игре не найдена" };
+  if (!existing) return { error: { code: "recordNotFound" } };
 
   await db.update(gameRecords).set({ tier }).where(eq(gameRecords.id, existing.id));
   return { ok: true };
@@ -554,7 +558,7 @@ export async function createDemoReview(
     .where(eq(games.steamAppId, data.appId))
     .limit(1)
     .then((rows) => rows[0]);
-  if (!game) return { error: "Failed to create game" };
+  if (!game) return { error: { code: "saveFailed" as const } };
 
   // link to user (playtime not tracked for demos)
   await db
@@ -1254,7 +1258,7 @@ export interface ImpressionInput {
  * when slot_reviews / game_reviews / slot_notes merge into a single model, only
  * its body changes — the calling code stays as it is.
  */
-type SaveResult = { ok: true; entryId?: number } | { error: string };
+type SaveResult = { ok: true; entryId?: number } | { error: QueryError };
 
 /**
  * The one place where an opinion about a game gets written — now straight into
@@ -1272,21 +1276,21 @@ export async function saveImpression(
   const note = input.note?.trim() ?? "";
 
   if (rule.noteRequired && note.length < rule.minNote) {
-    return { error: `Заметка минимум ${rule.minNote} символов` };
+    return { error: { code: "noteTooShort", min: rule.minNote } };
   }
   if (note.length > 0 && note.length < rule.minNote) {
-    return { error: `Заметка минимум ${rule.minNote} символов` };
+    return { error: { code: "noteTooShort", min: rule.minNote } };
   }
   if (rule.verdictRequired && !isValidVerdict(input.verdict)) {
-    return { error: "Выбери вердикт" };
+    return { error: { code: "noVerdict" } };
   }
   if (input.rating != null && (input.rating < 1 || input.rating > 5)) {
-    return { error: "Оценка от 1 до 5" };
+    return { error: { code: "badRating" } };
   }
 
   // Closing a contract: the time counts from the start, and it has to be real
   if (input.mode === "slot-first") {
-    if (!input.slotId) return { error: "Не указан контракт" };
+    if (!input.slotId) return { error: { code: "noContract" } };
 
     const slot = await db
       .select({
@@ -1300,12 +1304,12 @@ export async function saveImpression(
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!slot || slot.status !== "active") return { error: "Контракт не найден" };
+    if (!slot || slot.status !== "active") return { error: { code: "contractNotFound" } };
 
     const played = input.currentPlaytime - slot.playtimeOnStart;
     if (played < MIN_PLAYTIME_TO_REVIEW) {
       return {
-        error: `Нужно наиграть минимум ${MIN_PLAYTIME_TO_REVIEW} минут (сейчас ${played})`,
+        error: { code: "notEnoughPlaytime", need: MIN_PLAYTIME_TO_REVIEW, played },
       };
     }
 
@@ -1331,7 +1335,7 @@ export async function saveImpression(
   }
 
   const gameId = input.gameId;
-  if (!gameId) return { error: "Не указана игра" };
+  if (!gameId) return { error: { code: "noGame" } };
 
   const owned = await db
     .select({ gameId: userGames.gameId })
@@ -1339,7 +1343,7 @@ export async function saveImpression(
     .where(and(eq(userGames.userId, userId), eq(userGames.gameId, gameId)))
     .limit(1)
     .then((rows) => rows[0]);
-  if (!owned) return { error: "Игра не найдена в библиотеке" };
+  if (!owned) return { error: { code: "gameNotOwned" } };
 
   const recordId = await upsertRecord(userId, gameId, {
     verdict: input.verdict,

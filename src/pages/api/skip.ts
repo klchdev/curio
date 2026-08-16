@@ -3,6 +3,7 @@ import { getUserId } from "../../lib/auth";
 import { skipSlot, getFreeSkips, FREE_SKIP_MARKER } from "../../lib/queries";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
+import { errorText } from "../../lib/query-errors";
 import { SKIP_CODES } from "../../components/SkipModal";
 
 export const POST: APIRoute = async ({ request, cookies }) => {
@@ -23,7 +24,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (available <= 0) return fail(s.errors.noFreeSkips);
 
     const result = await skipSlot(slotId, userId, "legitimate", FREE_SKIP_MARKER);
-    if ("error" in result && result.error) return fail(result.error);
+    if ("error" in result && result.error) return fail(errorText(s, result.error));
     return new Response(JSON.stringify({ ok: true, type: "legitimate" }), {
       headers: { "Content-Type": "application/json" },
     });
@@ -38,7 +39,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
    */
   const isLegitimate = (SKIP_CODES as readonly string[]).includes(reasonCode);
   const result = await skipSlot(slotId, userId, isLegitimate ? "legitimate" : "shame", reason);
-  if ("error" in result && result.error) return fail(result.error);
+  if ("error" in result && result.error) return fail(errorText(s, result.error));
 
   return new Response(JSON.stringify({ ok: true, type: isLegitimate ? "legitimate" : "shame" }), {
     headers: { "Content-Type": "application/json" },
