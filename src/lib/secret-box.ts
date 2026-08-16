@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 
 /**
  * Encryption of user secrets — right now those are the model API keys.
@@ -24,21 +24,45 @@ const KEY_BYTES = 32;
 const IV_BYTES = 12;
 
 /**
- * Parses the key from the environment and checks its length right away.
- *
- * The check happens at startup, not on the first encryption: otherwise a
- * truncated ENCRYPTION_KEY surfaces a week later on a live user rather than at
- * deploy time.
+ * Minimum length of the configured secret. Short enough that any secret a
+ * hosting platform generates clears it, long enough that a hand-typed word
+ * does not.
  */
-export function parseEncryptionKey(base64: string): Buffer {
-  const key = Buffer.from(base64, "base64");
-  if (key.length !== KEY_BYTES) {
+const MIN_SECRET_LENGTH = 24;
+
+/** Domain separation: this derived key is for secret-box and nothing else. */
+const HKDF_INFO = "curio/secret-box/v1";
+
+/**
+ * Derives the encryption key from whatever secret the environment holds.
+ *
+ * The obvious implementation — demand exactly 32 raw bytes in base64 — is a
+ * deployment trap. Every platform that offers to generate a secret for you
+ * (Render, Railway, Coolify) generates an arbitrary random string, so a
+ * one-click deploy would fall over on first boot with a complaint about key
+ * length, and the person deploying has no idea why. Accepting any sufficiently
+ * long secret and stretching it here removes that trap without weakening
+ * anything: HKDF over a high-entropy string yields exactly the 32 bytes AES
+ * wants.
+ *
+ * The length check happens at startup, not on the first encryption: otherwise
+ * a truncated ENCRYPTION_KEY surfaces a week later on a live user rather than
+ * at deploy time.
+ *
+ * Changing INFO, or the secret itself, makes every stored key undecryptable —
+ * this is the one value in the project that must survive redeploys untouched.
+ */
+export function parseEncryptionKey(secret: string): Buffer {
+  const trimmed = secret.trim();
+
+  if (trimmed.length < MIN_SECRET_LENGTH) {
     throw new Error(
-      `ENCRYPTION_KEY must be ${KEY_BYTES} bytes in base64, got ${key.length}. ` +
+      `ENCRYPTION_KEY must be at least ${MIN_SECRET_LENGTH} characters, got ${trimmed.length}. ` +
         "Generate one with: openssl rand -base64 32"
     );
   }
-  return key;
+
+  return Buffer.from(hkdfSync("sha256", trimmed, "", HKDF_INFO, KEY_BYTES));
 }
 
 /**
