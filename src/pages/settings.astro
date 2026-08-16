@@ -1,0 +1,44 @@
+---
+import Layout from "../layouts/Layout.astro";
+import LlmKeyForm, { type ProviderMeta } from "../components/LlmKeyForm";
+import { getSessionUser } from "../lib/session";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+import { ADAPTER_LIST } from "../lib/llm";
+import { getLlmSettings } from "../lib/llm/credentials";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+const settings = await getLlmSettings(user.id);
+
+/*
+ * Only plain data goes outward: the adapters themselves pull in the SDKs of
+ * three providers, and handing them to an island means dragging all of that
+ * into the browser.
+ */
+const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
+  id: adapter.id,
+  label: adapter.label,
+  keyHelpUrl: adapter.keyHelpUrl,
+  models: adapter.models,
+}));
+---
+
+<Layout title={s.llm.title}>
+  <div class="mx-auto max-w-xl py-10">
+    <a href="/dashboard" class="text-sm text-gray-500 transition hover:text-gray-300">
+      &larr; {s.pages.back}
+    </a>
+
+    <h1 class="mt-4 text-2xl font-semibold text-gray-100">{s.llm.title}</h1>
+    <p class="mt-2 text-sm leading-relaxed text-gray-400">{s.llm.intro}</p>
+
+    <div class="mt-8 rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
+      <LlmKeyForm client:load providers={providers} current={settings} locale={locale} />
+    </div>
+  </div>
+</Layout>

@@ -1,17 +1,17 @@
-import { Type, ThinkingLevel } from "@google/genai";
-import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
+import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
 
 /**
- * Что скажет Curio, дочитав отзыв до конца.
+ * What Curio says once it has read the review through.
  *
- * Соблазн здесь — пересказать человеку его же слова покрасивее. Это пустая
- * работа: он их только что написал и помнит лучше модели. Ценно ровно
- * обратное — то, чего из одной игры не видно: куда эта игра встала среди
- * остальных, какая претензия у него повторяется из отзыва в отзыв, где
- * оценка расходится с тем, как он про игру говорит.
+ * The temptation here is to hand the player their own words back, only
+ * prettier. That is empty work: they wrote them a moment ago and remember them
+ * better than the model does. What is worth saying is the opposite — the part
+ * one game cannot show: where this game landed among the rest, which complaint
+ * keeps coming back review after review, where the rating disagrees with the
+ * way they talk about the game.
  *
- * Поэтому вердикт обязан опираться на другие игры дневника и на его словарь
- * претензий. Разговор без этого — просто вежливый шум.
+ * So the take has to lean on the other games in the diary and on their
+ * vocabulary of complaints. Without that it is just polite noise.
  */
 
 export interface TakeInput {
@@ -20,13 +20,13 @@ export interface TakeInput {
   verdict: string | null;
   rating: number | null;
   tier: string | null;
-  /** Тон записей по порядку: видно, куда двигалось настроение. */
+  /** Entry tones in order: shows which way the mood was moving. */
   tones: number[];
-  /** Его словарь: сколько раз каждая претензия и похвала встречалась вообще. */
+  /** Their vocabulary: how often each complaint and praise has come up overall. */
   profile: Array<{ label: string; kind: string; games: number }>;
-  /** Игры, где встречались те же теги, — материал для сравнения. */
+  /** Games carrying the same tags — material for comparison. */
   related: Array<{ title: string; tier: string | null; rating: number | null; labels: string[] }>;
-  /** Соседи по оценке: с чем эта игра встала в один ряд. */
+  /** Neighbours by rating: what this game ended up standing alongside. */
   neighbours: Array<{ title: string; tier: string | null; rating: number | null }>;
 }
 
@@ -49,15 +49,18 @@ const SYSTEM_INSTRUCTION = `Ты — Curio. Человек только что �
 — Не советуй, что играть дальше: это не твоя задача здесь.
 — Не выдумывай ни игр, ни его слов. Всё, что называешь, должно быть в данных.`;
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+const RESPONSE_SCHEMA: JsonSchema = {
+  type: "object",
   properties: {
-    take: { type: Type.STRING, description: "Три-пять предложений от Curio" },
+    take: { type: "string", description: "Три-пять предложений от Curio" },
   },
   required: ["take"],
 };
 
-export async function generateTake(input: TakeInput, keys: GeminiKeys): Promise<string> {
+export async function generateTake(
+  input: TakeInput,
+  creds: LlmCredentials | null
+): Promise<string> {
   const feed = input.entries.map((entry) => `[${entry.hours}ч] ${entry.text}`).join("\n\n");
 
   const profile = input.profile
@@ -104,25 +107,20 @@ export async function generateTake(input: TakeInput, keys: GeminiKeys): Promise<
     "Скажи, что видишь.",
   ].join("\n");
 
-  const raw = await withGemini(keys, async (ai) => {
-    const res = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        /*
-         * Сопоставить игру с десятками других по тегам и оценкам — работа,
-         * ради которой размышление и нужно. Вердикт выносится раз на игру,
-         * лишние секунды тут ничего не стоят.
-         */
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
+  const raw = await withLlm(creds, async (client) => {
+    const answer = await client.generateJson({
+      system: SYSTEM_INSTRUCTION,
+      prompt,
+      schema: RESPONSE_SCHEMA,
+      /*
+       * Matching a game against dozens of others by tags and ratings is
+       * exactly the work reasoning is there for. The take is passed once per
+       * game, so the extra seconds cost nothing here.
+       */
+      effort: "high",
     });
 
-    const answer = res.text ?? "";
-    if (!answer) throw new Error("Gemini вернул пустой ответ");
+    if (!answer) throw new Error("The model returned an empty response");
     return answer;
   });
 

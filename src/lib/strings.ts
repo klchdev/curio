@@ -2,18 +2,18 @@ import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import { THRESHOLDS } from "./vocab";
 
 /**
- * Все тексты интерфейса. Словарь тиров и вердиктов живёт в vocab.ts — здесь
- * только то, что вокруг них.
+ * Every string in the interface. The tier and verdict vocabulary lives in
+ * vocab.ts — here is only what surrounds it.
  *
- * Значение может быть функцией: русский требует согласования числительных
- * («ещё 1 отзыв» / «ещё 3 отзыва» / «ещё 5 отзывов»), и правило склонения
- * должно лежать рядом с текстом, а не в компоненте.
+ * A value may be a function: Russian requires numeral agreement («ещё 1 отзыв»
+ * / «ещё 3 отзыва» / «ещё 5 отзывов»), and the inflection rule belongs next to
+ * the text, not inside a component.
  *
- * EN описан как `Dict`, поэтому забытый ключ или разошедшаяся сигнатура —
- * ошибка компиляции, а не пустая строка на экране.
+ * EN is typed as `Dict`, so a forgotten key or a signature that has drifted is
+ * a compile error rather than an empty string on screen.
  */
 
-/** Русские числительные: 1 отзыв, 2 отзыва, 5 отзывов. */
+/** Russian numerals: 1 отзыв, 2 отзыва, 5 отзывов. */
 function plural(n: number, one: string, few: string, many: string): string {
   const mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 14) return many;
@@ -95,12 +95,118 @@ const RU = {
     lede: "Приложение превращает бэклог в обязательства и в дневник впечатлений — а потом разбирает написанное и говорит, что играть дальше. Не по жанрам, а по твоим словам.",
     login: "Войти через Steam",
     loginHint: "Нужен только открытый профиль — библиотека подтянется сама",
-    step1Title: "Контракт вместо намерения",
-    step1Text: `Берёшь игру — из совета или по жребию — и обязуешься сыграть минимум ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и записать первое впечатление. Одновременно контрактов ${THRESHOLDS.MAX_ACTIVE_SLOTS}. Сдаться можно, но это останется в дневнике.`,
-    step2Title: "Впечатление слоями, а не снимком",
-    step2Text: "Отзыв — не одна оценка на всю игру. Каждая запись помечена наигранным временем, и видно, как мнение менялось: что вытащило игру к десятому часу или что её убило.",
-    step3Title: "Советы по твоим словам",
-    step3Text: "Модель читает всё, что ты написал, и раскладывает непройденное по тирам — ссылаясь на твои же отзывы по названиям. Иногда спорит с твоими вердиктами и доказывает, что игру бросили зря.",
+    demoCta: "Попробовать без аккаунта",
+    demoHint: "Готовый дневник вымышленного человека — сразу видно, что получается на выходе",
+
+    howTitle: "Как это работает",
+    step1Title: "Свой ключ от нейросети",
+    step1Text: "Gemini, Claude или GPT — ключ берётся у провайдера за минуту и вводится в настройках. Запросы уходят от твоего имени: сервис за них не платит и своего ключа не держит.",
+    step2Title: "Отзывы на наигранное",
+    step2Text: `Написанное на страницах игр в Steam переносится одной кнопкой, остальное дописывается руками. От ${THRESHOLDS.MIN_REVIEWS_FOR_AI} отзывов Кьюрио уже есть за что зацепиться.`,
+    step3Title: "Разбор, советы и вердикты",
+    step3Text: "Модель читает всё, что ты написал, формулирует твой вкус и раскладывает непройденное по тирам — ссылаясь на твои же слова, а не на жанры.",
+
+    featuresTitle: "Что внутри",
+    featureDiary: "Дневник впечатлений",
+    featureDiaryText: "Записи об одной игре собираются в тред и помечены наигранным временем — видно, как менялось мнение, а не только чем всё кончилось.",
+    featurePicks: "Советы, что играть",
+    featurePicksText: "Непройденное разложено по тирам, к каждой игре объяснение. Не можешь выбрать сам — есть жребий.",
+    featureTiers: "Тир-лист",
+    featureTiersText: "Всё сыгранное расставлено по рядам от S до F, обложки перетаскиваются мышью.",
+    featureDeep: "Разбор одной игры",
+    featureDeepText: "Кьюрио читает отзывы игроков в Steam и сверяет их с твоим вкусом: стоит запускать или это не твоё.",
+    featureChrono: "Хронология",
+    featureChronoText: "Когда и сколько ты играешь на самом деле — по часам суток, дням и играм.",
+    featureDemos: "Демки",
+    featureDemosText: "Впечатления с Next Fest живут отдельно от библиотеки: там свои вердикты, включая «жду релиз».",
+
+    freeTitle: "Бесплатно, открыто, на твоём ключе",
+    freeText: "Подписки нет и не будет: за нейросеть платит твой ключ напрямую провайдеру, а не общий счёт сервиса. Ключ лежит зашифрованным и не показывается даже тебе. Код открыт — можно поднять свою копию и не доверять чужому серверу вовсе.",
+
+    footerDisclaimer:
+      "Not affiliated with Valve Corporation. Steam and the Steam logo are trademarks of Valve Corporation.",
+    footerGithub: "Исходники на GitHub",
+    footerCoffee: "Купить мне кофе",
+  },
+
+  onboarding: {
+    title: "Настройка",
+    lede: "Четыре шага, минут пять. Без первого не работает ничего умного, без остальных Кьюрио нечего читать.",
+    progress: (current: number, total: number) => `Шаг ${current} из ${total}`,
+    stepDone: "готово",
+    skip: "Пропустить и осмотреться",
+    back: "Назад",
+    next: "Дальше",
+    finish: "Открыть приложение",
+    finishing: "Открываю…",
+    resume: "Вернуться к настройке",
+
+    keyTitle: "Ключ от нейросети",
+    keyText:
+      "Разборы, советы и вердикты делает нейросеть, и работает она на твоём ключе — своего сервис не держит. У Gemini есть бесплатный тариф: его хватит, чтобы попробовать всё.",
+    keyDone: (mask: string) => `Ключ на месте (${mask})`,
+
+    libraryTitle: "Библиотека из Steam",
+    libraryText:
+      "Curio забирает из Steam список игр и наигранное время. Время нужно не для галочки: им помечается каждая запись в дневнике, поэтому и видно, на каком часу мнение поменялось.",
+    libraryCta: "Забрать библиотеку",
+    libraryBusy: "Спрашиваю Steam…",
+    libraryDone: (n: number) => `${n} ${plural(n, "игра", "игры", "игр")} в библиотеке`,
+    libraryFailed:
+      "Steam не отдал библиотеку. Проверь, что профиль и список игр открыты — приватный список Valve не отдаёт даже владельцу.",
+
+    reviewsTitle: "Отзывы на наигранное",
+    reviewsText: (need: number) =>
+      `Кьюрио советует по твоим словам, а не по жанрам: он читает, за что ты хвалишь и на что ругаешься из игры в игру. Пока отзывов меньше ${need}, зацепиться не за что — советы просто не соберутся.`,
+    reviewsProgress: (have: number, need: number) => `${have} из ${need}`,
+    reviewsEnough: "Отзывов хватает — Кьюрио есть что читать",
+    reviewsLeft: (left: number) =>
+      `Осталось ${left} ${plural(left, "отзыв", "отзыва", "отзывов")}`,
+    reviewsImport: "Забрать отзывы из Steam",
+    reviewsImportBusy: "Читаю профиль…",
+    reviewsImportHint:
+      "Всё, что ты писал на страницах игр в Steam, станет записями дневника. Вердикт по каждой проставишь сам.",
+    reviewsImportNone: "На профиле отзывов не нашлось — значит, пишем руками",
+    reviewsManual: "Написать самому",
+    reviewsManualHint:
+      "В «Сейчас» лежат игры, где наиграно прилично, а вердикта нет: с них начинать проще всего — впечатление ещё свежее.",
+
+    readyTitle: "Всё готово",
+    readyText:
+      "Дальше — зона «Выбрать»: Кьюрио прочитает дневник и разложит непройденное по тирам. Первый прогон занимает около минуты.",
+    readyGaps: "Незакрытым осталось:",
+    readyGapsHint: "К настройке можно вернуться в любой момент — она никуда не денется.",
+
+    needLibraryTitle: "Библиотека пустая",
+    needLibraryText:
+      "Steam ещё не спрашивали или он ничего не отдал. Без списка игр советовать нечего и разбирать нечего.",
+    needLibraryCta: "Забрать библиотеку",
+    needReviewsTitle: (left: number) =>
+      `Ещё ${left} ${plural(left, "отзыв", "отзыва", "отзывов")} — и Кьюрио заговорит`,
+    needReviewsText:
+      "Профиль вкуса собирается только из отзывов. Перенеси написанное в Steam или начни с того, во что уже наиграно.",
+    needReviewsCta: "Разобраться с отзывами",
+  },
+
+  demo: {
+    title: "Демо",
+    banner: "Демо-данные: библиотека и отзывы вымышленные",
+    ctaTitle: "Здесь мог быть твой дневник",
+    ctaText:
+      "Войди через Steam — библиотека подтянется сама, отзывы с профиля перенесутся одной кнопкой. Сервис бесплатный и работает на твоём ключе от нейросети.",
+    ctaButton: "Войти через Steam",
+    backToLanding: "На главную",
+  },
+
+  dev: {
+    title: "Тестовые аккаунты",
+    hint: "Отладочный механизм владельца инстанса: пустые аккаунты, чтобы проверять сценарии, не ломая свой дневник. В публичную статистику они не попадают.",
+    create: "Создать тестовый аккаунт",
+    labelPlaceholder: "Название",
+    switchTo: "Войти",
+    back: "Вернуться в свой аккаунт",
+    deleteOne: "Удалить",
+    empty: "Пока ни одного",
   },
 
   dock: {
@@ -234,11 +340,6 @@ const RU = {
     dropped: "Бросил",
     review: "Отзыв",
 
-    dispute: "Спор о брошенном",
-    disputeHint: "Кьюрио не всегда с тобой согласен",
-    secondChance: "Дам второй шанс",
-    imRight: "Нет, я прав",
-    toDiary: "Записать в дневник",
   },
 
   board: {
@@ -322,7 +423,7 @@ const RU = {
       "История пишется с нуля: Steam своей не отдаёт. Поиграй немного — первые часы появятся здесь.",
     since: (date: string) => `Трекер пишет с ${date}`,
     silent: "Трекер молчит больше суток — проверь, что опрос запущен",
-    // Строкой, а не функцией: подпись уезжает в браузер через JSON, а функции его не переживают
+    // A string, not a function: the label ships to the browser as JSON, functions don't survive
     playingNow: "Сейчас в игре",
 
     totalHours: "Часов за период",
@@ -355,6 +456,63 @@ const RU = {
     range90: "90 дней",
     rangeAll: "Всё время",
     weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+  },
+
+  account: {
+    title: "Мои данные",
+    exportHint:
+      "Один файл со всем, что здесь есть про тебя: библиотека, дневник со всеми записями, теги, контракты, советы Кьюрио и история игровых сессий.",
+    exportButton: "Выгрузить мои данные",
+
+    dangerZone: "Опасная зона",
+    deleteTitle: "Удалить аккаунт",
+    deleteWarning:
+      "Удаляется всё и насовсем: дневник, вердикты, теги, контракты, советы и вся история сессий. Это необратимо — резервных копий на такой случай не держим, восстановить будет нечем. Если написанное жалко, сначала выгрузи данные.",
+    deleteConfirmLabel: (username: string) => `Впиши «${username}», чтобы подтвердить`,
+    deleteConfirmPlaceholder: "Ник из Steam",
+    deleteSubmit: "Удалить навсегда",
+    deleting: "Удаляю…",
+    deleteFailed: "Не удалось удалить аккаунт — попробуй ещё раз",
+    confirmMismatch: "Ник не совпал — ничего не удалено",
+  },
+
+  llm: {
+    title: "Ключ от нейросети",
+    intro:
+      "Разборы, вердикты и советы делает нейросеть, и работает она на твоём ключе. Сервис за это не платит и своего ключа не держит — поэтому он бесплатный и таким останется. Ключ хранится зашифрованным и не показывается даже тебе: видно только хвост.",
+    provider: "Провайдер",
+    model: "Модель",
+    customModel: "Другая модель…",
+    customModelHint: "Точное имя модели",
+    /*
+     * The one-line notes beside each model in the picker. The key is the
+     * provider's own model id, so a new model whose note nobody translated is
+     * caught at compile time: EN is typed as Dict.
+     */
+    modelNotes: {
+      "gemini-3.7-flash": "быстрая, есть бесплатный тариф",
+      "gemini-3.7-pro": "умнее и дороже",
+      "claude-sonnet-5": "баланс цены и качества",
+      "claude-opus-5": "самая сильная, дороже",
+      "claude-haiku-4-5": "дешёвая, для массовых разборов",
+      "gpt-4.1": "",
+      "gpt-4.1-mini": "дешевле, для массовых разборов",
+    } as Record<string, string>,
+    key: "Ключ",
+    keyPlaceholder: "Вставь ключ",
+    keySaved: (mask: string) => `Ключ сохранён (${mask}) — введи новый, чтобы заменить`,
+    whereToGet: (provider: string) => `Где взять ключ ${provider}`,
+    privacyNote:
+      "В нейросеть уходят твои записи и список игр. На бесплатном тарифе Gemini Google может использовать содержимое запросов для улучшения моделей — если это не подходит, возьми платный тариф или другого провайдера.",
+    checking: "Проверяю…",
+    save: "Сохранить",
+    remove: "Удалить ключ",
+    errorAuth: "Провайдер не принял ключ. Проверь, что скопировал целиком и что он не отозван.",
+    errorModel: "Такой модели нет или у ключа нет к ней доступа. Проверь имя модели.",
+    errorGeneric: "Не получилось проверить ключ. Похоже на сетевую ошибку — попробуй ещё раз.",
+    missingTitle: "Нужен ключ от нейросети",
+    missingText: "Эта функция работает на твоём ключе. Добавь его в настройках — это займёт минуту.",
+    missingCta: "Добавить ключ",
   },
 
   errors: {
@@ -459,12 +617,117 @@ const EN: Dict = {
     lede: "The app turns your backlog into commitments and into a diary of impressions — then reads what you wrote and tells you what to play next. Not by genre, but by your own words.",
     login: "Sign in with Steam",
     loginHint: "All it needs is a public profile — the library comes in on its own",
-    step1Title: "A contract instead of an intention",
-    step1Text: `You take a game — from a pick or from the dice — and commit to at least ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} minutes and a written first impression. ${THRESHOLDS.MAX_ACTIVE_SLOTS} contracts at a time. You can give up, but the diary will remember.`,
-    step2Title: "Impressions in layers, not a snapshot",
-    step2Text: "A review isn't one verdict for the whole game. Every entry is stamped with playtime, so you can see how your opinion moved: what saved the game by hour ten, or what killed it.",
-    step3Title: "Advice built from your own words",
-    step3Text: "The model reads everything you've written and sorts the unplayed part of your library into tiers — citing your own reviews by name. Sometimes it argues with your verdicts and makes the case that you dropped a game too early.",
+    demoCta: "Try it without an account",
+    demoHint: "A ready-made diary of a made-up player — you can see what comes out the other end",
+
+    howTitle: "How it works",
+    step1Title: "Your own AI key",
+    step1Text: "Gemini, Claude or GPT — a key takes a minute to get from the provider and goes into settings. Requests go out in your name: this service pays for none of them and keeps no key of its own.",
+    step2Title: "Reviews of what you've played",
+    step2Text: `Whatever you wrote on Steam game pages comes over with one button, the rest you write by hand. From ${THRESHOLDS.MIN_REVIEWS_FOR_AI} reviews on, Curio has something to hold on to.`,
+    step3Title: "A read on your taste, picks and verdicts",
+    step3Text: "The model reads everything you've written, puts your taste into words and sorts the unplayed part of your library into tiers — citing your own words, not genres.",
+
+    featuresTitle: "What's inside",
+    featureDiary: "Impression diary",
+    featureDiaryText: "Entries about one game gather into a thread, each stamped with playtime — you see how your opinion moved, not just how it ended.",
+    featurePicks: "Picks on what to play",
+    featurePicksText: "The unplayed part sorted into tiers, with a reason for every game. Can't decide yourself — roll the dice.",
+    featureTiers: "Tier list",
+    featureTiersText: "Everything you've played laid out in rows from S to F, covers dragged with the mouse.",
+    featureDeep: "A deep dive on one game",
+    featureDeepText: "Curio reads player reviews on Steam and checks them against your taste: worth launching, or not your thing.",
+    featureChrono: "Chronology",
+    featureChronoText: "When and how much you actually play — by hour of day, by day, by game.",
+    featureDemos: "Demos",
+    featureDemosText: "Next Fest impressions live apart from the library, with verdicts of their own, \"awaiting release\" among them.",
+
+    freeTitle: "Free, open, running on your key",
+    freeText: "There is no subscription and never will be: the AI is paid for by your key, straight to the provider, not from a shared bill. The key is stored encrypted and never shown back, even to you. The code is open — you can run your own copy and trust nobody else's server at all.",
+
+    footerDisclaimer:
+      "Not affiliated with Valve Corporation. Steam and the Steam logo are trademarks of Valve Corporation.",
+    footerGithub: "Source on GitHub",
+    footerCoffee: "Buy me a coffee",
+  },
+
+  onboarding: {
+    title: "Setup",
+    lede: "Four steps, about five minutes. Without the first one nothing smart works; without the rest Curio has nothing to read.",
+    progress: (current: number, total: number) => `Step ${current} of ${total}`,
+    stepDone: "done",
+    skip: "Skip and look around",
+    back: "Back",
+    next: "Next",
+    finish: "Open the app",
+    finishing: "Opening…",
+    resume: "Back to setup",
+
+    keyTitle: "AI key",
+    keyText:
+      "Breakdowns, picks and verdicts are made by an AI model running on your key — this service keeps none of its own. Gemini has a free tier: enough to try everything.",
+    keyDone: (mask: string) => `Key is in place (${mask})`,
+
+    libraryTitle: "Library from Steam",
+    libraryText:
+      "Curio pulls your game list and playtime from Steam. The playtime isn't decoration: every diary entry is stamped with it, which is how you see at what hour your opinion turned.",
+    libraryCta: "Pull the library",
+    libraryBusy: "Asking Steam…",
+    libraryDone: (n: number) => `${n} ${n === 1 ? "game" : "games"} in the library`,
+    libraryFailed:
+      "Steam didn't hand the library over. Check that your profile and game list are public — Valve won't share a private list even with its owner.",
+
+    reviewsTitle: "Reviews of what you've played",
+    reviewsText: (need: number) =>
+      `Curio advises from your words, not from genres: it reads what you praise and what you gripe about, game after game. With fewer than ${need} reviews there's nothing to hold on to — the picks simply won't come together.`,
+    reviewsProgress: (have: number, need: number) => `${have} of ${need}`,
+    reviewsEnough: "That's enough reviews — Curio has something to read",
+    reviewsLeft: (left: number) => `${left} ${left === 1 ? "review" : "reviews"} to go`,
+    reviewsImport: "Import reviews from Steam",
+    reviewsImportBusy: "Reading your profile…",
+    reviewsImportHint:
+      "Everything you wrote on Steam game pages becomes a diary entry. You set the verdict on each one yourself.",
+    reviewsImportNone: "No reviews on your profile — so we write them by hand",
+    reviewsManual: "Write one yourself",
+    reviewsManualHint:
+      "\"Now\" holds the games you've put real hours into with no verdict yet: easiest place to start, the impression is still fresh.",
+
+    readyTitle: "All set",
+    readyText:
+      "Next stop is the \"Choose\" zone: Curio reads the diary and sorts the unplayed part into tiers. The first run takes about a minute.",
+    readyGaps: "Still open:",
+    readyGapsHint: "You can come back to setup any time — it isn't going anywhere.",
+
+    needLibraryTitle: "The library is empty",
+    needLibraryText:
+      "Steam hasn't been asked yet, or it returned nothing. With no game list there's nothing to advise on and nothing to dig into.",
+    needLibraryCta: "Pull the library",
+    needReviewsTitle: (left: number) =>
+      `${left} more ${left === 1 ? "review" : "reviews"} and Curio starts talking`,
+    needReviewsText:
+      "The taste profile is built out of reviews and nothing else. Bring over what you wrote on Steam, or start with the games you've already sunk hours into.",
+    needReviewsCta: "Sort out the reviews",
+  },
+
+  demo: {
+    title: "Demo",
+    banner: "Demo data: the library and the reviews are made up",
+    ctaTitle: "This could be your diary",
+    ctaText:
+      "Sign in with Steam — the library comes in on its own and your profile reviews import with one button. The service is free and runs on your own AI key.",
+    ctaButton: "Sign in with Steam",
+    backToLanding: "Back to the homepage",
+  },
+
+  dev: {
+    title: "Test accounts",
+    hint: "A debugging device for whoever runs this instance: empty accounts to walk through scenarios without wrecking your own diary. They stay out of every public statistic.",
+    create: "Create a test account",
+    labelPlaceholder: "Name",
+    switchTo: "Sign in",
+    back: "Back to my account",
+    deleteOne: "Delete",
+    empty: "None yet",
   },
 
   dock: {
@@ -597,11 +860,6 @@ const EN: Dict = {
     dropped: "Dropped",
     review: "Review",
 
-    dispute: "Argument about the dropped",
-    disputeHint: "Curio doesn't always agree with you",
-    secondChance: "I'll give it another shot",
-    imRight: "No, I was right",
-    toDiary: "Save to diary",
   },
 
   board: {
@@ -716,6 +974,58 @@ const EN: Dict = {
     range90: "90 days",
     rangeAll: "All time",
     weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  },
+
+  account: {
+    title: "My data",
+    exportHint:
+      "A single file with everything this app knows about you: your library, the diary with every entry, tags, contracts, Curio's picks and the history of your play sessions.",
+    exportButton: "Export my data",
+
+    dangerZone: "Danger zone",
+    deleteTitle: "Delete account",
+    deleteWarning:
+      "Everything goes, for good: the diary, verdicts, tags, contracts, picks and the whole session history. There is no undo — we keep no backups for this, so there would be nothing to restore from. If you'd miss what you wrote, export it first.",
+    deleteConfirmLabel: (username: string) => `Type "${username}" to confirm`,
+    deleteConfirmPlaceholder: "Your Steam name",
+    deleteSubmit: "Delete forever",
+    deleting: "Deleting…",
+    deleteFailed: "Couldn't delete the account — try again",
+    confirmMismatch: "The name didn't match — nothing was deleted",
+  },
+
+  llm: {
+    title: "AI key",
+    intro:
+      "Breakdowns, verdicts and picks are made by an AI model running on your own key. This service pays for none of it and keeps no key of its own — which is why it's free and will stay that way. Your key is stored encrypted and is never shown back to you: only the tail is.",
+    provider: "Provider",
+    model: "Model",
+    customModel: "Other model…",
+    customModelHint: "Exact model name",
+    modelNotes: {
+      "gemini-3.7-flash": "fast, has a free tier",
+      "gemini-3.7-pro": "smarter and pricier",
+      "claude-sonnet-5": "balance of cost and quality",
+      "claude-opus-5": "the strongest, pricier",
+      "claude-haiku-4-5": "cheap, for bulk analysis",
+      "gpt-4.1": "",
+      "gpt-4.1-mini": "cheaper, for bulk analysis",
+    } as Record<string, string>,
+    key: "Key",
+    keyPlaceholder: "Paste your key",
+    keySaved: (mask: string) => `Key saved (${mask}) — enter a new one to replace it`,
+    whereToGet: (provider: string) => `Where to get a ${provider} key`,
+    privacyNote:
+      "Your entries and game list are sent to the AI provider. On Gemini's free tier Google may use request content to improve its models — if that doesn't work for you, use a paid tier or another provider.",
+    checking: "Checking…",
+    save: "Save",
+    remove: "Remove key",
+    errorAuth: "The provider rejected this key. Check you copied all of it and that it hasn't been revoked.",
+    errorModel: "No such model, or your key has no access to it. Check the model name.",
+    errorGeneric: "Couldn't verify the key. Looks like a network error — try again.",
+    missingTitle: "An AI key is needed",
+    missingText: "This runs on your own key. Add one in settings — it takes a minute.",
+    missingCta: "Add a key",
   },
 
   errors: {

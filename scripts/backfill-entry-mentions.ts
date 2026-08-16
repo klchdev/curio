@@ -1,18 +1,23 @@
 /**
- * Проставляет упоминания игр в записях, написанных до появления разбора.
+ * Fills in game mentions for entries written before the analysis existed.
  *
- * Советы модели (kind = 'advisor') пропускаются: там названия и так размечены
- * ею самой, а дневник — про то, что человек написал сам.
+ * The model's own advice (kind = 'advisor') is skipped: the titles there are
+ * already marked up by the model itself, and the journal is about what a person
+ * wrote themselves.
  *
- *   DATABASE_URL=... GEMINI_API_KEY=... [GEMINI_API_KEY_PAID=...] \
- *     npx tsx scripts/backfill-entry-mentions.ts [--apply] [лимит] [--ids=1,2]
+ *   DATABASE_URL=... LLM_PROVIDER=gemini LLM_API_KEY=... [LLM_MODEL=...] \
+ *     npx tsx scripts/backfill-entry-mentions.ts [--apply] [limit] [--ids=1,2]
  *
- * Без --apply только показывает, что нашлось, и ничего не пишет.
+ * Without --apply it only shows what was found and writes nothing.
+ *
+ * The key is taken from the environment rather than the database: the run is
+ * started by hand, and `llm/credentials.ts` is no use here — it pulls in
+ * astro:env.
  */
 import { Client } from "pg";
 import { placeMentions, type CatalogGame } from "../src/lib/entry-mentions";
 import { readEntry } from "../src/lib/entry-reading";
-import { GEMINI_MODEL, type GeminiKeys } from "../src/lib/gemini";
+import { adapterFor, isProviderId, type LlmCredentials } from "../src/lib/llm";
 import { findStoreGame } from "../src/lib/store-search";
 import { normalizeTitle } from "../src/lib/titles";
 
@@ -20,16 +25,16 @@ const apply = process.argv.includes("--apply");
 const limit = Number(process.argv.find((arg) => /^\d+$/.test(arg)) ?? 0);
 
 /**
- * Пауза между записями. Бесплатный ключ держит около двадцати запросов в
- * минуту, а прогон по всему дневнику — это сотни: без паузы он упирается в
- * отказы и тратит попытки впустую. Упрётся всё равно — тогда запросы уйдут
- * на платный ключ, и пауза нужна лишь чтобы это случилось не на первой сотне.
+ * Pause between entries. Free tiers hold about twenty requests a minute, and a
+ * run over an entire journal is hundreds of them: without the pause it runs into
+ * rejections and burns attempts for nothing. There is no spare key any more, so
+ * running into the limit now simply means waiting out the retries.
  */
 const PAUSE_MS = 1500;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Точечный прогон: `--ids=191,193` — чтобы проверять разбор на знакомом треде. */
+/** A targeted run: `--ids=191,193`, to test the analysis on a familiar thread. */
 const ids = process.argv
   .find((arg) => arg.startsWith("--ids="))
   ?.slice("--ids=".length)
@@ -68,8 +73,8 @@ async function loadCatalog(client: Client, userId: number): Promise<CatalogGame[
 }
 
 /**
- * Заводит карточку игры, которой нет в каталоге, и возвращает её id.
- * В user_games не пишет: каталог общий, библиотека личная.
+ * Creates a card for a game that isn't in the catalog and returns its id.
+ * Writes nothing to user_games: the catalog is shared, the library is personal.
  */
 async function adoptGame(client: Client, title: string): Promise<number | null> {
   const hit = await findStoreGame(title);
@@ -86,9 +91,9 @@ async function adoptGame(client: Client, title: string): Promise<number | null> 
 }
 
 /**
- * Проходит по упоминаниям без игры и пытается завести им карточку.
- * Отдельный режим, потому что чинит уже записанное: разбор текста повторять
- * незачем, названия у этих строк уже есть.
+ * Walks the mentions that have no game attached and tries to create a card for
+ * them. A separate mode, because it repairs what is already written: there's no
+ * point in analysing the text again, these rows already have their titles.
  */
 async function resolveUnknown(client: Client) {
   const { rows } = await client.query(
@@ -96,13 +101,13 @@ async function resolveUnknown(client: Client) {
        from entry_mentions where game_id is null
       group by canonical_title order by n desc`
   );
-  console.log(`Названий без карточки: ${rows.length}${apply ? "" : " (сухой прогон)"}\n`);
+  console.log(`Titles without a card: ${rows.length}${apply ? "" : " (dry run)"}\n`);
 
   let adopted = 0;
   for (const row of rows) {
     const hit = await findStoreGame(row.canonical_title);
     if (!hit) {
-      console.log(`  — ${row.canonical_title} (×${row.n}): в магазине точного совпадения нет`);
+      console.log(`  — ${row.canonical_title} (×${row.n}): no exact match in the store`);
       continue;
     }
     console.log(`  + ${row.canonical_title} (×${row.n}) → appid ${hit.appId}`);
@@ -118,10 +123,10 @@ async function resolveUnknown(client: Client) {
     await wait(400);
   }
 
-  console.log(`\nЗаведено карточек: ${adopted} из ${rows.length}`);
+  console.log(`\nCards created: ${adopted} of ${rows.length}`);
 }
 
-/** Словарь тегов человека — модель должна брать своё, а не плодить синонимы. */
+/** A person's tag vocabulary — the model must reuse it, not breed synonyms. */
 async function vocabularyOf(client: Client, userId: number) {
   const { rows } = await client.query(`select kind, label from tags where user_id = $1`, [userId]);
   return {
@@ -130,7 +135,7 @@ async function vocabularyOf(client: Client, userId: number) {
   };
 }
 
-/** Заводит тег при необходимости и возвращает его id. */
+/** Creates the tag if needed and returns its id. */
 async function upsertTag(
   client: Client,
   userId: number,
@@ -151,9 +156,17 @@ async function upsertTag(
 }
 
 async function main() {
-  const free = process.env.GEMINI_API_KEY;
-  if (!free) throw new Error("Нужен GEMINI_API_KEY");
-  const keys: GeminiKeys = { free, paid: process.env.GEMINI_API_KEY_PAID || undefined };
+  const provider = process.env.LLM_PROVIDER;
+  if (!isProviderId(provider)) throw new Error("LLM_PROVIDER is required: gemini, anthropic or openai");
+
+  const apiKey = process.env.LLM_API_KEY;
+  if (!apiKey) throw new Error("LLM_API_KEY is required");
+
+  const creds: LlmCredentials = {
+    provider,
+    apiKey,
+    model: process.env.LLM_MODEL || adapterFor(provider).models[0]!.id,
+  };
 
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -166,7 +179,7 @@ async function main() {
 
   const { rows: entries } = await client.query(PENDING, [ids?.length ? ids : null]);
   const targets = limit > 0 ? entries.slice(0, limit) : entries;
-  console.log(`Записей к разбору: ${targets.length}${apply ? "" : " (сухой прогон)"}\n`);
+  console.log(`Entries to analyse: ${targets.length}${apply ? "" : " (dry run)"}\n`);
 
   const catalogs = new Map<number, CatalogGame[]>();
   let withMentions = 0;
@@ -186,44 +199,45 @@ async function main() {
     try {
       const reading = await readEntry(
         { text: entry.text, aboutTitle: entry.title, vocabulary: await vocabularyOf(client, entry.user_id) },
-        keys
+        creds
       );
       const placed = placeMentions(entry.text, reading.mentions, catalog, entry.game_id);
 
-      // Названия, которых нет в каталоге, заводим карточками — но только
-      // когда пишем: сухой прогон ничего в базе менять не должен
+      // Titles missing from the catalog get a card of their own — but only when
+      // we're writing: a dry run must change nothing in the database
       if (apply) {
         for (const mention of placed) {
           if (mention.gameId === null) mention.gameId = await adoptGame(client, mention.canonicalTitle);
         }
       }
 
-      // Строка на каждую запись, а не только на находки: иначе долгий ответ
-      // модели и повисший прогон выглядят из терминала одинаково
+      // A line per entry, not only per hit: otherwise a slow answer from the
+      // model and a hung run look exactly the same from the terminal
       const spent = Math.round((Date.now() - startedAt) / 100) / 10;
       if (placed.length > 0) {
         withMentions += 1;
         total += placed.length;
       }
       const shown = placed
-        .map((m) => `«${m.surface}» → ${m.canonicalTitle}${m.gameId ? "" : " (нет в базе)"}`)
+        .map((m) => `"${m.surface}" → ${m.canonicalTitle}${m.gameId ? "" : " (not in the database)"}`)
         .join(", ");
-      console.log(`[${done}/${targets.length}] ${spent}с #${entry.id} ${entry.title} · тон ${reading.tone}`);
-      if (shown) console.log(`      игры: ${shown}`);
-      if (reading.complaints.length) console.log(`      ругает: ${reading.complaints.join(", ")}`);
-      if (reading.praises.length) console.log(`      хвалит: ${reading.praises.join(", ")}`);
-      for (const claim of reading.claims) console.log(`      ставка: ${claim}`);
+      console.log(`[${done}/${targets.length}] ${spent}s #${entry.id} ${entry.title} · tone ${reading.tone}`);
+      if (shown) console.log(`      games: ${shown}`);
+      if (reading.complaints.length) console.log(`      complains about: ${reading.complaints.join(", ")}`);
+      if (reading.praises.length) console.log(`      praises: ${reading.praises.join(", ")}`);
+      for (const claim of reading.claims) console.log(`      bet: ${claim}`);
 
       if (!apply) continue;
 
       await client.query("begin");
       await client.query(
-        // created_at проставляет приложение, а не база: сырому SQL надо самому
+        // created_at is set by the app, not the database: raw SQL has to do it
+        // itself
         `insert into entry_analyses (entry_id, status, model, created_at, finished_at)
               values ($1, 'done', $2, now(), now())
          on conflict (entry_id)
          do update set status = 'done', model = $2, error = null, finished_at = now()`,
-        [entry.id, GEMINI_MODEL]
+        [entry.id, creds.model]
       );
       await client.query("delete from entry_mentions where entry_id = $1", [entry.id]);
       for (const mention of placed) {
@@ -238,7 +252,8 @@ async function main() {
         reading.tone,
       ]);
 
-      // Снимаем только предложенное моделью: руками поставленное — не её дело
+      // Clear only what the model suggested: what was set by hand is none of
+      // its business
       await client.query(
         `delete from entry_tags where entry_id = $1 and source = 'model'`,
         [entry.id]
@@ -273,7 +288,7 @@ async function main() {
     }
   }
 
-  console.log(`\nУпоминаний: ${total} в ${withMentions} записях из ${targets.length}`);
+  console.log(`\nMentions: ${total} across ${withMentions} entries of ${targets.length}`);
   await client.end();
 }
 

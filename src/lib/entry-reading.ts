@@ -1,15 +1,16 @@
-import { Type, ThinkingLevel } from "@google/genai";
-import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
+import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
 import type { RawMention } from "./entry-mentions";
 
 /**
- * Одно прочтение записи дневника.
+ * One reading of a diary entry.
  *
- * Слоёв четыре — упоминания игр, претензии и похвалы, ставки на будущее и тон
- * текста, — но текст один, и читать его четырьмя вызовами модели незачем: это
- * вчетверо дороже и вчетверо дольше ради одних и тех же двух тысяч знаков.
+ * There are four layers — game mentions, complaints and praise, bets on what
+ * comes next, and the tone of the text — but only one text, and no reason to
+ * read it with four model calls: four times the cost and four times the wait
+ * for the same two thousand characters.
  *
- * Без импортов astro:env и db: модуль нужен и серверу, и разовому скрипту.
+ * No astro:env or db imports: this module is needed by the server and by a
+ * one-off script alike.
  */
 
 export interface RawReading {
@@ -17,7 +18,7 @@ export interface RawReading {
   complaints: string[];
   praises: string[];
   claims: string[];
-  /** −2…2: как звучит запись, а не какая игра. */
+  /** −2…2: how the entry sounds, not how good the game is. */
   tone: number;
 }
 
@@ -65,24 +66,24 @@ title — полное название игры так, как оно пише�
 
 Оценивай КАК ЗВУЧИТ ЗАПИСЬ, а не насколько игра хороша и какую оценку человек ей поставил. Текст, где половина абзацев про то, как всё халтурно, — это −2, даже если в конце сказано «в целом времени не жалею».`;
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+const RESPONSE_SCHEMA: JsonSchema = {
+  type: "object",
   properties: {
     mentions: {
-      type: Type.ARRAY,
+      type: "array",
       items: {
-        type: Type.OBJECT,
+        type: "object",
         properties: {
-          surface: { type: Type.STRING, description: "Дословный кусок текста записи" },
-          title: { type: Type.STRING, description: "Полное название игры как в Steam" },
+          surface: { type: "string", description: "Дословный кусок текста записи" },
+          title: { type: "string", description: "Полное название игры как в Steam" },
         },
         required: ["surface", "title"],
       },
     },
-    complaints: { type: Type.ARRAY, items: { type: Type.STRING } },
-    praises: { type: Type.ARRAY, items: { type: Type.STRING } },
-    claims: { type: Type.ARRAY, items: { type: Type.STRING } },
-    tone: { type: Type.INTEGER, description: "Тон текста от -2 до 2" },
+    complaints: { type: "array", items: { type: "string" } },
+    praises: { type: "array", items: { type: "string" } },
+    claims: { type: "array", items: { type: "string" } },
+    tone: { type: "integer", description: "Тон текста от -2 до 2" },
   },
   required: ["mentions", "complaints", "praises", "claims", "tone"],
 };
@@ -99,11 +100,14 @@ function strings(value: unknown, limit: number): string[] {
 export interface ReadingInput {
   text: string;
   aboutTitle: string;
-  /** Теги, которыми человек уже пользовался — чтобы не плодить синонимы. */
+  /** Tags the player already uses — so the model doesn't breed synonyms. */
   vocabulary: { complaints: string[]; praises: string[] };
 }
 
-export async function readEntry(input: ReadingInput, keys: GeminiKeys): Promise<RawReading> {
+export async function readEntry(
+  input: ReadingInput,
+  creds: LlmCredentials | null
+): Promise<RawReading> {
   if (input.text.trim().length < 20) return EMPTY;
 
   const known = [
@@ -115,26 +119,21 @@ export async function readEntry(input: ReadingInput, keys: GeminiKeys): Promise<
       : "Прежних похвал ещё нет — заводи с нуля.",
   ].join("\n");
 
-  const raw = await withGemini(keys, async (ai) => {
-    const res = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: `# Словарь этого человека\n${known}\n\n# Запись об игре: ${input.aboutTitle}\n\n${input.text}`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        /*
-         * Разбор записи механический: выписать названия, назвать свойства,
-         * оценить тон. Размышление тут стоит секунд и токенов на пустом
-         * месте — на всём дневнике это разница между минутами и часами.
-         * Ниже LOW не опускаемся: MINIMAL эта модель отвергает с 400.
-         */
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      },
+  const raw = await withLlm(creds, async (client) => {
+    const answer = await client.generateJson({
+      system: SYSTEM_INSTRUCTION,
+      prompt: `# Словарь этого человека\n${known}\n\n# Запись об игре: ${input.aboutTitle}\n\n${input.text}`,
+      schema: RESPONSE_SCHEMA,
+      /*
+       * Reading an entry is mechanical: copy out the titles, name the
+       * properties, rate the tone. Reasoning here burns seconds and tokens for
+       * nothing — across a whole diary that is the difference between minutes
+       * and hours.
+       */
+      effort: "low",
     });
 
-    const answer = res.text ?? "";
-    if (!answer) throw new Error("Gemini вернул пустой ответ");
+    if (!answer) throw new Error("The model returned an empty response");
     return answer;
   });
 

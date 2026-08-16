@@ -6,8 +6,8 @@ import { eq, and } from "drizzle-orm";
 import { getAppReviews } from "../../lib/steam";
 import { generateDeepDive } from "../../lib/deep-dive";
 import { getReviewCorpus, getFirstPassPick, getTasteProfile } from "../../lib/queries";
-import { errorCode } from "../../lib/gemini";
-import { GEMINI_KEYS } from "../../lib/gemini-env";
+import { adapterFor, LlmAuthError } from "../../lib/llm";
+import { getLlmCredentials } from "../../lib/llm/credentials";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
@@ -18,9 +18,9 @@ const json = (body: unknown, status = 200) =>
   });
 
 /**
- * Разбор одной игры по требованию. Синхронно: это один запрос к модели на
- * одну игру, секунды — фоновая машинерия прогона тут была бы дороже самой
- * работы.
+ * An on-demand analysis of a single game. Synchronous: this is one model
+ * request for one game, a matter of seconds — the background machinery of a
+ * run would cost more here than the work itself.
  */
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -65,6 +65,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
+  /*
+   * We check the key only after the cache: an analysis that already exists is
+   * readable without one — it has been paid for and is sitting in the database.
+   */
+  const creds = await getLlmCredentials(userId);
+  if (!creds) return json({ error: "no_llm_key" }, 400);
+
   try {
     const [reviews, corpus, firstPass, profile] = await Promise.all([
       getAppReviews(game.steamAppId),
@@ -84,7 +91,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         profile,
         firstPass,
       },
-      GEMINI_KEYS,
+      creds,
       localeFrom(cookies, request)
     );
 
@@ -118,11 +125,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return json({ ...dive, reviewsUsed: reviews?.reviews.length ?? 0, cached: false });
   } catch (err) {
     console.error("[deep-dive]", err);
-    const code = errorCode(err);
-    const message =
-      code === 429
+    const kind = adapterFor(creds.provider).classifyError(err).kind;
+    const message = err instanceof LlmAuthError
+      ? s.llm.errorAuth
+      : kind === "rate_limit"
         ? s.errors.modelQuota
-        : code === 500 || code === 503 || code === 504
+        : kind === "overloaded" || kind === "server"
           ? s.errors.modelBusy
           : s.errors.runFailedFallback;
     return json({ error: message }, 502);

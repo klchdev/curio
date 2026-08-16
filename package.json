@@ -16,6 +16,7 @@
     "check": "astro check"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "@astrojs/node": "^10.0.4",
     "@astrojs/react": "^5.0.3",
     "@google/genai": "^2.15.0",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19.2.3",
     "astro": "^6.1.4",
     "drizzle-orm": "^0.45.2",
+    "openai": "^7.4.0",
     "openid": "^2.0.15",
     "pg": "^8.20.0",
     "react": "^19.2.4",

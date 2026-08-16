@@ -1,6 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { GEMINI_KEYS } from "./gemini-env";
 import { db } from "../db";
 import {
   games,
@@ -13,21 +12,21 @@ import {
   entryClaims,
   tags,
 } from "../db/schema";
-import { GEMINI_MODEL } from "./gemini";
+import { getLlmCredentials } from "./llm/credentials";
 import { placeMentions, type CatalogGame, type PlacedMention } from "./entry-mentions";
 import { readEntry } from "./entry-reading";
 import { normalizeTitle } from "./titles";
 import { findStoreGame } from "./store-search";
 
 /**
- * Фоновый разбор записи дневника: одно прочтение, четыре слоя.
+ * Background analysis of a diary entry: one reading, four layers.
  *
- * Упоминания игр, претензии и похвалы, ставки на будущее и тон текста —
- * всё из одного вызова модели. Разносить их по отдельным проходам значило бы
- * читать один и тот же текст четыре раза.
+ * Game mentions, complaints and praise, bets on what comes next, and the tone
+ * of the text — all out of a single model call. Splitting them into separate
+ * passes would mean reading the same text four times over.
  */
 
-/** Каталог для сопоставления: все игры базы с пометками про этого человека. */
+/** The catalog to match against: every game in the base, flagged for this player. */
 async function getCatalog(userId: number): Promise<CatalogGame[]> {
   const [all, library, records] = await Promise.all([
     db.select({ id: games.id, title: games.title }).from(games),
@@ -53,11 +52,12 @@ async function getCatalog(userId: number): Promise<CatalogGame[]> {
 }
 
 /**
- * Заводит карточку игры, которой ещё нет в каталоге.
+ * Creates a catalog row for a game the catalog does not have yet.
  *
- * В `user_games` она не попадает: каталог общий, а библиотека — личная.
- * Детали (жанры, описание, тип) подтянет `scripts/fetch-app-details.ts` —
- * он ходит по строкам без деталей и для того и написан.
+ * It does not land in `user_games`: the catalog is shared, the library is
+ * personal. The details (genres, description, kind) get pulled in by
+ * `scripts/fetch-app-details.ts` — it walks the rows that have none, which is
+ * what it was written for.
  */
 async function adoptGame(title: string): Promise<number | null> {
   const hit = await findStoreGame(title);
@@ -71,7 +71,7 @@ async function adoptGame(title: string): Promise<number | null> {
 
   if (created) return created.id;
 
-  // Карточка уже была — либо завелась параллельным разбором
+  // The row already existed — or a parallel analysis just created it
   const existing = await db
     .select({ id: games.id })
     .from(games)
@@ -82,7 +82,7 @@ async function adoptGame(title: string): Promise<number | null> {
   return existing?.id ?? null;
 }
 
-/** Упоминания, не нашедшие игру в каталоге, получают её из магазина. */
+/** Mentions that found no game in the catalog get one from the store. */
 async function adoptUnknown(placed: PlacedMention[]): Promise<PlacedMention[]> {
   const seen = new Map<string, number | null>();
 
@@ -99,7 +99,7 @@ async function adoptUnknown(placed: PlacedMention[]): Promise<PlacedMention[]> {
   return placed;
 }
 
-/** Чем человек уже пользовался — чтобы модель брала своё, а не плодила синонимы. */
+/** What the player already uses — so the model reuses it instead of breeding synonyms. */
 async function getVocabulary(userId: number): Promise<{ complaints: string[]; praises: string[] }> {
   const rows = await db
     .select({ kind: tags.kind, label: tags.label })
@@ -113,12 +113,12 @@ async function getVocabulary(userId: number): Promise<{ complaints: string[]; pr
 }
 
 /**
- * Возвращает id тега, заводя его при необходимости.
+ * Returns the tag id, creating the tag when there isn't one.
  *
- * Ключ — нормализованная форма: «Рециклинг локаций» и «рециклинг локаций»
- * должны быть одним тегом. Вид (претензия или похвала) у существующего тега
- * не меняем: одно и то же свойство человек может помянуть с обеих сторон, и
- * перекидывать его туда-сюда на каждом разборе незачем.
+ * The key is the normalized form: "Recycled locations" and "recycled locations"
+ * have to be one tag. The kind (complaint or praise) of an existing tag is left
+ * alone: the player can bring the same property up from either side, and there
+ * is no sense flipping it back and forth on every analysis.
  */
 async function upsertTag(
   userId: number,
@@ -147,8 +147,8 @@ async function upsertTag(
 }
 
 /**
- * Теги записи. Снимается только предложенное моделью: поставленное руками —
- * решение человека, и повторный разбор не вправе его отменять.
+ * Tags of an entry. Only what the model proposed is cleared: a tag set by hand
+ * is the player's decision, and a re-run has no right to undo it.
  */
 async function saveTags(
   userId: number,
@@ -175,7 +175,7 @@ async function saveTags(
   }
 }
 
-/** Ставки перезаписываются целиком: разметка модели, а не человека. */
+/** Bets are rewritten wholesale: this is the model's markup, not the player's. */
 async function saveClaims(entryId: number, claims: string[]): Promise<void> {
   await db.delete(entryClaims).where(eq(entryClaims.entryId, entryId));
   if (claims.length === 0) return;
@@ -199,12 +199,20 @@ export async function analyzeEntry(entryId: number): Promise<void> {
 
   if (!entry) return;
 
+  /*
+   * No key means AI is simply switched off for this player. There is no sense
+   * creating an analysis row: it would sit in pending forever and read as a
+   * hung run, even though nothing ever started.
+   */
+  const creds = await getLlmCredentials(entry.userId);
+  if (!creds) return;
+
   await db
     .insert(entryAnalyses)
-    .values({ entryId, model: GEMINI_MODEL, status: "pending" })
+    .values({ entryId, model: creds.model, status: "pending" })
     .onConflictDoUpdate({
       target: entryAnalyses.entryId,
-      set: { status: "pending", model: GEMINI_MODEL, error: null, finishedAt: null },
+      set: { status: "pending", model: creds.model, error: null, finishedAt: null },
     });
 
   try {
@@ -215,15 +223,15 @@ export async function analyzeEntry(entryId: number): Promise<void> {
 
     const reading = await readEntry(
       { text: entry.text, aboutTitle: entry.gameTitle, vocabulary },
-      GEMINI_KEYS
+      creds
     );
 
     const placed = await adoptUnknown(
       placeMentions(entry.text, reading.mentions, catalog, entry.gameId)
     );
 
-    // Разбор повторяемый: старая разметка снимается целиком, иначе правка
-    // промпта оставит в тексте следы предыдущего прохода
+    // Analysis is repeatable: the old markup is cleared wholesale, otherwise a
+    // prompt edit leaves traces of the previous pass in the text
     await db.delete(entryMentions).where(eq(entryMentions.entryId, entryId));
     if (placed.length > 0) {
       await db.insert(entryMentions).values(placed.map((mention) => ({ entryId, ...mention })));
@@ -249,15 +257,15 @@ export async function analyzeEntry(entryId: number): Promise<void> {
 }
 
 /**
- * Разбор не должен задерживать сохранение и тем более ронять его: человек
- * дописал впечатление, и ответ ему нужен сразу, а упоминания подождут до
- * следующего открытия дневника.
+ * Analysis must not hold up the save, let alone bring it down: the player has
+ * just finished an impression and needs an answer right away, while the
+ * mentions can wait until the diary is opened next.
  */
 export function queueEntryAnalysis(entryId: number): void {
   analyzeEntry(entryId).catch(() => {});
 }
 
-/** Запись принадлежит этому человеку — проверка перед любой правкой извне. */
+/** The entry belongs to this player — checked before any edit from outside. */
 async function ownsEntry(userId: number, entryId: number): Promise<boolean> {
   const row = await db
     .select({ id: gameEntries.id })
@@ -271,8 +279,8 @@ async function ownsEntry(userId: number, entryId: number): Promise<boolean> {
 }
 
 /**
- * Тег, поставленный руками. Помечается как свой и переживает повторный
- * разбор: человек уже решил, что это свойство тут есть.
+ * A tag set by hand. Marked as the player's own and survives a re-run of the
+ * analysis: they have already decided this property is here.
  */
 export async function addEntryTag(
   userId: number,
@@ -297,8 +305,8 @@ export async function addEntryTag(
 }
 
 /**
- * Снятый тег удаляется у записи, но остаётся в словаре: человек убрал его
- * отсюда, а не отказался от самого понятия.
+ * Dropping a tag removes it from the entry but keeps it in the vocabulary: the
+ * player took it off this entry, they did not renounce the notion itself.
  */
 export async function removeEntryTag(
   userId: number,
@@ -314,7 +322,7 @@ export async function removeEntryTag(
   return true;
 }
 
-/** Теги записей для дневника. */
+/** Entry tags for the diary. */
 export async function getDiaryTags(userId: number) {
   return db
     .select({
@@ -331,7 +339,7 @@ export async function getDiaryTags(userId: number) {
     .orderBy(desc(tags.kind), tags.label);
 }
 
-/** Разметка для дневника: все упоминания в записях этого человека. */
+/** Markup for the diary: every mention across this player's entries. */
 export async function getDiaryMentions(userId: number) {
   const sourceGames = alias(games, "source_games");
 

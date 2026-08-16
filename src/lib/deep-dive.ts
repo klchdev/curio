@@ -1,18 +1,18 @@
-import { Type } from "@google/genai";
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { ReviewCorpusItem, TasteTag } from "./queries";
 import type { AppReviews } from "./steam";
-import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
+import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
 import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
 
 /**
- * Разбор одной игры: описание из магазина плюс отзывы других игроков,
- * пропущенные через вкус конкретного человека.
+ * A deep dive on a single game: the store description plus other players'
+ * reviews, run through the taste of one particular person.
  *
- * Опасность режима — в том, что чужие отзывы могут подменить собой вкус
- * игрока: модель начнёт пересказывать общее мнение, ровно то, от чего этот
- * продукт уходит. Поэтому в инструкции чужие отзывы названы фактами об игре,
- * а право выносить вердикт оставлено только за отзывами самого игрока.
+ * The danger of this mode is that other people's reviews can stand in for the
+ * player's own taste: the model starts retelling the consensus, which is
+ * precisely what this product moves away from. So the instruction calls other
+ * people's reviews facts about the game, and leaves the right to pass a verdict
+ * with the player's own reviews alone.
  */
 const SYSTEM_INSTRUCTION = `Ты разбираешь одну конкретную игру для одного конкретного игрока.
 
@@ -63,21 +63,21 @@ const OUTPUT_LANGUAGE: Record<Locale, string> = {
   en: "Write in English, even though these instructions are in Russian. The reviews may be in Russian — paraphrase them in English.",
 };
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+const RESPONSE_SCHEMA: JsonSchema = {
+  type: "object",
   properties: {
-    fit: { type: Type.STRING, enum: ["yes", "maybe", "no"] },
+    fit: { type: "string", enum: ["yes", "maybe", "no"] },
     tier: {
-      type: Type.STRING,
+      type: "string",
       enum: ["S", "A", "B", "C", "D"],
       description: "Пересмотренный тир после чтения отзывов",
     },
-    summary: { type: Type.STRING, description: "Что это за игра на самом деле, 1-2 предложения" },
-    forYou: { type: Type.STRING, description: "Почему зайдёт именно этому игроку, со ссылками на его отзывы" },
-    against: { type: Type.STRING, description: "Что оттолкнёт именно его" },
+    summary: { type: "string", description: "Что это за игра на самом деле, 1-2 предложения" },
+    forYou: { type: "string", description: "Почему зайдёт именно этому игроку, со ссылками на его отзывы" },
+    against: { type: "string", description: "Что оттолкнёт именно его" },
     complaints: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: "array",
+      items: { type: "string" },
       description: "2-4 факта о том, на что жалуются игроки",
     },
   },
@@ -86,7 +86,7 @@ const RESPONSE_SCHEMA = {
 
 export interface DeepDive {
   fit: "yes" | "maybe" | "no";
-  /** Тир после чтения отзывов — может разойтись с первым проходом. */
+  /** The tier after reading the reviews — may diverge from the first pass. */
   tier: AdvisorTier;
   summary: string;
   forYou: string;
@@ -101,9 +101,9 @@ export interface DeepDiveInput {
   description: string | null;
   reviews: AppReviews | null;
   corpus: ReviewCorpusItem[];
-  /** Сведённый профиль: те же отзывы, но уже разложенные по свойствам. */
+  /** The rolled-up profile: the same reviews, already broken out by property. */
   profile: TasteTag[];
-  /** Что поставил первый проход и почему — точка отсчёта для пересмотра. */
+  /** What the first pass gave and why — the baseline for the revision. */
   firstPass: { tier: string; reason: string } | null;
 }
 
@@ -149,7 +149,7 @@ function formatOthers(reviews: AppReviews | null): string {
 
 export async function generateDeepDive(
   input: DeepDiveInput,
-  keys: GeminiKeys,
+  creds: LlmCredentials | null,
   locale: Locale = DEFAULT_LOCALE
 ): Promise<DeepDive> {
   const prompt = [
@@ -178,19 +178,14 @@ export async function generateDeepDive(
     "Разбери, стоит ли этому игроку запускать эту игру.",
   ].join("\n");
 
-  const raw = await withGemini(keys, async (ai) => {
-    const res = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: prompt,
-      config: {
-        systemInstruction: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-      },
+  const raw = await withLlm(creds, async (client) => {
+    const text = await client.generateJson({
+      system: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
+      prompt,
+      schema: RESPONSE_SCHEMA,
     });
 
-    const text = res.text ?? "";
-    if (!text) throw new Error("Gemini вернул пустой ответ");
+    if (!text) throw new Error("The model returned an empty response");
     return text;
   });
 

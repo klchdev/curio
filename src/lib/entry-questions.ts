@@ -1,26 +1,26 @@
-import { Type, ThinkingLevel } from "@google/genai";
-import { withGemini, GEMINI_MODEL, type GeminiKeys } from "./gemini";
+import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
 
 /**
- * Вопросы к только что закрытому отзыву.
+ * Questions about a review that was just closed out.
  *
- * Отзыв всегда чего-то недоговаривает, и дыры в нём видны только на фоне всей
- * ленты: пять записей подряд ругал рециклинг, а поставил B — почему? Спросить
- * об этом в момент, когда игра ещё в голове, дешевле, чем восстанавливать
- * потом.
+ * A review always leaves something unsaid, and the holes in it only show
+ * against the whole feed: five entries in a row cursing recycled locations, and
+ * then a B — why? Asking while the game is still fresh in mind is cheaper than
+ * reconstructing it later.
  *
- * Отвечать необязательно и на все, и вообще: вопрос без ответа ничего не
- * стоит, а обязаловка превратила бы дневник в домашнее задание.
+ * Answering every question is optional, and so is answering at all: a question
+ * left hanging costs nothing, while making it compulsory would turn the diary
+ * into homework.
  */
 
 export interface QuestionInput {
   gameTitle: string;
-  /** Лента целиком: вопрос имеет смысл только на фоне всего, что уже сказано. */
+  /** The whole feed: a question only means anything against everything already said. */
   entries: Array<{ hours: number; text: string; rating: number | null; tier: string | null }>;
   verdict: string | null;
   rating: number | null;
   tier: string | null;
-  /** Как человек оценивал другие игры — чтобы сравнение было предметным. */
+  /** How the player rated other games — so a comparison has something to stand on. */
   neighbours: Array<{ title: string; tier: string | null; rating: number | null }>;
 }
 
@@ -43,12 +43,12 @@ const SYSTEM_INSTRUCTION = `Ты прочитал дневник одного ч
 
 Если дыр нет и отзыв полный — верни пустой список. Это нормальный ответ.`;
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+const RESPONSE_SCHEMA: JsonSchema = {
+  type: "object",
   properties: {
     questions: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: "array",
+      items: { type: "string" },
       description: "Два-три вопроса, каждый одним предложением",
     },
   },
@@ -57,7 +57,7 @@ const RESPONSE_SCHEMA = {
 
 export async function generateQuestions(
   input: QuestionInput,
-  keys: GeminiKeys
+  creds: LlmCredentials | null
 ): Promise<string[]> {
   const feed = input.entries
     .map((entry) => {
@@ -100,25 +100,20 @@ export async function generateQuestions(
     "Задай вопросы про то, чего в этих записях нет.",
   ].join("\n");
 
-  const raw = await withGemini(keys, async (ai) => {
-    const res = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        /*
-         * Здесь размышление оправдано: найти дыру в отзыве — не выписывание
-         * фактов, а сопоставление записей между собой. Вопросов три штуки
-         * на всю игру, и лишние секунды тут никого не разоряют.
-         */
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
+  const raw = await withLlm(creds, async (client) => {
+    const answer = await client.generateJson({
+      system: SYSTEM_INSTRUCTION,
+      prompt,
+      schema: RESPONSE_SCHEMA,
+      /*
+       * Reasoning earns its keep here: finding the hole in a review is not
+       * copying out facts, it is holding the entries up against each other.
+       * Three questions for a whole game — the extra seconds ruin nobody.
+       */
+      effort: "high",
     });
 
-    const answer = res.text ?? "";
-    if (!answer) throw new Error("Gemini вернул пустой ответ");
+    if (!answer) throw new Error("The model returned an empty response");
     return answer;
   });
 

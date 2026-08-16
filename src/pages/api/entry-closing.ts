@@ -13,8 +13,8 @@ import {
 import { generateQuestions } from "../../lib/entry-questions";
 import { generateTake } from "../../lib/curio-take";
 import { saveCurioTake } from "../../lib/queries";
-import { GEMINI_KEYS } from "../../lib/gemini-env";
-import { errorCode } from "../../lib/gemini";
+import { getLlmCredentials } from "../../lib/llm/credentials";
+import { adapterFor, LlmAuthError } from "../../lib/llm";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
@@ -25,12 +25,12 @@ const json = (body: unknown, status = 200) =>
   });
 
 /**
- * Момент закрытия игры: Curio говорит своё и спрашивает про то, чего в
- * отзыве нет.
+ * The moment a game closes: Curio has its say and asks about what the review
+ * leaves out.
  *
- * Две модели работают параллельно, а не одна на два дела: вердикт и вопросы
- * требуют разного — сказать и спросить. Ждём мы всё равно по дольшему из
- * двух, а промпты остаются острыми.
+ * Two model calls run in parallel rather than one doing both jobs: a verdict
+ * and questions ask for different things — to speak and to probe. We wait on
+ * the longer of the two either way, and both prompts stay sharp.
  */
 export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
@@ -43,9 +43,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!Number.isInteger(gameId)) return json({ error: "Не указана игра" }, 400);
 
   /*
-   * Из дневника спрашивают только вердикт: вопросы имеют смысл сразу после
-   * того, как человек дописал отзыв, а не когда он перечитывает старый тред.
-   * Генерировать их «на всякий случай» — платить за то, что никто не увидит.
+   * Everyone brings their own key, and a missing one is not a failure but an
+   * unfilled setting. A separate code so the interface points at settings
+   * instead of showing "something went wrong".
+   */
+  const creds = await getLlmCredentials(userId);
+  if (!creds) return json({ error: "no_llm_key" }, 400);
+
+  /*
+   * The diary asks for the verdict only: questions make sense right after
+   * someone has finished writing a review, not when they are re-reading an old
+   * thread. Generating them "just in case" means paying for what nobody sees.
    */
   const takeOnly = body.only === "take";
 
@@ -88,8 +96,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .orderBy(desc(gameRecords.lastEntryAt))
       .limit(30),
 
-    // Словарь с охватом: тег, встреченный в одной игре, — случайность,
-    // встреченный в семи — свойство вкуса
+    // A vocabulary with reach: a tag seen in one game is an accident,
+    // one seen in seven is a property of taste
     db
       .select({
         label: tags.label,
@@ -109,7 +117,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const own = entries.filter((entry) => entry.kind !== "advisor");
   if (own.length === 0) return json({ take: "", questions: [] });
 
-  // Игры, где встречались те же теги: с ними и есть смысл сравнивать
+  // Games where the same tags showed up: those are the ones worth comparing against
   const ownLabels = profile.map((tag) => tag.label);
   const related = ownLabels.length
     ? await db
@@ -150,9 +158,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   };
 
   /*
-   * Молчание — худший ответ: пустой вердикт и упёршийся лимит выглядят из
-   * интерфейса одинаково, и человек остаётся гадать, сломалось оно или ему
-   * просто нечего сказать.
+   * Silence is the worst answer: an empty verdict and a hit rate limit look
+   * identical from the interface, and the person is left guessing whether it
+   * broke or it simply had nothing to say.
    */
   let failure: string | null = null;
 
@@ -169,14 +177,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           labels: (game.labels ?? "").split(", ").filter(Boolean),
         })),
       },
-      GEMINI_KEYS
+      creds
     ).catch((err) => {
       console.error("[entry-closing:take]", err);
-      const code = errorCode(err);
-      failure =
-        code === 429
+      const kind = adapterFor(creds.provider).classifyError(err).kind;
+      failure = err instanceof LlmAuthError
+        ? s.llm.errorAuth
+        : kind === "rate_limit"
           ? s.errors.modelQuota
-          : code === 503 || code === 500 || code === 504
+          : kind === "overloaded" || kind === "server"
             ? s.errors.modelBusy
             : s.errors.generic;
       return "";
@@ -184,13 +193,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     takeOnly
       ? Promise.resolve([] as string[])
-      : generateQuestions(shared, GEMINI_KEYS).catch((err) => {
+      : generateQuestions(shared, creds).catch((err) => {
           console.error("[entry-closing:questions]", err);
           return [] as string[];
         }),
   ]);
 
-  // Вердикт остаётся в ленте: через полгода он ценнее, чем сейчас
+  // The verdict stays in the feed: in six months it is worth more than it is now
   if (take) await saveCurioTake(userId, gameId, take);
 
   return json({ take, questions, error: failure });

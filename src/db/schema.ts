@@ -1,4 +1,5 @@
 import { pgTable, text, integer, serial, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -6,6 +7,39 @@ export const users = pgTable("users", {
   username: text("username").notNull(),
   avatarUrl: text("avatar_url"),
   lastLibrarySync: timestamp("last_library_sync"),
+
+  /*
+   * The LLM key belongs to each person. The service pays for no inference and
+   * keeps no server-side key at all, so an empty (provider, key) pair means
+   * exactly one thing: AI features are off for this person.
+   *
+   * The ciphertext lives whole in one column; parsing happens in secret-box.ts.
+   * The model is stored apart from the provider: every provider has several,
+   * and choosing between the cheap one and the smart one is up to the person
+   * paying the bill.
+   */
+  llmProvider: text("llm_provider", { enum: ["gemini", "anthropic", "openai"] }),
+  llmKeyEncrypted: text("llm_key_encrypted"),
+  llmModel: text("llm_model"),
+
+  /*
+   * The moment the person finished onboarding. Not a boolean flag: the date
+   * shows how many people get stuck and at which step — the first thing we'll
+   * have to fix after a public launch.
+   */
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+
+  /*
+   * A test account created by the instance owner to walk through scenarios.
+   * Steam OpenID hands out one steam_id per person, so on these rows it is
+   * synthetic (prefixed `test:`) and can never collide with a real one.
+   *
+   * The flag is not only about signing in: such accounts must drop out of any
+   * public statistics, or those lie by exactly the size of my experiments.
+   */
+  isTest: boolean("is_test").notNull().default(false),
+  createdByUserId: integer("created_by_user_id").references((): AnyPgColumn => users.id),
+
   createdAt: timestamp("created_at")
     .notNull()
     .$defaultFn(() => new Date()),
@@ -19,22 +53,23 @@ export const games = pgTable("games", {
   isDemo: boolean("is_demo").notNull().default(false),
 
   /*
-   * Данные из карточки магазина. Раньше о кандидате модель знала только
-   * название и выдумывала всё остальное, а в очередь разбора попадали Blender
-   * и Wallpaper Engine — отличить софт от игры было нечем.
+   * Data from the store page. The model used to know nothing about a candidate
+   * but its title and made up everything else, while Blender and Wallpaper
+   * Engine kept landing in the analysis queue — there was nothing to tell
+   * software apart from a game.
    *
-   * `type`: game / dlc / software / video / music / demo. Пока null — про игру
-   * ещё не спрашивали, и она считается игрой, чтобы бэкофилл не выключил
-   * половину приложения на время работы.
+   * `type`: game / dlc / software / video / music / demo. Still null means we
+   * haven't asked about this game yet, and it counts as a game so the backfill
+   * doesn't switch off half the app while it runs.
    */
   type: text("type"),
   shortDescription: text("short_description"),
-  /** Жанры через запятую: их всегда 1-4, отдельная таблица тут излишество. */
+  /** Comma-separated genres: there are always 1-4, a separate table is overkill here. */
   genres: text("genres"),
   categories: text("categories"),
-  /** Вердикт классификатора: в SQL жанры разбирать неудобно. */
+  /** The classifier's verdict: picking genres apart in SQL is awkward. */
   isSoftware: boolean("is_software").notNull().default(false),
-  /** Дата релиза как её отдаёт Steam — формат гуляет по локалям. */
+  /** Release date exactly as Steam hands it over — the format drifts across locales. */
   releaseDate: text("release_date"),
   detailsFetchedAt: timestamp("details_fetched_at"),
 
@@ -56,9 +91,9 @@ export const userGames = pgTable(
     playtimeMinutes: integer("playtime_minutes").notNull().default(0),
     lastPlayedAt: timestamp("last_played_at"),
     /**
-     * Исключение из пула — решение конкретного игрока, а не свойство игры.
-     * Раньше флаг стоял на общем каталоге: скипнул «это не игра» один
-     * пользователь, а из пула она пропадала у всех.
+     * Excluding a game from the pool is one particular player's decision, not a
+     * property of the game. The flag used to sit on the shared catalog: one user
+     * skipped it as "not a game" and it disappeared from everyone's pool.
      */
     excluded: boolean("excluded").notNull().default(false),
   },
@@ -86,12 +121,12 @@ export const slots = pgTable("slots", {
 }, (t) => [index("slots_user_status_idx").on(t.userId, t.status)]);
 
 /**
- * Единая модель мнения об игре.
+ * A single model of what a player thinks about a game.
  *
- * game_records — что игрок думает сейчас, game_entries — как он к этому
- * пришёл. Заменяет три таблицы (slot_reviews, game_reviews, slot_notes),
- * у которых было три разных правила дедупликации и одна колонка времени
- * с двумя несовместимыми смыслами.
+ * game_records is what the player thinks now, game_entries is how they got
+ * there. It replaces three tables (slot_reviews, game_reviews, slot_notes)
+ * that had three different dedup rules between them and one time column
+ * carrying two incompatible meanings.
  */
 export const gameRecords = pgTable(
   "game_records",
@@ -106,12 +141,12 @@ export const gameRecords = pgTable(
     verdict: text("verdict", { enum: ["finished", "endless", "playing", "dropped", "later"] }),
     tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
     rating: integer("rating"),
-    /** Откуда пришла запись — невидимая деталь хранения, не фильтр в интерфейсе. */
+    /** Where the record came from — an invisible storage detail, not a filter in the UI. */
     origin: text("origin", { enum: ["roulette", "retro", "triage", "demo", "steam"] })
       .notNull()
       .default("retro"),
     slotId: integer("slot_id").references(() => slots.id),
-    /** Абсолютные минуты на момент последней записи — по ним считается «наиграл ещё». */
+    /** Absolute minutes as of the last entry — "played some more" is counted against it. */
     playtimeAtLastEntry: integer("playtime_at_last_entry").notNull().default(0),
     firstEntryAt: timestamp("first_entry_at").notNull(),
     lastEntryAt: timestamp("last_entry_at").notNull(),
@@ -120,7 +155,7 @@ export const gameRecords = pgTable(
       .$defaultFn(() => new Date()),
   },
   (t) => [
-    // Это и есть новое правило дедупликации: одна запись на пару
+    // This is the new dedup rule: one record per (user, game) pair
     uniqueIndex("game_records_user_game_idx").on(t.userId, t.gameId),
     index("game_records_user_verdict_idx").on(t.userId, t.verdict),
     index("game_records_user_tier_idx").on(t.userId, t.tier),
@@ -139,22 +174,22 @@ export const gameEntries = pgTable(
       .default("update"),
     text: text("text").notNull(),
     /**
-     * Храним и абсолют, и дельту. Раньше slot_notes.playtime_minutes значил
-     * дельту от начала контракта в одной форме строки и общее время в другой —
-     * в одной и той же колонке.
+     * We keep both the absolute value and the delta. slot_notes.playtime_minutes
+     * used to mean the delta since the start of the contract in one shape of row
+     * and the total playtime in another — in one and the same column.
      */
     playtimeTotalMinutes: integer("playtime_total_minutes").notNull(),
     playtimeDeltaMinutes: integer("playtime_delta_minutes").notNull().default(0),
     /**
-     * Вопрос, на который эта запись отвечает.
+     * The question this entry is answering.
      *
-     * Ответ на вопрос советчика — такая же запись дневника, как любая другая:
-     * её писал человек, и в ленте она стоит на своём месте по времени. Но без
-     * вопроса рядом она читается обрывком разговора, у которого потеряна
-     * первая реплика.
+     * An answer to the advisor's question is a diary entry like any other: a
+     * person wrote it, and it sits in the feed in its rightful place in time.
+     * But without the question beside it, it reads like a scrap of a
+     * conversation whose opening line has been lost.
      */
     promptedBy: text("prompted_by"),
-    /** Снимок мнения на момент записи — из него видно эволюцию. */
+    /** A snapshot of the opinion at the time of the entry — it's what shows the evolution. */
     verdictAt: text("verdict_at"),
     ratingAt: integer("rating_at"),
     tierAt: text("tier_at"),
@@ -166,13 +201,14 @@ export const gameEntries = pgTable(
 );
 
 /**
- * Фоновый разбор одной записи дневника.
+ * Background analysis of a single diary entry.
  *
- * Статус лежит отдельно от результата намеренно: разбор один, а слоёв у него
- * будет несколько — упоминания игр, теги претензий, ставки на будущее, тон
- * текста. Появится следующий слой — перезапускать надо будет по этой строке,
- * а не по наличию строк в таблице результатов, где пустой ответ («игр не
- * упомянуто») неотличим от неразобранного.
+ * The status sits apart from the result on purpose: there is one analysis, but
+ * it will have several layers — game mentions, complaint tags, predictions
+ * about the future, the tone of the text. Once the next layer shows up, reruns
+ * have to key off this row rather than off the presence of rows in the results
+ * table, where an empty answer ("no games mentioned") is indistinguishable from
+ * never analyzed at all.
  */
 export const entryAnalyses = pgTable(
   "entry_analyses",
@@ -187,9 +223,10 @@ export const entryAnalyses = pgTable(
     model: text("model").notNull(),
     error: text("error"),
     /**
-     * Температура текста от −2 до 2 — не оценка игры, а то, как звучит
-     * запись. Оценку человек ставит руками и часто забывает подвинуть;
-     * тон меняется сам собой, и расхождение между ними как раз и видно.
+     * The temperature of the text, from −2 to 2 — not a score for the game but
+     * how the entry sounds. The score a person sets by hand and often forgets
+     * to move; the tone shifts on its own, and the gap between the two is
+     * exactly what becomes visible.
      */
     tone: integer("tone"),
     createdAt: timestamp("created_at")
@@ -201,11 +238,12 @@ export const entryAnalyses = pgTable(
 );
 
 /**
- * Словарь претензий и похвал — свой у каждого человека.
+ * A vocabulary of complaints and praise — one of its own per person.
  *
- * Растёт из его же записей, поэтому нормализованная форма хранится рядом:
- * без неё «рециклинг локаций», «повторяющиеся локации» и «мало локаций»
- * станут тремя разными тегами, и профиль вкуса рассыплется на синонимы.
+ * It grows out of that person's own entries, so the normalized form is kept
+ * alongside: without it "recycled locations", "repeating locations" and "too
+ * few locations" turn into three different tags, and the taste profile falls
+ * apart into synonyms.
  */
 export const tags = pgTable(
   "tags",
@@ -234,7 +272,7 @@ export const entryTags = pgTable(
     tagId: integer("tag_id")
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
-    /** Поставленное руками переживает повторный разбор, предложенное — нет. */
+    /** What was set by hand survives a re-analysis, what was suggested does not. */
     source: text("source", { enum: ["model", "user"] })
       .notNull()
       .default("model"),
@@ -246,11 +284,11 @@ export const entryTags = pgTable(
 );
 
 /**
- * Ставка на будущее, оставленная в записи: «надеюсь, станет интереснее»,
- * «моя теория, что Макс из параллельной вселенной».
+ * A prediction about the future left in an entry: "hope it gets more
+ * interesting", "my theory is that Max is from a parallel universe".
  *
- * Размечать их руками никто не станет, поэтому их достаёт тот же проход. Со
- * временем ставку можно предъявить обратно — и вот тогда она чего-то стоит.
+ * Nobody is going to mark these up by hand, so the same pass digs them out. In
+ * time a prediction can be held up again — and that's when it's worth something.
  */
 export const entryClaims = pgTable(
   "entry_claims",
@@ -260,7 +298,7 @@ export const entryClaims = pgTable(
       .notNull()
       .references(() => gameEntries.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
-    /** Пока null — ставку ещё не предъявляли. */
+    /** Still null — the prediction hasn't been held up against reality yet. */
     outcome: text("outcome", { enum: ["hit", "miss", "unclear"] }),
     askedAt: timestamp("asked_at"),
   },
@@ -268,15 +306,15 @@ export const entryClaims = pgTable(
 );
 
 /**
- * Игра, упомянутая в чужой записи.
+ * A game mentioned inside someone's entry.
  *
- * Текст записи не переписывается никогда: разметка хранится рядом с ним —
- * дословный кусок и его позиция, — а подсветка накладывается при отрисовке.
- * Оригинал остаётся ровно тем, что человек написал.
+ * The entry text is never rewritten: the markup is stored next to it — the
+ * verbatim fragment and its position — and the highlight is laid on at render
+ * time. The original stays exactly what the person wrote.
  *
- * gameId может быть пустым: назвать игру, которой нет ни в библиотеке, ни в
- * базе, — обычное дело («там ведь ещё Reunion есть»), и такое упоминание
- * ценно само по себе, как след интереса.
+ * gameId may be empty: naming a game that is in neither the library nor the
+ * database is an everyday thing ("there's a Reunion too, you know"), and such a
+ * mention is valuable in its own right, as a trace of interest.
  */
 export const entryMentions = pgTable(
   "entry_mentions",
@@ -286,10 +324,10 @@ export const entryMentions = pgTable(
       .notNull()
       .references(() => gameEntries.id, { onDelete: "cascade" }),
     gameId: integer("game_id").references(() => games.id),
-    /** Дословный кусок текста — по нему ищется место подсветки. */
+    /** The verbatim fragment of text — the highlight's position is found by it. */
     surface: text("surface").notNull(),
     startOffset: integer("start_offset").notNull(),
-    /** Полное название по версии модели: им же игра и разрешается. */
+    /** The full title according to the model: it's also what resolves the game. */
     canonicalTitle: text("canonical_title").notNull(),
   },
   (t) => [
@@ -329,19 +367,28 @@ export const recommendations = pgTable("recommendations", {
   gameId: integer("game_id")
     .notNull()
     .references(() => games.id),
-  // pick — совет из нетронутого; abandoned — разбор брошенного
+  /*
+   * `pick` is advice from the untouched pile. `abandoned` belonged to a
+   * dropped feature — the model took a side on games you had given up on, and
+   * you answered with a button.
+   *
+   * The value and the `stance` column below are kept because rows carrying
+   * them already exist: they are the record of runs that really happened, and
+   * dropping the column would rewrite that history rather than end the
+   * feature. Nothing writes either of them any more.
+   */
   kind: text("kind", { enum: ["pick", "abandoned"] })
     .notNull()
     .default("pick"),
   tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
-  // для kind=abandoned: согласен с игроком или спорит
+  /** Legacy, see `kind` above: the side the model took on a dropped game. */
   stance: text("stance", { enum: ["agree", "disagree"] }),
   rank: integer("rank").notNull().default(0),
   reason: text("reason").notNull(),
   /*
-   * Откуда у модели знание об игре. Без этого совет по игре, которую она
-   * знает наизусть, и совет по игре, о которой не знает ничего, выглядят
-   * одинаково уверенно.
+   * Where the model's knowledge of the game comes from. Without this, advice
+   * about a game it knows by heart and advice about a game it knows nothing
+   * about look equally confident.
    */
   grounding: text("grounding", { enum: ["known", "from-description", "guess"] }),
 });
@@ -359,9 +406,9 @@ export const slotSkips = pgTable("slot_skips", {
 });
 
 /**
- * Глубокий разбор одной игры: описание, отзывы других игроков и вкус
- * конкретного человека. Кэшируется по паре (пользователь, игра) — разбор
- * зависит от обоих, а стоит целого запроса к модели и двух к Steam.
+ * A deep dive into one game: its description, other players' reviews and one
+ * particular person's taste. Cached per (user, game) pair — the analysis
+ * depends on both, and costs a whole model request plus two to Steam.
  */
 export const deepDives = pgTable(
   "deep_dives",
@@ -374,12 +421,12 @@ export const deepDives = pgTable(
       .notNull()
       .references(() => games.id),
     fit: text("fit", { enum: ["yes", "maybe", "no"] }).notNull(),
-    /** Тир после разбора: первый проход судил по описанию, этот — по механике. */
+    /** Tier after the deep dive: the first pass judged by description, this one by mechanics. */
     tier: text("tier", { enum: ["S", "A", "B", "C", "D"] }),
     summary: text("summary").notNull(),
     forYou: text("for_you").notNull(),
     against: text("against").notNull(),
-    /** Жалобы построчно — массив ради одной колонки заводить не стоит. */
+    /** Complaints line by line — not worth an array type for the sake of one column. */
     complaints: text("complaints"),
     reviewsUsed: integer("reviews_used").notNull().default(0),
     createdAt: timestamp("created_at")
@@ -390,18 +437,18 @@ export const deepDives = pgTable(
 );
 
 /**
- * Замер наигранного времени.
+ * A snapshot of playtime.
  *
- * Steam не отдаёт историю: `playtime_forever` — один счётчик, который растёт,
- * и в `user_games` он перезаписывается при каждом синке. Всё, что было между
- * двумя синками, из этой колонки не восстановить никак. Поэтому историю мы
- * заводим сами: строка пишется только когда счётчик вырос, а `user_games`
- * остаётся тем, чем и был — последним известным значением, то есть базой,
- * относительно которой считается следующий прирост.
+ * Steam hands out no history: `playtime_forever` is a single counter that only
+ * grows, and in `user_games` it gets overwritten on every sync. Whatever
+ * happened between two syncs cannot be recovered from that column at all. So we
+ * keep the history ourselves: a row is written only once the counter has grown,
+ * and `user_games` stays what it always was — the last known value, that is,
+ * the baseline the next increment is measured against.
  *
- * Отсюда же и отсутствие «нулевых» строк: библиотека в тысячу игр не должна
- * порождать тысячу строк на каждый опрос. Игра, в которую не играли, не
- * оставляет следа вовсе.
+ * Hence the absence of "zero" rows as well: a library of a thousand games must
+ * not spawn a thousand rows on every poll. A game nobody played leaves no trace
+ * at all.
  */
 export const playtimeSnapshots = pgTable(
   "playtime_snapshots",
@@ -414,43 +461,46 @@ export const playtimeSnapshots = pgTable(
       .notNull()
       .references(() => games.id),
     /*
-     * С поясом, в отличие от остальных таблиц. `timestamp without time zone`
-     * драйвер разбирает по поясу процесса: один и тот же ряд читается как
-     * разное время сервером в UTC и машиной разработчика, и «во сколько ты
-     * играешь» уезжает на несколько часов. Для трекера «когда» — это и есть
-     * содержание, поэтому здесь хранится момент, а не показания настенных
-     * часов неизвестно чьей стены.
+     * With a time zone, unlike the other tables. `timestamp without time zone`
+     * is parsed by the driver in the process's own zone: the very same row
+     * reads as a different time on a server running in UTC and on a developer's
+     * machine, and "what time do you play" slides by several hours. For a
+     * tracker, the "when" *is* the content, so what's stored here is a moment in
+     * time, not the reading of a wall clock on nobody knows whose wall.
      */
     takenAt: timestamp("taken_at", { withTimezone: true }).notNull(),
-    /** Абсолют на момент замера — по нему чинится история, если опрос упал. */
+    /** The absolute value at the snapshot — history is repaired from it if a poll died. */
     playtimeMinutes: integer("playtime_minutes").notNull(),
-    /** Прирост с прошлого замера: то, ради чего таблица и заведена. */
+    /** Growth since the previous snapshot: the whole reason this table exists. */
     deltaMinutes: integer("delta_minutes").notNull(),
     /*
-     * Кто заметил прирост. Ручной синк библиотеки видит его крупными кусками
-     * (между заходами могли пройти сутки), опрос — получасовыми. По времени
-     * замера это не отличить, а для точности выводов разница существенная.
+     * Who noticed the growth. A manual library sync sees it in large chunks (a
+     * day may have passed between visits), the poll in half-hour ones. The
+     * snapshot's timestamp can't tell the two apart, and the difference matters
+     * a great deal for how precise the conclusions are.
      *
-     * `backfill` — прирост, вычитанный задним числом из дневника: между двумя
-     * записями об игре видно, сколько наиграно, а даты записей известны. Такой
-     * строке нельзя верить в вопросе «во сколько», поэтому в тепловой карте,
-     * ночных часах и стрике она не участвует.
+     * `backfill` is growth read out of the diary after the fact: between two
+     * entries about a game you can see how much was played, and the dates of the
+     * entries are known. Such a row can't be trusted on the "what time" question,
+     * so it takes no part in the heatmap, the night hours or the streak.
      */
     source: text("source", { enum: ["sync", "poll", "backfill"] })
       .notNull()
       .default("poll"),
     /*
-     * Начало интервала, за который набежал прирост. У живого опроса пустое:
-     * там интервал — это расстояние до предыдущей строки, полчаса от силы. У
-     * восстановленного из дневника — девять дней в среднем, и без этой границы
-     * строка врала бы, будто всё было наиграно в момент записи отзыва.
+     * The start of the interval the growth accumulated over. Empty for a live
+     * poll: there the interval is the distance to the previous row, half an hour
+     * at most. For a row reconstructed from the diary it's nine days on average,
+     * and without this boundary the row would claim all of it was played at the
+     * moment the review was written.
      */
     sinceAt: timestamp("since_at", { withTimezone: true }),
     /*
-     * Сессия, которой этот прирост принадлежит. Пустая — время наиграно в
-     * обход опроса статуса: закрытый профиль, режим невидимки, лежавшее
-     * приложение. Без этой колонки такой прирост и прирост уже посчитанной
-     * сессии в статистике неразличимы, и часы удваиваются.
+     * The session this growth belongs to. Empty means the time was played
+     * around the status poll: a private profile, invisible mode, an app that was
+     * down. Without this column, such growth and the growth of an already
+     * counted session are indistinguishable in the statistics, and the hours
+     * get doubled.
      */
     sessionId: integer("session_id").references(() => playSessions.id),
   },
@@ -461,20 +511,21 @@ export const playtimeSnapshots = pgTable(
 );
 
 /**
- * Игровая сессия — «сидел в этой игре с 21:04 до 23:40».
+ * A play session — "sat in this game from 21:04 to 23:40".
  *
- * Строится не из счётчика времени, а из статуса «во что играет сейчас»:
- * счётчик Steam обновляет рывками (часто только при выходе из игры), и
- * трёхчасовой вечер прилетает в него одним куском под ту минуту, когда игрок
- * закрыл игру. Для «во сколько ты обычно играешь» это негодный источник.
+ * It is built not from the playtime counter but from the "what are they playing
+ * right now" status: Steam updates the counter in jerks (often only when the
+ * game exits), and a three-hour evening lands in it as one lump stamped with the
+ * minute the player closed the game. As a source for "what time do you usually
+ * play" that is worthless.
  *
- * Поэтому две колонки времени, а не одна: `minutes` — часы на стене, из
- * опроса статуса, `playtime_gain_minutes` — что за ту же сессию насчитал сам
- * Steam. Первое честнее по границам, второе — по минутам, и расходятся они
- * законно (пауза, альт-таб, игра в оффлайне).
+ * Hence two time columns rather than one: `minutes` is wall-clock time, from the
+ * status poll, `playtime_gain_minutes` is what Steam itself counted for the same
+ * session. The first is more honest about the boundaries, the second about the
+ * minutes, and they disagree legitimately (a pause, an alt-tab, playing offline).
  *
- * `ended_at IS NULL` значит «идёт прямо сейчас»; закрывает сессию тот же
- * опрос, когда видит, что игрок вышел.
+ * `ended_at IS NULL` means "happening right now"; the session is closed by the
+ * same poll, once it sees the player has left.
  */
 export const playSessions = pgTable(
   "play_sessions",
@@ -486,9 +537,9 @@ export const playSessions = pgTable(
     gameId: integer("game_id")
       .notNull()
       .references(() => games.id),
-    /** С поясом — по той же причине, что и у замеров. */
+    /** With a time zone — for the same reason as on the snapshots. */
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
-    /** Последний опрос, заставший игрока в игре. Он же станет концом сессии. */
+    /** The last poll that caught the player in the game. It also becomes the session's end. */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     minutes: integer("minutes").notNull().default(0),
