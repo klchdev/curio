@@ -15,13 +15,15 @@ pnpm-debug.log*
 
 # environment variables
 .env
-.env.production
+.env.*
+!.env.example
 
 # macOS-specific files
 .DS_Store
 
-# jetbrains setting folder
+# editor settings
 .idea/
+.vscode/
 
 # database
 *.db
@@ -31,3 +33,7 @@ pnpm-debug.log*
 # sessions
 .sessions/
 .backups/
+
+# рабочие заметки, которые не публикуются
+COMPETITORS.md
+.claude/

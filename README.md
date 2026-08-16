@@ -1,101 +1,170 @@
 # Curio
 
-**Библиотекарь, который знает твой вкус и говорит, что играть дальше.**
+**A journal of what you've played that turns into advice on what to play next.**
 
-Curio читает всё, что ты написал о сыгранном, и раскладывает непройденное по тирам — ссылаясь на твои же отзывы, а не на жанры и общую репутацию. Спорит с брошенным, разбирает отдельную игру по отзывам в Steam и меняет собственную оценку, когда узнаёт больше.
+Curio connects to your Steam library and asks you to write not one review after
+you finish a game, but several along the way — whenever your opinion moves. Write
+after the first evening, or forty hours in, or the moment a game loses you; there
+are no checkpoints to hit. Every entry is automatically stamped with your real
+playtime from Steam, so you can see how your opinion changed, not just how it
+ended up.
 
-Топливо для этого — многослойный дневник. Большинство платформ предлагают оставить один отзыв после прохождения, но впечатление меняется: первые 20 минут — восторг, на 5-м часу — сомнения, после финала — переосмысление. Curio фиксирует эволюцию, потому что советы строятся именно на ней.
+Those entries add up to a taste profile — what irritates you game after game,
+what hooks you, where your score disagrees with the way you actually talk about
+a game. The advice is built on that profile: your unplayed games get sorted into
+tiers with links back to your own words, and any single game can be put through
+a deep dive over its Steam reviews.
 
-## Ключевая идея
+<!-- TODO: screenshots from demo mode -->
 
-Отзыв — это не снэпшот, а нарратив. Каждая часть автоматически привязана к playtime из Steam:
+## How it works
+
+1. **You bring your own model key.** Curio doesn't pay for inference — the key
+   is yours, and requests go straight to the provider you picked.
+2. **You fill the journal.** Import the reviews from your Steam profile with one
+   button, write about what you've played by hand, or spin the roulette — it
+   picks a random game from the backlog and opens a slot for it.
+3. **You get the write-ups.** A taste profile, a tier list of what's unplayed,
+   verdicts on individual games, and a chronicle of what you actually played and
+   when.
+
+A review in Curio is a thread, not a snapshot:
 
 ```
-Первое впечатление · 45 мин
-  "Механика боя интересная, графика приятная..."
+First impression · 45 min
+  "The combat is interesting, the art is nice..."
 
-Дополнение · 4 ч 20 мин
-  "Сюжет начал провисать, но побочные квесты спасают..."
+Update · 4 h 20 min
+  "The story is starting to sag, but the side quests save it..."
 
-Вердикт · 12 ч · Прошёл · 4/5
-  "В итоге рад что прошёл, финал сильный..."
+Verdict · 12 h · Finished · 4/5
+  "Glad I stuck with it, the ending is strong..."
 ```
 
-## Как работает
+## Stack
 
-1. **Рулетка** крутит случайную игру из Steam бэклога
-2. Играешь минимум 20 минут — оставляешь **первое впечатление** (вердикт + рейтинг + текст)
-3. Слот освобождается — можно крутить дальше
-4. Продолжаешь играть — **дополняешь отзыв** новыми частями
-5. Вердикт и рейтинг можно менять по мере прохождения
+Astro 6 (SSR, node adapter) · React 19 · Tailwind CSS 4 · PostgreSQL with
+Drizzle ORM · Steam Web API · Steam OpenID login.
 
-## Что отличает
+## Running locally
 
-- **Многослойный отзыв** — не один снэпшот, а история впечатлений
-- **Автоматический playtime** — каждая часть помечена реальным временем из Steam
-- **Эволюция мнения** — видно как менялся вердикт и оценка
-- **Рулетка бэклога** — геймифицированный способ разобрать коллекцию
+You need Node.js 22.12 or newer and a live PostgreSQL database.
 
-## Стек
+```sh
+npm install
+cp .env.example .env   # fill in the variables from the table below
+npm run db:push        # push the schema to the database
+npm run dev
+```
 
-Astro + React + SQLite (Drizzle ORM) + Steam Web API
+The app comes up on `http://localhost:4321`. Login goes through Steam OpenID, so
+`STEAM_API_KEY` is needed from the very first minute — without it there's no way
+to sign in.
 
-## Трекер времени
+### Environment variables
 
-Steam не отдаёт историю по дням и часам: `playtime_forever` — один накопительный
-счётчик, и всё, что было между двумя синками, из него не восстановить. Curio
-заводит эту историю сам, снимая два сигнала:
+| Variable | Req. | What it is |
+|---|---|---|
+| `STEAM_API_KEY` | yes | Steam Web API key, get one at https://steamcommunity.com/dev/apikey |
+| `SESSION_SECRET` | yes | random string, at least 32 characters; the session cookie is signed with it |
+| `DATABASE_URL` | yes | PostgreSQL connection string |
+| `ENCRYPTION_KEY` | yes | 32 bytes in base64 (`openssl rand -base64 32`) — encrypts users' model keys |
+| `CRON_SECRET` | no | password for `/api/cron/poll`; without it the playtime tracker doesn't run |
+| `DEV_ACCOUNTS_ENABLED` | no | enables test accounts, off by default |
+| `DEV_STEAM_IDS` | no | comma-separated SteamIDs allowed to use test accounts |
 
-| Сигнал | Откуда | Как часто | Что даёт |
+`ENCRYPTION_KEY` must not be changed: stored user keys are encrypted with that
+exact key, and after a swap everyone has to enter theirs again.
+
+## Model key (BYOK)
+
+The write-ups, the advice and the verdicts come from a language model, and
+everyone pays for their own. Curio keeps no shared key: you enter yours in the
+settings, it gets encrypted (AES-256-GCM), and that encrypted form is the only
+one the database ever holds.
+
+Three providers are supported:
+
+- **Google Gemini** — https://aistudio.google.com/apikey
+- **Anthropic Claude** — https://console.anthropic.com/settings/keys
+- **OpenAI** — https://platform.openai.com/api-keys
+
+Gemini has a free tier, and it's enough to try everything except running a large
+journal through analysis in one go. Do keep in mind that on the free tier Google
+reserves the right to use the contents of your requests to improve its models;
+the details are in [PRIVACY.md](PRIVACY.md).
+
+## Playtime tracker
+
+Steam doesn't hand out history by day and hour: `playtime_forever` is a single
+cumulative counter, and nothing that happened between two syncs can be recovered
+from it. Curio builds that history itself, off two signals:
+
+| Signal | Source | How often | What it gives |
 |---|---|---|---|
-| Счётчик минут | `GetRecentlyPlayedGames` | 30 мин | `playtime_snapshots` — сколько наиграно, точно по минутам |
-| «Играет прямо сейчас» | `GetPlayerSummaries` | 3 мин | `play_sessions` — когда именно, точно по времени |
+| Minute counter | `GetRecentlyPlayedGames` | 30 min | `playtime_snapshots` — how much was played, down to the minute |
+| "Playing right now" | `GetPlayerSummaries` | 3 min | `play_sessions` — exactly when, down to the clock |
 
-Порознь они бесполезны: счётчик обновляется рывками (часто только при выходе из
-игры), а статус ничего не знает о минутах. Вместе получается «во вторник с 21:04
-до 23:40, два часа сорок». Страница `/chrono` строит из этого тепловую карту по
-часам, дни, топ игр и последние сессии; раскладку по времени делает браузер,
-потому что часовой пояс известен только ему.
+On their own they're useless: the counter updates in jumps (often only when you
+quit the game), and the status knows nothing about minutes. Together they add up
+to "Tuesday, 21:04 to 23:40, two hours forty". The `/chrono` page turns that into
+an hourly heatmap, days, top games and recent sessions.
 
-Оба опроса живут таймерами внутри веб-процесса и будятся при старте контейнера
-(`scripts/start.mjs` дёргает `/api/cron/poll`). Что нужно на Railway:
+Both polls run on timers inside the web process and are woken when the container
+starts (`scripts/start.mjs` pings `/api/cron/poll`). What production needs:
 
-- переменная `CRON_SECRET` — без неё трекер не запускается;
-- **App Sleeping выключен**: спящая служба не опрашивает;
-- одна реплика. Двойного учёта на нескольких не будет (прирост считается под
-  блокировкой строки в той же транзакции, где пишется новое значение), но
-  запросов к Valve станет кратно больше.
+- the `CRON_SECRET` variable — without it the tracker doesn't start;
+- **don't let the service sleep**: a sleeping process polls nothing;
+- a single replica. Several won't double-count (the increment is computed under
+  a row lock, in the same transaction that writes the new value), but the number
+  of requests to Valve grows with every one of them.
 
-Ту же ручку можно дёргать снаружи, если держать процесс живым не хочется:
+The same endpoint can be called from outside if you'd rather not keep the
+process alive:
 
 ```sh
 curl -H "authorization: Bearer $CRON_SECRET" "https://<app>/api/cron/poll?job=all"
 ```
 
-Чего трекер не умеет: видеть игрока с закрытым профилем или в невидимке — у
-такого останутся только замеры счётчика, без границ сессий.
+What the tracker can't do: see a player with a private profile or in invisible
+mode — for them only the counter readings survive, with no session boundaries.
 
-### История до трекера
+### History from before the tracker
 
-Часть прошлого всё же восстанавливается — из дневника. Каждая запись помечена
-абсолютным наигранным временем и датой, значит две записи об одной игре дают
-интервал: «между третьим и двенадцатым мая наиграно 127 минут». Взятый контракт
-даёт такую же пару со временем на старте.
+Some of the past can still be recovered — from the journal. Every entry is
+stamped with an absolute playtime and a date, so two entries about the same game
+give you an interval: "127 minutes played between May 3rd and May 12th".
 
 ```sh
-DATABASE_URL=... npx tsx scripts/backfill-playtime-history.ts          # сухой прогон
+DATABASE_URL=... npx tsx scripts/backfill-playtime-history.ts          # dry run
 DATABASE_URL=... npx tsx scripts/backfill-playtime-history.ts --apply
 ```
 
-Строки помечаются `source='backfill'` и несут `since_at` — начало интервала. В
-тепловую карту, дни и стрик они не попадают: час в них неизвестен, а средний
-интервал — девять дней, и размазать его по суткам значило бы выдумать. На
-странице для них отдельный блок с итогами по играм и по месяцам.
+Those rows are marked `source='backfill'` and stay out of the heatmap: the hour
+in them is unknown, the average interval is nine days, and spreading it across
+the day would mean inventing it.
 
-## Запуск
+## Privacy
 
-```sh
-npm install
-cp .env.example .env  # заполнить STEAM_API_KEY, SESSION_SECRET, CRON_SECRET
-npm run dev
-```
+What is stored, where it goes and how to delete all of it — in
+[PRIVACY.md](PRIVACY.md).
+
+## Contributing
+
+Bugs and ideas go to issues, patches to pull requests. Details in
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Support
+
+If Curio turned out to be useful: https://buymeacoffee.com/CHANGEME
+
+<!-- TODO: replace CHANGEME with the real Buy Me a Coffee address -->
+
+---
+
+> **Not affiliated with Valve Corporation.**
+> Steam and the Steam logo are trademarks of Valve Corporation.
