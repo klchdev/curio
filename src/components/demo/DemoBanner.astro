@@ -1,0 +1,23 @@
+---
+/**
+ * The "this is made up" strip, stuck to the top of the screen.
+ *
+ * It sticks there for a reason, not for looks: the demo is a long page with
+ * three zones, and someone who has scrolled down to a stranger's diary and a
+ * stranger's stats no longer remembers the header. An interface that looks like
+ * a real account and says nothing about it reads as a deception — and deceiving
+ * people in order to demonstrate honesty is a silly thing to do.
+ */
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+---
+
+<p
+  class="sticky top-0 z-30 mb-6 flex items-center gap-2.5 rounded-xl border border-amber-900/60 bg-amber-950/40 px-4 py-2.5 text-sm text-amber-200/90 backdrop-blur"
+>
+  <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" aria-hidden="true"></span>
+  {s.demo.banner}
+</p>

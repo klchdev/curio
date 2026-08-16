@@ -1,0 +1,30 @@
+---
+/**
+ * The end of the demo: what to do next.
+ *
+ * It sits at the bottom of every demo screen, because the decision ripens not
+ * at the start but once the visitor has leafed through someone else's diary and
+ * understood what the whole thing is for.
+ */
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+---
+
+<section class="mt-16 rounded-2xl border border-gray-800 bg-gray-900/40 p-8 text-center">
+  <h2 class="text-2xl font-bold text-balance">{s.demo.ctaTitle}</h2>
+  <p class="mx-auto mt-3 max-w-xl leading-relaxed text-gray-400">{s.demo.ctaText}</p>
+
+  <a
+    href="/auth/login"
+    class="mt-7 inline-block rounded-xl bg-white px-7 py-3.5 font-medium text-gray-950 transition hover:scale-[1.02]"
+  >
+    {s.demo.ctaButton}
+  </a>
+
+  <a href="/" class="mt-5 block text-sm text-gray-500 transition hover:text-white">
+    &larr; {s.demo.backToLanding}
+  </a>
+</section>

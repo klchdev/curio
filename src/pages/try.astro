@@ -1,0 +1,137 @@
+---
+/**
+ * Curio without an account.
+ *
+ * Three walls stand in a row between a visitor and their first "ah, I get it":
+ * signing in through Steam, bringing your own model key, and writing a dozen
+ * reviews. Until those are cleared, the app shows an empty diary and asks to
+ * be taken on faith — and there is nothing to take on faith, because the whole
+ * point of Curio is only visible on a filled-in account. The demo removes all
+ * three walls at once.
+ *
+ * The session is deliberately never asked for here: no redirect, no user in
+ * the database, no trip to Steam, not a single model call. Everything on the
+ * screen was computed ahead of time in `demo-fixtures.ts`.
+ *
+ * The prop layout mirrors `dashboard.astro` line for line — and must keep
+ * mirroring it. The moment the demo starts feeding the hub its own way, it
+ * stops being a demonstration of the product and becomes a separate product.
+ */
+import Layout from "../layouts/Layout.astro";
+import DemoBanner from "../components/demo/DemoBanner.astro";
+import DemoCta from "../components/demo/DemoCta.astro";
+import DemoHub from "../components/demo/DemoHub";
+import type { Zone } from "../components/hub/Hub";
+import { DEMO } from "../lib/demo-fixtures";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+// The zone lives in the URL — the hub writes it there itself, and a link to a zone must work
+const zoneParam = Astro.url.searchParams.get("zone");
+const initialZone: Zone =
+  zoneParam === "now" || zoneParam === "recap" ? zoneParam : "choose";
+
+const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
+  day: "numeric",
+  month: "long",
+});
+
+const run = DEMO.recommendations;
+---
+
+<Layout title={s.demo.title}>
+  <DemoBanner />
+
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      {DEMO.user.avatarUrl && <img src={DEMO.user.avatarUrl} alt="" class="h-9 w-9 rounded-full" />}
+      <span class="font-medium">{DEMO.user.username}</span>
+    </div>
+    <div class="flex items-center gap-4 text-sm text-gray-500">
+      <a href="/try/demos" class="transition hover:text-white">{s.nav.demos}</a>
+      <a href="/" class="transition hover:text-white">{s.demo.backToLanding}</a>
+    </div>
+  </div>
+
+  <DemoHub
+    client:load
+    picks={run.items}
+    slots={DEMO.slots.map(({ slot, game, currentPlaytime }) => ({
+      slotId: slot.id,
+      gameId: game.id,
+      title: game.title,
+      image: game.headerImage,
+      played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
+    }))}
+    updates={DEMO.attention.items
+      .filter((item) => item.reason === "update")
+      .map((item) => ({
+        gameId: item.gameId,
+        title: item.title,
+        headerImage: item.headerImage,
+        currentPlaytime: item.currentPlaytime,
+        lastRecordedPlaytime: item.lastRecordedPlaytime,
+        delta: item.delta,
+        verdict: item.existingVerdict,
+        rating: item.existingRating,
+        tier: item.existingTier,
+      }))}
+    queue={DEMO.attention.items
+      .filter((item) => item.reason === "triage")
+      .map((item) => ({
+        gameId: item.gameId,
+        title: item.title,
+        headerImage: item.headerImage,
+        playtimeMinutes: item.playtimeMinutes,
+        hasReview: item.hasReview,
+      }))}
+    queueTotal={DEMO.attention.triageTotal}
+    tierGames={DEMO.tierList.map((g) => ({
+      gameId: g.gameId,
+      title: g.gameTitle,
+      image: g.gameImage,
+      tier: g.tier,
+    }))}
+    diary={DEMO.history
+      .filter((entry) => entry.type === "reviewed")
+      .slice(0, 6)
+      .map((entry) => ({
+        id: entry.entryId,
+        gameId: entry.gameId,
+        title: entry.gameTitle,
+        note: entry.note,
+        kind: entry.kind,
+        playtimeMinutes: entry.playtimeMinutes,
+        deltaMinutes: entry.deltaMinutes,
+        verdict: entry.verdict,
+        tier: entry.tier,
+        origin: entry.origin,
+      }))}
+    demos={DEMO.demos.slice(0, 8).map((d) => ({
+      gameId: d.gameId,
+      title: d.title,
+      headerImage: d.headerImage,
+      tier: d.tier,
+      note: d.note,
+    }))}
+    stats={DEMO.stats}
+    reviewCount={DEMO.reviewCount}
+    poolSize={DEMO.pool.length}
+    freeSkips={DEMO.freeSkips.available}
+    locale={locale}
+    initialZone={initialZone}
+    lastSyncAt={DEMO.user.lastLibrarySync ? new Date(DEMO.user.lastLibrarySync).getTime() : null}
+    runProfile={run.profile}
+    runDate={dateFormat.format(new Date(run.createdAt))}
+    activeRunId={null}
+    activeRunProgress={null}
+  />
+
+  {/* The hub's bottom bar is pinned to the screen — it needs headroom underneath */}
+  <div class="pb-28">
+    <DemoCta />
+  </div>
+</Layout>

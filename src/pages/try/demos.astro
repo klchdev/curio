@@ -1,0 +1,44 @@
+---
+/**
+ * Game demos inside the demo mode.
+ *
+ * The screen is taken whole: `DemoList` is the same component the `/demos`
+ * page shows to a signed-in person. This page exists because the hub links to
+ * the demo list from the "Recap" zone, and without it the link would throw a
+ * guest out to the landing page in the middle of looking around.
+ */
+import Layout from "../../layouts/Layout.astro";
+import DemoBanner from "../../components/demo/DemoBanner.astro";
+import DemoCta from "../../components/demo/DemoCta.astro";
+import GameDemos from "../../components/demo/GameDemos";
+import { DEMO } from "../../lib/demo-fixtures";
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+// The date travels to the island as json, and a `Date` is no longer a `Date` there
+const reviews = DEMO.demos.map((review) => ({
+  ...review,
+  createdAt: review.createdAt.toISOString(),
+}));
+---
+
+<Layout title={s.pages.demos}>
+  <DemoBanner />
+
+  <div class="mb-8 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">{s.pages.demos}</h1>
+      <p class="text-sm text-gray-400">{s.pages.demosLede}</p>
+    </div>
+    <a href="/try" class="text-sm text-gray-400 transition hover:text-white">
+      &larr; {s.pages.back}
+    </a>
+  </div>
+
+  <GameDemos client:load reviews={reviews} locale={locale} />
+
+  <DemoCta />
+</Layout>
