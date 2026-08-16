@@ -116,8 +116,8 @@ export function startTracker(): boolean {
   void runJob("playtime");
 
   console.log(
-    `[tracker] опрос запущен: статус раз в ${PRESENCE_INTERVAL_MS / 60_000} мин, ` +
-      `счётчик раз в ${PLAYTIME_INTERVAL_MS / 60_000} мин`
+    `[tracker] polling started: presence every ${PRESENCE_INTERVAL_MS / 60_000} min, ` +
+      `playtime counter every ${PLAYTIME_INTERVAL_MS / 60_000} min`
   );
   return true;
 }
