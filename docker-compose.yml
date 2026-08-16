@@ -1,0 +1,90 @@
+# Curio, whole: the app, a PostgreSQL for it, and a one-shot job that puts the
+# schema in place before the app is allowed to start.
+#
+#   cp .env.example .env    # then fill in the four required values
+#   docker compose up -d    # http://localhost:4321
+#
+# What .env has to contain for this file:
+#
+#   STEAM_API_KEY   from https://steamcommunity.com/dev/apikey — no way around
+#                   getting this one by hand
+#   SESSION_SECRET  any long random string — `openssl rand -base64 32` is a
+#                   convenient way to get one, not a required format
+#   ENCRYPTION_KEY  the same, at least 24 characters. Back it up somewhere off
+#                   the server and never change it: everyone's stored model keys
+#                   are encrypted with a key derived from this string, and a
+#                   different string can't decrypt them
+#   CRON_SECRET     optional; without it the playtime tracker stays asleep
+#
+# DATABASE_URL is deliberately NOT read from .env — the database lives in the
+# `db` service below, and the address is set here so a local development .env
+# pointing at localhost can't quietly break the containers.
+
+name: curio
+
+# The app and the schema job are the same build; the anchor keeps them from
+# drifting apart. They deliberately don't share an image *tag* — two services
+# exporting one tag at the same time collide — but the build is identical, so
+# the second one is a cache hit.
+x-curio: &curio
+  build: .
+  environment: &curio-env
+    DATABASE_URL: postgresql://curio:curio@db:5432/curio
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: curio
+      POSTGRES_PASSWORD: curio
+      POSTGRES_DB: curio
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # Without this the app races the database on a cold start and loses
+      test: ["CMD-SHELL", "pg_isready -U curio -d curio"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  # There are no migration files in the repo on purpose: the schema is applied
+  # with drizzle-kit push. So a fresh database is empty until something runs it,
+  # and that something is this — it has to finish before the app comes up, every
+  # time, rather than depending on anyone remembering.
+  #
+  # Re-running it is free: push diffs the live database against the schema and
+  # applies only what's missing. If a future schema change would destroy data it
+  # will refuse instead, and the app won't start until you sort it out by hand.
+  schema:
+    <<: *curio
+    command: npm run db:push
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    <<: *curio
+    ports:
+      - "4321:4321"
+    environment:
+      <<: *curio-env
+      STEAM_API_KEY: ${STEAM_API_KEY:?set STEAM_API_KEY in .env — get one at https://steamcommunity.com/dev/apikey}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env — any long random string}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env — any long random string, and never change it}
+      CRON_SECRET: ${CRON_SECRET:-}
+      # Signing in as an arbitrary user. Leave these alone unless you know why
+      # you want them.
+      # DEV_ACCOUNTS_ENABLED: "true"
+      # DEV_STEAM_IDS: "76561198000000000"
+    depends_on:
+      db:
+        condition: service_healthy
+      schema:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  db-data:

@@ -1,0 +1,39 @@
+# Everything here is either rebuilt inside the image or has no business being in it.
+
+# Rebuilt by `npm ci` and `npm run build` in the builder stage
+node_modules
+dist
+.astro
+
+# Secrets. The image must never carry them: they arrive as environment
+# variables at run time, and a baked-in .env would leak with the image.
+.env
+.env.*
+!.env.example
+
+# Version control and local noise
+.git
+.gitignore
+.github
+.vscode
+.idea
+.claude
+.backups
+.sessions
+.DS_Store
+*.log
+npm-debug.log*
+
+# Prose and local databases — neither is needed to build or run the server
+*.md
+LICENSE
+*.db
+*.db-shm
+*.db-wal
+
+# Deployment config itself
+Dockerfile
+.dockerignore
+docker-compose.yml
+render.yaml
+railway.json

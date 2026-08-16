@@ -68,13 +68,106 @@ to sign in.
 | `STEAM_API_KEY` | yes | Steam Web API key, get one at https://steamcommunity.com/dev/apikey |
 | `SESSION_SECRET` | yes | random string, at least 32 characters; the session cookie is signed with it |
 | `DATABASE_URL` | yes | PostgreSQL connection string |
-| `ENCRYPTION_KEY` | yes | 32 bytes in base64 (`openssl rand -base64 32`) — encrypts users' model keys |
+| `ENCRYPTION_KEY` | yes | any random string, at least 24 characters — encrypts users' model keys. Never change it |
 | `CRON_SECRET` | no | password for `/api/cron/poll`; without it the playtime tracker doesn't run |
 | `DEV_ACCOUNTS_ENABLED` | no | enables test accounts, off by default |
 | `DEV_STEAM_IDS` | no | comma-separated SteamIDs allowed to use test accounts |
 
-`ENCRYPTION_KEY` must not be changed: stored user keys are encrypted with that
-exact key, and after a swap everyone has to enter theirs again.
+`ENCRYPTION_KEY` is the one value in the project you can neither lose nor
+change. The AES key is derived from it with HKDF, so any sufficiently long
+random string will do — `openssl rand -base64 32` is a convenient way to get
+one, not a requirement. But the derivation is deterministic: a different string
+derives a different key, and every model key already in the database stops
+decrypting. Save it somewhere outside the server and carry the same value across
+every redeploy, or everyone using your copy has to enter their key again.
+
+## Deploying your own copy
+
+One thing is on you no matter which route you take: **the Steam key**. Valve
+issues those to people, not to scripts — go to
+https://steamcommunity.com/dev/apikey, put in any domain you like, and copy the
+key out. Everything else the platform can do for you: `SESSION_SECRET`,
+`ENCRYPTION_KEY` and `CRON_SECRET` are just long random strings, and the
+database hands over its own address.
+
+There are no migration files in this repository on purpose — the schema is
+applied with `drizzle-kit push`, which compares the live database against
+`src/db/schema.ts` and adds what's missing. Every route below runs it before the
+server starts, so a fresh database doesn't stay empty. Re-running it costs
+nothing; if a future schema change would destroy data, push refuses instead and
+the app doesn't start until you deal with it by hand.
+
+### Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/klchdev/curio)
+
+The button reads [`render.yaml`](render.yaml) and creates the web service and a
+PostgreSQL next to it. Two clicks, not one: the first opens the blueprint, then
+Render asks for `STEAM_API_KEY` and you press Apply.
+
+Once it's up, copy `ENCRYPTION_KEY` out of the service's environment page and
+keep it somewhere else. Render generated it and Render will happily generate a
+different one if the service is ever recreated — and a different one can't
+decrypt the model keys already in your database.
+
+The free plan is a fair place to look around and a bad place to keep a journal:
+the database is deleted after 30 days, and a free web service falls asleep when
+nobody visits — and a sleeping process polls nothing, so the playtime tracker
+stops recording. Both go away on a paid plan.
+
+### Railway
+
+Create a project from your fork at [railway.com/new](https://railway.com/new),
+then add a PostgreSQL to it from the same canvas. Railway picks up
+[`railway.json`](railway.json), builds the `Dockerfile` and starts the server —
+no guessing at what the project is. Set the variables on the service:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` — a reference to the database you just added |
+| `STEAM_API_KEY` | yours from Valve |
+| `SESSION_SECRET` | any long random string |
+| `ENCRYPTION_KEY` | the same, and never change it afterwards |
+| `CRON_SECRET` | the same; without it the tracker doesn't run |
+
+Keep it at one replica — see [the tracker section](#playtime-tracker) for why.
+
+### Docker Compose
+
+On any machine with Docker, this is the whole thing — the app, a PostgreSQL, a
+volume for it, and a one-shot job that puts the schema in place before the app
+is let anywhere near it:
+
+```sh
+cp .env.example .env   # fill in STEAM_API_KEY and make up the secrets
+docker compose up -d
+```
+
+`http://localhost:4321`. `DATABASE_URL` is set inside
+[`docker-compose.yml`](docker-compose.yml) and ignored from `.env` — the
+database is the `db` container, and a local development `.env` pointing at
+localhost shouldn't be able to quietly break it.
+
+To generate the secrets:
+
+```sh
+openssl rand -base64 32
+```
+
+Logs are `docker compose logs -f app`; if the app never comes up, look at
+`docker compose logs schema` first — that's where a database that refused the
+schema will say so.
+
+### Just the image
+
+The [`Dockerfile`](Dockerfile) is a plain multi-stage build with nothing
+platform-specific in it, so it works anywhere a container does. It needs
+`HOST=0.0.0.0` (already set), a `PORT`, and the variables from the table above.
+The schema is applied by the image too:
+
+```sh
+docker run --rm -e DATABASE_URL=... your-image npm run db:push
+```
 
 ## Model key (BYOK)
 
@@ -160,9 +253,12 @@ MIT — see [LICENSE](LICENSE).
 
 ## Support
 
-If Curio turned out to be useful: https://buymeacoffee.com/CHANGEME
-
-<!-- TODO: replace CHANGEME with the real Buy Me a Coffee address -->
+Curio is not a business. If it turned out to be useful, there's
+[GitHub Sponsors](https://github.com/sponsors/klchdev) — it covers the hosting
+and the domain, and that's all it does. Nothing is locked behind it: there is no
+paid tier, no sponsor-only feature, and the hosted instance works the same
+whether you give anything or not. The code is MIT, so the other way to support
+it is a fork or a patch.
 
 ---
 
