@@ -99,6 +99,10 @@ const RU = {
     demoCta: "Попробовать без аккаунта",
     demoHint: "Готовый дневник вымышленного человека — сразу видно, что получается на выходе",
 
+    pickEyebrow: "Так выглядит совет",
+    pickNote:
+      "Пример собран на вымышленном дневнике — у тебя это будут ссылки на твои же записи.",
+
     howTitle: "Как это работает",
     step1Title: "Свой ключ от нейросети",
     step1Text: "Gemini, Claude или GPT — ключ берётся у провайдера за минуту и вводится в настройках. Запросы уходят от твоего имени: сервис за них не платит и своего ключа не держит.",
@@ -219,6 +223,8 @@ const RU = {
       "Войди через Steam — библиотека подтянется сама, отзывы с профиля перенесутся одной кнопкой. Сервис бесплатный и работает на твоём ключе от нейросети.",
     ctaButton: "Войти через Steam",
     backToLanding: "На главную",
+    /* Демо наполняется шагами, но заставлять проходить их — это тоже стена. */
+    skipToEnd: "Показать готовое",
   },
 
   dev: {
@@ -656,6 +662,9 @@ const EN: Dict = {
     demoCta: "Try it without an account",
     demoHint: "A ready-made diary of a made-up player — you can see what comes out the other end",
 
+    pickEyebrow: "What a pick looks like",
+    pickNote: "Built from a made-up diary — yours would quote your own entries instead.",
+
     howTitle: "How it works",
     step1Title: "Your own AI key",
     step1Text: "Gemini, Claude or GPT — a key takes a minute to get from the provider and goes into settings. Requests go out in your name: this service pays for none of them and keeps no key of its own.",
@@ -763,6 +772,7 @@ const EN: Dict = {
       "Sign in with Steam — the library comes in on its own and your profile reviews import with one button. The service is free and runs on your own AI key.",
     ctaButton: "Sign in with Steam",
     backToLanding: "Back to the homepage",
+    skipToEnd: "Skip to the finished demo",
   },
 
   dev: {

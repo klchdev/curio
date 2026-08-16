@@ -6,12 +6,18 @@
  * signing in through Steam, bringing your own model key, and writing a dozen
  * reviews. Until those are cleared, the app shows an empty diary and asks to
  * be taken on faith — and there is nothing to take on faith, because the whole
- * point of Curio is only visible on a filled-in account. The demo removes all
- * three walls at once.
+ * point of Curio is only visible on a filled-in account.
+ *
+ * So the demo does not display a finished account: it starts empty and fills up
+ * from the visitor's own clicks, in the order a real account fills up. Pull the
+ * library, import the reviews, generate the advice. Every one of those is the
+ * production screen doing its production job — the only thing replaced is the
+ * server behind it, which the demo does not have.
  *
  * The session is deliberately never asked for here: no redirect, no user in
  * the database, no trip to Steam, not a single model call. Everything on the
- * screen was computed ahead of time in `demo-fixtures.ts`.
+ * screen was computed ahead of time in `demo-fixtures.ts`, and how much of it
+ * is shown depends on how far the visitor has walked.
  *
  * The prop layout mirrors `dashboard.astro` line for line — and must keep
  * mirroring it. The moment the demo starts feeding the hub its own way, it
@@ -21,14 +27,36 @@ import Layout from "../layouts/Layout.astro";
 import DemoBanner from "../components/demo/DemoBanner.astro";
 import DemoCta from "../components/demo/DemoCta.astro";
 import DemoHub from "../components/demo/DemoHub";
+import DemoOnboarding from "../components/demo/DemoOnboarding";
 import { demoRun, runVariantFrom } from "../components/demo/demo-run";
+import { reached, stepFrom } from "../components/demo/demo-step";
 import type { Zone } from "../components/hub/Hub";
+import type { ProviderMeta } from "../components/LlmKeyForm";
 import { DEMO } from "../lib/demo-fixtures";
+import { ADAPTER_LIST } from "../lib/llm";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
 
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
+
+const step = stepFrom(Astro.url.searchParams);
+const hasLibrary = reached(step, "library");
+const hasReviews = reached(step, "reviews");
+const hasAdvice = reached(step, "advice");
+
+/*
+ * Onboarding hands over to the hub once there are reviews to work with: that is
+ * exactly where the real product stops explaining itself and starts being used.
+ */
+const screen = hasReviews ? "hub" : "onboarding";
+
+/*
+ * Which advice set to show. Regenerating advice ends in a reload, and the mock
+ * points this parameter at the other set on its way out — so the freshly
+ * "generated" run is already in the first server-rendered frame.
+ */
+const run = demoRun(runVariantFrom(Astro.url.searchParams));
 
 // The zone lives in the URL — the hub writes it there itself, and a link to a zone must work
 const zoneParam = Astro.url.searchParams.get("zone");
@@ -41,11 +69,28 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
 });
 
 /*
- * Which advice set to show. Regenerating advice ends in a reload, and the mock
- * points this parameter at the other set on its way out — so the freshly
- * "generated" run is already in the first server-rendered frame.
+ * Only plain data goes to the island: the adapters pull in the SDKs of three
+ * providers. Same reasoning as on /onboarding and /settings.
  */
-const run = demoRun(runVariantFrom(Astro.url.searchParams));
+const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
+  id: adapter.id,
+  label: adapter.label,
+  keyHelpUrl: adapter.keyHelpUrl,
+  models: adapter.models,
+}));
+
+/*
+ * The key is shown as already set, and that is the one step the demo skips on
+ * purpose. A guest has no key to give, every possible answer to "save this key"
+ * would be a lie, and inviting someone to type a real API secret into a demo is
+ * a bad idea on its own. The rest of the walk — library, reviews, advice — is
+ * real clicking.
+ */
+const demoLlm = {
+  provider: "gemini" as const,
+  model: run.model,
+  keyMask: "AIza…7f2c",
+};
 ---
 
 <Layout title={s.demo.title}>
@@ -57,87 +102,111 @@ const run = demoRun(runVariantFrom(Astro.url.searchParams));
       <span class="font-medium">{DEMO.user.username}</span>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-500">
-      <a href="/try/demos" class="transition hover:text-white">{s.nav.demos}</a>
+      {/*
+        Not everyone came to walk a path — some just want to see the product.
+        Without this the demo turns into a quest, which is its own kind of wall.
+      */}
+      {!hasAdvice && (
+        <a href="/try?step=advice" class="text-emerald-400/90 transition hover:text-emerald-300">
+          {s.demo.skipToEnd}
+        </a>
+      )}
+      {hasReviews && <a href="/try/demos" class="transition hover:text-white">{s.nav.demos}</a>}
       <a href="/" class="transition hover:text-white">{s.demo.backToLanding}</a>
     </div>
   </div>
 
-  <DemoHub
-    client:load
-    picks={run.items}
-    slots={DEMO.slots.map(({ slot, game, currentPlaytime }) => ({
-      slotId: slot.id,
-      gameId: game.id,
-      title: game.title,
-      image: game.headerImage,
-      played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
-    }))}
-    updates={DEMO.attention.items
-      .filter((item) => item.reason === "update")
-      .map((item) => ({
-        gameId: item.gameId,
-        title: item.title,
-        headerImage: item.headerImage,
-        currentPlaytime: item.currentPlaytime,
-        lastRecordedPlaytime: item.lastRecordedPlaytime,
-        delta: item.delta,
-        verdict: item.existingVerdict,
-        rating: item.existingRating,
-        tier: item.existingTier,
+  {screen === "onboarding" ? (
+    <DemoOnboarding
+      client:load
+      providers={providers}
+      llm={demoLlm}
+      libraryCount={hasLibrary ? DEMO.stats.totalLibrary : 0}
+      reviewCount={0}
+      locale={locale}
+    />
+  ) : (
+    <DemoHub
+      client:load
+      picks={hasAdvice ? run.items : []}
+      slots={hasAdvice
+        ? DEMO.slots.map(({ slot, game, currentPlaytime }) => ({
+            slotId: slot.id,
+            gameId: game.id,
+            title: game.title,
+            image: game.headerImage,
+            played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
+          }))
+        : []}
+      updates={DEMO.attention.items
+        .filter((item) => item.reason === "update")
+        .map((item) => ({
+          gameId: item.gameId,
+          title: item.title,
+          headerImage: item.headerImage,
+          currentPlaytime: item.currentPlaytime,
+          lastRecordedPlaytime: item.lastRecordedPlaytime,
+          delta: item.delta,
+          verdict: item.existingVerdict,
+          rating: item.existingRating,
+          tier: item.existingTier,
+        }))}
+      queue={DEMO.attention.items
+        .filter((item) => item.reason === "triage")
+        .map((item) => ({
+          gameId: item.gameId,
+          title: item.title,
+          headerImage: item.headerImage,
+          playtimeMinutes: item.playtimeMinutes,
+          hasReview: item.hasReview,
+        }))}
+      queueTotal={DEMO.attention.triageTotal}
+      tierGames={DEMO.tierList.map((g) => ({
+        gameId: g.gameId,
+        title: g.gameTitle,
+        image: g.gameImage,
+        tier: g.tier,
       }))}
-    queue={DEMO.attention.items
-      .filter((item) => item.reason === "triage")
-      .map((item) => ({
-        gameId: item.gameId,
-        title: item.title,
-        headerImage: item.headerImage,
-        playtimeMinutes: item.playtimeMinutes,
-        hasReview: item.hasReview,
+      diary={DEMO.history
+        .filter((entry) => entry.type === "reviewed")
+        .slice(0, 6)
+        .map((entry) => ({
+          id: entry.entryId,
+          gameId: entry.gameId,
+          title: entry.gameTitle,
+          note: entry.note,
+          kind: entry.kind,
+          playtimeMinutes: entry.playtimeMinutes,
+          deltaMinutes: entry.deltaMinutes,
+          verdict: entry.verdict,
+          tier: entry.tier,
+          origin: entry.origin,
+        }))}
+      demos={DEMO.demos.slice(0, 8).map((d) => ({
+        gameId: d.gameId,
+        title: d.title,
+        headerImage: d.headerImage,
+        tier: d.tier,
+        note: d.note,
       }))}
-    queueTotal={DEMO.attention.triageTotal}
-    tierGames={DEMO.tierList.map((g) => ({
-      gameId: g.gameId,
-      title: g.gameTitle,
-      image: g.gameImage,
-      tier: g.tier,
-    }))}
-    diary={DEMO.history
-      .filter((entry) => entry.type === "reviewed")
-      .slice(0, 6)
-      .map((entry) => ({
-        id: entry.entryId,
-        gameId: entry.gameId,
-        title: entry.gameTitle,
-        note: entry.note,
-        kind: entry.kind,
-        playtimeMinutes: entry.playtimeMinutes,
-        deltaMinutes: entry.deltaMinutes,
-        verdict: entry.verdict,
-        tier: entry.tier,
-        origin: entry.origin,
-      }))}
-    demos={DEMO.demos.slice(0, 8).map((d) => ({
-      gameId: d.gameId,
-      title: d.title,
-      headerImage: d.headerImage,
-      tier: d.tier,
-      note: d.note,
-    }))}
-    stats={DEMO.stats}
-    reviewCount={DEMO.reviewCount}
-    poolSize={DEMO.pool.length}
-    freeSkips={DEMO.freeSkips.available}
-    locale={locale}
-    initialZone={initialZone}
-    lastSyncAt={DEMO.user.lastLibrarySync ? new Date(DEMO.user.lastLibrarySync).getTime() : null}
-    runProfile={run.profile}
-    runDate={dateFormat.format(new Date(run.createdAt))}
-    activeRunId={null}
-    activeRunProgress={null}
-  />
+      stats={DEMO.stats}
+      reviewCount={DEMO.reviewCount}
+      poolSize={DEMO.pool.length}
+      freeSkips={DEMO.freeSkips.available}
+      locale={locale}
+      initialZone={initialZone}
+      lastSyncAt={DEMO.user.lastLibrarySync ? new Date(DEMO.user.lastLibrarySync).getTime() : null}
+      runProfile={hasAdvice ? run.profile : null}
+      runDate={hasAdvice ? dateFormat.format(new Date(run.createdAt)) : null}
+      activeRunId={null}
+      activeRunProgress={null}
+    />
+  )}
 
-  {/* The hub's bottom bar is pinned to the screen — it needs headroom underneath */}
-  <div class="pb-28">
-    <DemoCta />
-  </div>
+  {/* The call to action belongs at the finish, where there is something to lose */}
+  {hasAdvice && (
+    <div class="pb-28">
+      <DemoCta />
+    </div>
+  )}
 </Layout>

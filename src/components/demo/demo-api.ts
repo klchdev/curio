@@ -33,6 +33,7 @@ import {
   DEMO_LIBRARY,
   DEMO_POOL,
   DEMO_RECORDS,
+  DEMO_REVIEW_COUNT,
   DEMO_RUN,
   DEMO_STATS,
   DEMO_TIER_LIST,
@@ -40,6 +41,7 @@ import {
 import { t, type Dict } from "../../lib/strings";
 import type { Locale } from "../../lib/i18n";
 import { RUN_PARAM, demoRun, nextRunVariant, runVariantFrom, type RunVariant } from "./demo-run";
+import { reached, stepFrom, withStep, type DemoStep } from "./demo-step";
 
 type Body = Record<string, unknown>;
 
@@ -211,24 +213,46 @@ interface MockRun {
 let mockRun: MockRun | null = null;
 let lastRunId = 9500;
 
+function here(): URL {
+  return new URL(window.location.href);
+}
+
+function currentStep(): DemoStep {
+  return stepFrom(here().searchParams);
+}
+
 function currentVariant(): RunVariant {
-  return runVariantFrom(new URL(window.location.href).searchParams);
+  return runVariantFrom(here().searchParams);
+}
+
+/**
+ * Move the demo forward. Only forward: a visitor who already has advice must
+ * not be pushed back to an empty library by pressing "sync" out of curiosity.
+ */
+function advance(step: DemoStep): void {
+  if (reached(currentStep(), step)) return;
+  window.history.replaceState(null, "", withStep(here(), step));
 }
 
 /**
  * Point the address at an advice set. The hub reloads the page the moment a run
- * reports `done`, and the server reads this parameter on the way back — so the
- * new advice is already in the first painted frame.
+ * reports `done`, and the server reads these parameters on the way back — so
+ * the new advice is already in the first painted frame.
  */
 function selectRun(variant: RunVariant): void {
-  const url = new URL(window.location.href);
+  const url = withStep(here(), "advice");
   if (variant === "base") url.searchParams.delete(RUN_PARAM);
   else url.searchParams.set(RUN_PARAM, variant);
   window.history.replaceState(null, "", url);
 }
 
 function startRun(): Response {
-  const target = nextRunVariant(currentVariant());
+  /*
+   * The first run is what turns an empty "Choose" zone into advice, so it lands
+   * on the first set. Only once advice is on screen does regenerating mean
+   * "give me a different answer", and the two sets start taking turns.
+   */
+  const target = reached(currentStep(), "advice") ? nextRunVariant(currentVariant()) : "base";
   mockRun = {
     id: (lastRunId += 1),
     startedAt: Date.now(),
@@ -304,17 +328,36 @@ async function answer(url: URL, method: string, body: Body, s: Dict): Promise<Re
     case "GET /api/recommendation-status":
       return runStatus(Number(url.searchParams.get("runId")));
 
-    /* — Talking to Steam: the numbers come from the fixtures — */
+    /* — Talking to Steam: these two are what fill the empty demo — */
 
     case "POST /api/sync-library":
       await pause(STEAM_WORK_MS);
+      advance("library");
       return json({ synced: DEMO_STATS.totalLibrary });
 
-    // Reviews carried over from a Steam profile are marked `origin: "steam"` in
-    // the fixtures, so this count is the same one the diary shows badges for
-    case "POST /api/import-steam-reviews":
+    /*
+     * A second import legitimately finds nothing: the profile has already been
+     * read. That is how the real route behaves too, and it saves the demo from
+     * claiming to import the same diary twice.
+     */
+    case "POST /api/import-steam-reviews": {
       await pause(STEAM_WORK_MS);
-      return json({ imported: DEMO_STATS.steamCount, redated: 0 });
+      if (reached(currentStep(), "reviews")) return json({ imported: 0, redated: 0 });
+      advance("reviews");
+      return json({ imported: DEMO_REVIEW_COUNT, redated: 0 });
+    }
+
+    /*
+     * Finishing onboarding. The real screen ends with a hard jump to
+     * `/dashboard`, which for a guest is a redirect back to the landing page —
+     * and `location` cannot be patched to catch it. So the navigation is
+     * started here, and the promise is left unresolved on purpose: the caller
+     * never gets to run its own redirect, and the browser is already on its way
+     * to the demo's hub.
+     */
+    case "POST /api/onboarding":
+      window.location.replace(withStep(here(), "reviews").toString());
+      return new Promise<Response>(() => {});
 
     /* — Actions the screen reflects on its own, without a reload — */
 
