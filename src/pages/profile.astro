@@ -5,6 +5,9 @@ import { getStats } from "../lib/queries";
 import { formatPlaytime, verdictLabel } from "../lib/vocab";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
+import { getLlmSettings } from "../lib/llm/credentials";
+import { checkDevAccess, listTestAccounts } from "../lib/dev-accounts";
+import DevAccounts from "../components/DevAccounts";
 
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
@@ -13,6 +16,17 @@ const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
 const stats = await getStats(user.id);
+const llm = await getLlmSettings(user.id);
+
+/*
+ * The right to test accounts is decided on the server. For those not entitled
+ * to it the block simply is not there: hiding it with styles would ship both
+ * the list itself and the hint that the mechanism exists to the browser.
+ */
+const devAccess = await checkDevAccess(user.id);
+const testAccounts = devAccess.allowed && devAccess.ownerId
+  ? await listTestAccounts(devAccess.ownerId)
+  : [];
 
 const alreadyPlayed = stats.totalLibrary - stats.poolSize - stats.excludedCount;
 const progressPercent = stats.poolSize > 0
@@ -34,6 +48,27 @@ const formatTime = (minutes: number) => formatPlaytime(minutes, locale);
   </div>
 
   <!-- Backlog Progress -->
+  {/*
+    The model key lives on a separate page, but this is where people learn
+    about it: the profile is the first place they go looking for settings.
+    Without a key half the app stays silent, and a person should see that
+    state rather than guess at it.
+  */}
+  <section class="mb-8">
+    <a
+      href="/settings"
+      class="flex items-center justify-between rounded-xl border border-gray-800 bg-gray-900 p-5 transition hover:border-gray-700"
+    >
+      <div>
+        <div class="font-medium text-gray-200">{s.llm.title}</div>
+        <div class="mt-1 text-sm text-gray-500">
+          {llm.keyMask ? s.llm.keySaved(llm.keyMask) : s.llm.missingText}
+        </div>
+      </div>
+      <span class="text-gray-600">&rarr;</span>
+    </a>
+  </section>
+
   <section class="mb-8">
     <h2 class="mb-4 text-lg font-semibold">{s.pages.backlog}</h2>
     <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
@@ -141,4 +176,129 @@ const formatTime = (minutes: number) => formatPlaytime(minutes, locale);
       <p class="mt-2 text-green-400">{s.pages.cleanRecord}</p>
     </div>
   )}
+
+  {devAccess.allowed && devAccess.ownerId && (
+    <section class="mt-8">
+      <h2 class="mb-4 text-lg font-semibold">{s.dev.title}</h2>
+      <DevAccounts
+        client:load
+        accounts={testAccounts}
+        ownerId={devAccess.ownerId}
+        currentId={user.id}
+        locale={locale}
+      />
+    </section>
+  )}
+
+  <!-- My Data -->
+  <section class="mt-8">
+    <h2 class="mb-4 text-lg font-semibold">{s.account.title}</h2>
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
+      <p class="text-sm text-gray-400">{s.account.exportHint}</p>
+      <a
+        href="/api/account-export"
+        class="mt-4 inline-block rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition hover:border-indigo-500 hover:text-indigo-300"
+      >
+        {s.account.exportButton}
+      </a>
+    </div>
+  </section>
+
+  <!-- Danger Zone -->
+  <section class="mt-8">
+    <h2 class="mb-4 text-lg font-semibold text-red-400">{s.account.dangerZone}</h2>
+    <div
+      id="delete-account"
+      class="rounded-xl border border-red-900/50 bg-red-950/20 p-6"
+      data-username={user.username}
+      data-busy={s.account.deleting}
+      data-failed={s.account.deleteFailed}
+    >
+      <details>
+        <summary class="cursor-pointer text-sm font-semibold text-red-300 transition hover:text-red-200">
+          {s.account.deleteTitle}
+        </summary>
+
+        <p class="mt-4 text-sm leading-relaxed text-gray-300">{s.account.deleteWarning}</p>
+
+        <label for="delete-confirm" class="mt-5 block text-sm text-gray-400">
+          {s.account.deleteConfirmLabel(user.username)}
+        </label>
+        <input
+          id="delete-confirm"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder={s.account.deleteConfirmPlaceholder}
+          class="mt-2 w-full max-w-xs rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-200 outline-none transition focus:border-red-500"
+        />
+
+        <div class="mt-4">
+          <button
+            id="delete-submit"
+            type="button"
+            disabled
+            class="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
+          >
+            {s.account.deleteSubmit}
+          </button>
+        </div>
+
+        <p id="delete-error" class="mt-3 hidden text-sm text-red-400"></p>
+      </details>
+    </div>
+  </section>
 </Layout>
+
+<script>
+  /*
+   * One field and one button — there is nothing here for an island to do:
+   * React would be shipped for the sake of comparing two strings. The username
+   * and the labels sit in data attributes, because this script is bundled
+   * separately and cannot reach the server-side variables.
+   */
+  const root = document.getElementById("delete-account");
+  const input = document.getElementById("delete-confirm");
+  const button = document.getElementById("delete-submit");
+  const error = document.getElementById("delete-error");
+
+  if (
+    root instanceof HTMLElement &&
+    input instanceof HTMLInputElement &&
+    button instanceof HTMLButtonElement &&
+    error instanceof HTMLElement
+  ) {
+    const expected = root.dataset.username ?? "";
+    const idleLabel = button.textContent ?? "";
+
+    input.addEventListener("input", () => {
+      button.disabled = input.value !== expected;
+    });
+
+    button.addEventListener("click", async () => {
+      // The button is locked anyway, but a click can arrive past it — from the keyboard
+      if (input.value !== expected) return;
+
+      button.disabled = true;
+      button.textContent = root.dataset.busy ?? idleLabel;
+      error.classList.add("hidden");
+
+      try {
+        const response = await fetch("/api/account-delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: input.value }),
+        });
+        if (!response.ok) throw new Error(String(response.status));
+
+        // The profile no longer exists — every page of the app is empty now
+        window.location.href = "/";
+      } catch {
+        error.textContent = root.dataset.failed ?? "";
+        error.classList.remove("hidden");
+        button.disabled = false;
+        button.textContent = idleLabel;
+      }
+    });
+  }
+</script>
