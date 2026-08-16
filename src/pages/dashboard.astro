@@ -17,17 +17,47 @@ import {
 import Hub, { type Zone } from "../components/hub/Hub";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
+import { THRESHOLDS } from "../lib/vocab";
+import { getLlmSettings } from "../lib/llm/credentials";
+import { db } from "../db";
+import { users, userGames } from "../db/schema";
+import { eq, sql } from "drizzle-orm";
 
 const user = await getSessionUser(Astro);
 if (!user) return Astro.redirect("/");
 
 /*
- * Хаб получает всё с сервера одним заходом: острову остаётся переключать
- * зоны и отправлять действия, догружать он ничего не должен.
+ * Everyone brings their own model key, so a fresh account is an empty product,
+ * not "a dashboard without data". We steer people into setup, but only while
+ * they have never opened it: once it has been skipped, a person is entitled to
+ * sit in an empty app and not be thrown out of it on every visit.
+ */
+const [llm, onboardingRow, libraryRow] = await Promise.all([
+  getLlmSettings(user.id),
+  db
+    .select({ completedAt: users.onboardingCompletedAt })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1)
+    .then((rows) => rows[0]),
+  db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(userGames)
+    .where(eq(userGames.userId, user.id))
+    .then((rows) => rows[0]),
+]);
+
+if (!onboardingRow?.completedAt && !llm.keyMask) return Astro.redirect("/onboarding");
+
+const librarySize = libraryRow?.n ?? 0;
+
+/*
+ * The hub gets everything from the server in one pass: all the island has left
+ * to do is switch zones and send actions, it must never fetch anything more.
  */
 const locale = localeFrom(Astro.cookies, Astro.request);
 
-// Редиректы со старых страниц приходят с зоной — иначе тир-лист ведёт «не туда»
+// Redirects from the old pages carry a zone — otherwise the tier list lands "somewhere else"
 const zoneParam = Astro.url.searchParams.get("zone");
 const initialZone: Zone =
   zoneParam === "now" || zoneParam === "recap" ? zoneParam : "choose";
@@ -63,6 +93,47 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
   day: "numeric",
   month: "long",
 });
+
+/*
+ * What is missing for the app to work in full. There is exactly one notice,
+ * and it is the first missing thing in order: the steps depend on each other,
+ * and three simultaneous complaints on an empty account do not help, they
+ * drown each other out.
+ *
+ * Staying silent is not an option here: without a key the AI features simply
+ * answer nothing, and the person has no way of knowing it is not a breakage.
+ */
+const reviewsLeft = THRESHOLDS.MIN_REVIEWS_FOR_AI - reviewCount;
+const setupGap: "key" | "library" | "reviews" | null = !llm.keyMask
+  ? "key"
+  : librarySize === 0
+    ? "library"
+    : reviewsLeft > 0
+      ? "reviews"
+      : null;
+
+const GAP_NOTICE = {
+  key: {
+    title: s.llm.missingTitle,
+    text: s.llm.missingText,
+    cta: s.llm.missingCta,
+    href: "/settings",
+  },
+  library: {
+    title: s.onboarding.needLibraryTitle,
+    text: s.onboarding.needLibraryText,
+    cta: s.onboarding.needLibraryCta,
+    href: "/onboarding?step=library",
+  },
+  reviews: {
+    title: s.onboarding.needReviewsTitle(reviewsLeft),
+    text: s.onboarding.needReviewsText,
+    cta: s.onboarding.needReviewsCta,
+    href: "/onboarding?step=reviews",
+  },
+};
+
+const notice = setupGap ? GAP_NOTICE[setupGap] : null;
 ---
 
 <Layout title="Curio">
@@ -80,10 +151,24 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
     </div>
   </div>
 
+  {notice && (
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-800/60 bg-amber-950/20 px-5 py-4">
+      <div class="max-w-xl">
+        <p class="font-medium text-amber-200">{notice.title}</p>
+        <p class="mt-1 text-sm leading-relaxed text-amber-200/70">{notice.text}</p>
+      </div>
+      <a
+        href={notice.href}
+        class="shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950 transition hover:bg-amber-400"
+      >
+        {notice.cta}
+      </a>
+    </div>
+  )}
+
   <Hub
     client:load
     picks={run?.items ?? []}
-    abandoned={run?.abandoned ?? []}
     slots={activeSlots.map(({ slot, game, currentPlaytime }) => ({
       slotId: slot.id,
       gameId: game.id,

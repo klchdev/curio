@@ -1,0 +1,64 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Onboarding, { type StepId } from "../components/Onboarding";
+import type { ProviderMeta } from "../components/LlmKeyForm";
+import { getSessionUser } from "../lib/session";
+import { getReviewCorpusSize } from "../lib/queries";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+import { ADAPTER_LIST } from "../lib/llm";
+import { getLlmSettings } from "../lib/llm/credentials";
+import { db } from "../db";
+import { userGames } from "../db/schema";
+import { eq, sql } from "drizzle-orm";
+
+const user = await getSessionUser(Astro);
+if (!user) return Astro.redirect("/");
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+const [settings, reviewCount, libraryRow] = await Promise.all([
+  getLlmSettings(user.id),
+  getReviewCorpusSize(user.id),
+  db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(userGames)
+    .where(eq(userGames.userId, user.id))
+    .then((rows) => rows[0]),
+]);
+
+/*
+ * Only plain data goes outward: the adapters pull in the SDKs of three
+ * providers, and handing them to an island means dragging all of that into the
+ * browser. Same story on /settings.
+ */
+const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
+  id: adapter.id,
+  label: adapter.label,
+  keyHelpUrl: adapter.keyHelpUrl,
+  models: adapter.models,
+}));
+
+// The dashboard notices link here with a step — otherwise a person lands "at the beginning"
+const stepParam = Astro.url.searchParams.get("step");
+const initialStep: StepId | null =
+  stepParam === "key" || stepParam === "library" || stepParam === "reviews" ? stepParam : null;
+---
+
+<Layout title={s.onboarding.title}>
+  <div class="mx-auto max-w-2xl py-10">
+    <h1 class="text-2xl font-semibold text-gray-100">{s.onboarding.title}</h1>
+    <p class="mt-2 mb-8 text-sm leading-relaxed text-gray-400">{s.onboarding.lede}</p>
+
+    <Onboarding
+      client:load
+      providers={providers}
+      llm={settings}
+      libraryCount={libraryRow?.n ?? 0}
+      reviewCount={reviewCount}
+      locale={locale}
+      initialStep={initialStep}
+    />
+  </div>
+</Layout>
