@@ -45,6 +45,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Without this the build runs on the default `docker` driver, which
+      # cannot export a cache — and the step below asks it to, so the job fails
+      # before it ever reaches the Dockerfile. Buildx brings the
+      # `docker-container` driver, which can.
+      - uses: docker/setup-buildx-action@v3
+
       # The README offers this image as a way to run the project, so a
       # Dockerfile that stopped building would be a broken promise rather than
       # an internal problem. Build only — pushing it anywhere is not this
