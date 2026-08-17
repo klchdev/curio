@@ -3,7 +3,8 @@ import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
-import { DEMO_POOL } from "../lib/demo-fixtures";
+import { DEMO_TIER_LIST } from "../lib/demo-fixtures";
+import { TIER_STYLE } from "../lib/vocab";
 
 const user = await getSessionUser(Astro);
 if (user) return Astro.redirect("/dashboard");
@@ -29,24 +30,33 @@ const STEPS = [
 ];
 
 /*
- * Decoration above the headline, nothing more: covers say "games" at a glance
- * and let the sentence underneath do the explaining. Hence no tiers, titles or
- * reasons here — anything readable would compete with the headline.
+ * The strip above the headline.
  *
- * `DEMO_POOL` rather than `DEMO_LIBRARY` only because it is that same library
- * already carrying cover URLs; the fixtures keep their `header()` builder
- * private, and a second copy of Valve's CDN path is not worth three images.
- * Either way this is fixture data — never a real person's shelf on a public page.
+ * Three covers on their own only said "this is about games", which the headline
+ * says better. What the product actually does to a game is put a letter on it,
+ * so the letter comes along: same `TIER_STYLE` the app stamps on a shelf, same
+ * fixtures, and each cover keeps the tier that was really written about it. A
+ * badge is one glyph — it reads before the headline instead of competing with
+ * it, and it is the one thing a stranger needs to guess what is on offer here.
+ *
+ * Fixture data throughout: a real person's shelf has no business on a public
+ * page. The four are taken from across the range on purpose — a wall of S would
+ * say the advisor likes everything.
  */
-const ARC = DEMO_POOL.slice(0, 3).map((game, index, all) => {
-  const offset = index - (all.length - 1) / 2;
-  return {
-    image: game.headerImage,
-    rotate: offset * 8,
-    // Squared so the outer two dip evenly and the row reads as a curve
-    drop: offset * offset * 14,
-  };
-});
+const SHELF = ["S", "A", "C", "D"]
+  .map((tier) => DEMO_TIER_LIST.find((game) => game.tier === tier))
+  .filter((game) => game !== undefined)
+  .map((game, index, all) => {
+    const offset = index - (all.length - 1) / 2;
+    return {
+      image: game.gameImage,
+      title: game.gameTitle,
+      tier: game.tier as keyof typeof TIER_STYLE,
+      rotate: offset * 6,
+      // Squared so the outer ones dip evenly and the row reads as a curve
+      drop: offset * offset * 10,
+    };
+  });
 
 const FEATURES = [
   { title: s.landing.featureDiary, text: s.landing.featureDiaryText },
@@ -78,21 +88,27 @@ const FEATURES = [
       Curio
     </p>
 
-    <!-- aria-hidden with empty alts: purely ornamental, and a screen reader
-         announcing three game names before the headline would be noise -->
+    <!-- aria-hidden with empty alts: ornament for the eye, and a screen reader
+         reciting four game names and four letters ahead of the headline would
+         bury the sentence that actually explains the product -->
     <div class="reveal mb-6 flex items-start sm:mb-8" aria-hidden="true">
-      {ARC.map((cover, index) => (
+      {SHELF.map((game, index) => (
         <div
-          class={`arc-card ${index > 0 ? "-ml-5 sm:-ml-7" : ""}`}
-          style={`--rot: ${cover.rotate}deg; --drop: ${cover.drop}px`}
+          class={`arc-card relative ${index > 0 ? "-ml-6 sm:-ml-8" : ""}`}
+          style={`--rot: ${game.rotate}deg; --drop: ${game.drop}px`}
         >
           <img
-            src={cover.image}
+            src={game.image}
             alt=""
             width="460"
             height="215"
-            class="w-24 rounded-lg border border-gray-800 bg-gray-900 shadow-xl shadow-black/50 sm:w-36"
+            class="w-24 rounded-lg border border-gray-800 bg-gray-900 shadow-xl shadow-black/50 sm:w-32"
           />
+          <span
+            class={`absolute -top-2 -left-2 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold shadow-lg shadow-black/50 sm:h-8 sm:w-8 ${TIER_STYLE[game.tier].bg} ${TIER_STYLE[game.tier].text}`}
+          >
+            {game.tier}
+          </span>
         </div>
       ))}
     </div>
