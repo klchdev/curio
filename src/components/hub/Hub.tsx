@@ -1890,6 +1890,12 @@ function RecapZone({
 
   return (
     <div className="space-y-12">
+      {/*
+        The grid stretches these to a common height, but only the wrapper — so
+        the card inside is told to fill it, and its contents are centred rather
+        than left hanging at the top. One of the four carries a third line and
+        used to stand taller than the rest on its own.
+      */}
       <section className="grid gap-3 sm:grid-cols-4">
         {[
           {
@@ -1904,8 +1910,8 @@ function RecapZone({
           { value: stats.streak, label: s.recap.statStreak },
           { value: stats.wallOfShame.length, label: s.recap.statShame },
         ].map((cell, i) => (
-          <Reveal key={cell.label} delay={60 * i} from="scale">
-            <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-5 text-center">
+          <Reveal key={cell.label} delay={60 * i} from="scale" className="h-full">
+            <div className="flex h-full flex-col justify-center rounded-xl border border-gray-800 bg-gray-900/40 p-5 text-center">
               <p className="text-3xl font-bold">{cell.value}</p>
               <p className="mt-1 text-xs text-gray-500">{cell.label}</p>
               {"hint" in cell && cell.hint && (
