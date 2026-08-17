@@ -232,21 +232,6 @@ curl -H "authorization: Bearer $CRON_SECRET" "https://<app>/api/cron/poll?job=al
 What the tracker can't do: see a player with a private profile or in invisible
 mode — for them only the counter readings survive, with no session boundaries.
 
-### History from before the tracker
-
-Some of the past can still be recovered — from the journal. Every entry is
-stamped with an absolute playtime and a date, so two entries about the same game
-give you an interval: "127 minutes played between May 3rd and May 12th".
-
-```sh
-DATABASE_URL=... npx tsx scripts/backfill-playtime-history.ts          # dry run
-DATABASE_URL=... npx tsx scripts/backfill-playtime-history.ts --apply
-```
-
-Those rows are marked `source='backfill'` and stay out of the heatmap: the hour
-in them is unknown, the average interval is nine days, and spreading it across
-the day would mean inventing it.
-
 ## Privacy
 
 What is stored, where it goes and how to delete all of it — in
