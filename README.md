@@ -15,7 +15,7 @@ a game. The advice is built on that profile: your unplayed games get sorted into
 tiers with links back to your own words, and any single game can be put through
 a deep dive over its Steam reviews.
 
-![Curio: picking what to play next from a diary of impressions](docs/demo.gif)
+![Curio suggesting what to play next, with the reasoning drawn from the player's own entries](docs/demo.gif)
 
 *Recorded in demo mode — the library and the diary belong to a made-up player.
 You can [walk through the same thing](https://curio.brainy.run/try) without an
@@ -44,6 +44,12 @@ Update · 4 h 20 min
 Verdict · 12 h · Finished · 4/5
   "Glad I stuck with it, the ending is strong..."
 ```
+
+![Writing a verdict on a finished game, with the playtime filled in from Steam](docs/demo-writing.gif)
+
+*Closing a game off: the rating, the verdict and what it left you with. The
+playtime is not typed in — it comes from Steam, which is what makes an entry
+comparable to the one written forty hours earlier.*
 
 ## Stack
 
