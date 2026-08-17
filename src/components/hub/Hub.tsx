@@ -416,13 +416,18 @@ export default function Hub(props: Props) {
             errand, needed only when the shelf itself changed. What it says out
             loud lives in the tooltip instead — including the freshness line,
             which nobody reads until they are already wondering.
+
+            The square is a fixed size rather than an `aspect-square`: in this
+            flex row the width comes from the content, so a ratio had nothing to
+            work from and the button stretched into a tall pill. 14 is the height
+            of a dock tile — two lines of text plus its padding.
           */}
           <button
             onClick={sync}
             disabled={busy !== null}
             title={`${s.dock.sync} · ${syncResult ?? syncFreshness}\n${s.dock.syncWhy}`}
             aria-label={s.dock.sync}
-            className="grid aspect-square shrink-0 place-items-center self-stretch rounded-xl border border-gray-800 text-2xl transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
+            className="grid size-14 shrink-0 place-items-center self-center rounded-xl border border-gray-800 text-2xl transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
           >
             <span
               className={`block leading-none ${busy === "sync" ? "animate-spin" : ""} ${syncResult ? "text-emerald-400" : "text-gray-400"}`}
