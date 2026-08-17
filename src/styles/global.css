@@ -40,3 +40,39 @@
   aspect-ratio: 460 / 215;
   object-fit: cover;
 }
+
+/*
+ * The contract that just landed.
+ *
+ * Arriving in "Now" from a roll or a pick, the new card looks exactly like the
+ * two beside it, and the question the roulette was asked — which one did I get
+ * — goes unanswered. A short pulse points at it once and stops; the ring around
+ * it fades out on its own a few seconds later.
+ *
+ * Anyone who asked their system not to animate gets the ring alone, which
+ * carries the same answer without the movement.
+ */
+@keyframes landed {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.5);
+  }
+  60% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 12px rgb(16 185 129 / 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0);
+  }
+}
+
+.just-landed {
+  animation: landed 700ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .just-landed {
+    animation: none;
+  }
+}

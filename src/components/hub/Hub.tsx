@@ -189,10 +189,33 @@ export default function Hub(props: Props) {
   const takenIds = new Set(taken.map((slot) => slot.gameId));
   const openPicks = takenIds.size > 0 ? picks.filter((p) => !takenIds.has(p.gameId)) : picks;
 
+  /*
+   * The game the visitor just committed to, until the highlight fades.
+   *
+   * Taking a contract used to leave you standing in "Choose" with a toast: the
+   * one thing that changed was a slot on a screen you were not looking at. And
+   * the blind roll was worse — it reloaded the page, so the answer to "what did
+   * I get?" was a screen that looked identical. Both now walk you to where the
+   * contract landed and point at it.
+   */
+  const [landed, setLanded] = useState<number | null>(null);
+
   function onTaken(slot: Slot) {
     setTaken((prev) => [...prev, slot]);
     setToast(slot.title);
+    setLanded(slot.gameId);
+    goTo("now");
   }
+
+  /*
+   * Long enough to find the card after the zone change, short enough that it
+   * does not become a permanent decoration on a card like any other.
+   */
+  useEffect(() => {
+    if (landed === null) return;
+    const timer = setTimeout(() => setLanded(null), 4000);
+    return () => clearTimeout(timer);
+  }, [landed]);
 
   const pick = picks[index];
   const tone = TIER_STYLE[pick?.tier as Tier] ?? TIER_STYLE.B;
@@ -337,6 +360,7 @@ export default function Hub(props: Props) {
             setBusy={setBusy}
             post={post}
             onZone={goTo}
+            landed={landed}
           />
         )}
         {zone === "recap" && <RecapZone {...props} post={post} />}
@@ -450,6 +474,8 @@ type ZoneProps = Props & {
   busy: string | null;
   setBusy: (value: string | null) => void;
   post: (url: string, body?: unknown) => Promise<boolean>;
+  /** The game whose contract was just taken — highlighted until it fades. */
+  landed?: number | null;
 };
 
 function ChooseZone({
@@ -540,11 +566,35 @@ function ChooseZone({
     }
   }
 
+  /*
+   * The blind roll used to end in a full reload, which is why it read as a
+   * button that did nothing: the answer it produced — a contract on a game you
+   * had not chosen — was three screens away and looked no different from before.
+   * The route already returns the slot and the game, so the contract is put on
+   * screen here instead, the same way one taken by hand is.
+   */
   async function spinBlind() {
     setBusy("spin");
-    const ok = await post("/api/spin");
-    setBusy(null);
-    if (ok) window.location.reload();
+    setRunError(null);
+    try {
+      const res = await fetch("/api/spin", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.slot?.id) {
+        setRunError(data.error || s.errors.generic);
+        return;
+      }
+      onTaken({
+        slotId: data.slot.id,
+        gameId: data.game.id,
+        title: data.game.title,
+        image: data.game.headerImage ?? null,
+        played: 0,
+      });
+    } catch {
+      setRunError(s.errors.network);
+    } finally {
+      setBusy(null);
+    }
   }
 
   const blindSpin = (
@@ -1441,6 +1491,7 @@ function NowZone({
   busy,
   setBusy,
   post,
+  landed,
 }: ZoneProps & { onZone: (zone: Zone) => void }) {
   const s = t(locale);
   const [sheet, setSheet] = useState<{ mode: "slot-first" | "retro" | "entry"; item: any } | null>(
@@ -1492,7 +1543,18 @@ function NowZone({
         <div className="grid gap-3 md:grid-cols-3">
           {slots.map((slot, i) => (
             <Reveal key={slot.slotId} delay={70 * i} from="scale">
-              <article className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50">
+              {/*
+                The freshly taken one is ringed rather than moved to the front:
+                a card that jumps to another position is a card you then have to
+                find twice.
+              */}
+              <article
+                className={`overflow-hidden rounded-2xl border bg-gray-900/50 transition-colors duration-700 ${
+                  slot.gameId === landed
+                    ? "just-landed border-emerald-500 shadow-lg shadow-emerald-500/20"
+                    : "border-gray-800"
+                }`}
+              >
                 {slot.image && <img src={slot.image} alt="" className="header-art w-full" />}
                 <div className="p-4">
                   <p className="truncate font-medium">{slot.title}</p>

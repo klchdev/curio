@@ -256,9 +256,21 @@ function spin(): Response {
   if (pool.length === 0) return json({ error: "" }, 400);
 
   const picked = pool[Math.floor(Math.random() * pool.length)];
+
+  /*
+   * The address is written even though the hub no longer reloads: the guest may
+   * refresh out of habit, and a contract that vanishes on refresh is worse than
+   * one that was never offered.
+   */
   url.searchParams.set(SPIN_PARAM, String(picked.id));
   window.history.replaceState(null, "", url);
-  return json({ ok: true });
+
+  // The shape production returns — the hub reads `slot` and `game` off it
+  return json({
+    slot: { id: 9999, gameId: picked.id, status: "active", playtimeOnStart: 0 },
+    game: { id: picked.id, title: picked.title, headerImage: picked.headerImage },
+    decoys: [],
+  });
 }
 
 function startRun(): Response {
