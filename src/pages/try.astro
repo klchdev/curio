@@ -8,11 +8,13 @@
  * be taken on faith — and there is nothing to take on faith, because the whole
  * point of Curio is only visible on a filled-in account.
  *
- * So the demo does not display a finished account: it starts empty and fills up
- * from the visitor's own clicks, in the order a real account fills up. Pull the
- * library, import the reviews, generate the advice. Every one of those is the
- * production screen doing its production job — the only thing replaced is the
- * server behind it, which the demo does not have.
+ * So the demo does not open on a finished account either: it stops one step
+ * short, on the screen that offers to read the diary, and lets the visitor press
+ * the button themselves. That press is the product — everything before it (a
+ * library pulled from Steam, reviews imported) is a chore a guest does not have,
+ * since the library is invented and the reviews are already written. What is on
+ * screen is the production hub doing its production job; the only thing replaced
+ * is the server behind it, which the demo does not have.
  *
  * The session is deliberately never asked for here: no redirect, no user in
  * the database, no trip to Steam, not a single model call. Everything on the
@@ -27,29 +29,17 @@ import Layout from "../layouts/Layout.astro";
 import DemoBanner from "../components/demo/DemoBanner.astro";
 import DemoCta from "../components/demo/DemoCta.astro";
 import DemoHub from "../components/demo/DemoHub";
-import DemoOnboarding from "../components/demo/DemoOnboarding";
 import { demoRun, runVariantFrom } from "../components/demo/demo-run";
-import { reached, stepFrom } from "../components/demo/demo-step";
+import { stepFrom } from "../components/demo/demo-step";
 import type { Zone } from "../components/hub/Hub";
-import type { ProviderMeta } from "../components/LlmKeyForm";
 import { DEMO } from "../lib/demo-fixtures";
-import { ADAPTER_LIST } from "../lib/llm";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
 
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
 
-const step = stepFrom(Astro.url.searchParams);
-const hasLibrary = reached(step, "library");
-const hasReviews = reached(step, "reviews");
-const hasAdvice = reached(step, "advice");
-
-/*
- * Onboarding hands over to the hub once there are reviews to work with: that is
- * exactly where the real product stops explaining itself and starts being used.
- */
-const screen = hasReviews ? "hub" : "onboarding";
+const hasAdvice = stepFrom(Astro.url.searchParams) === "advice";
 
 /*
  * Which advice set to show. Regenerating advice ends in a reload, and the mock
@@ -69,28 +59,19 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
 });
 
 /*
- * Only plain data goes to the island: the adapters pull in the SDKs of three
- * providers. Same reasoning as on /onboarding and /settings.
+ * What is already in place before the visitor presses anything.
+ *
+ * Without this the advisor looks like it works on nothing: the screen asks to
+ * read "15 reviews" that the guest never saw arrive. Naming the three inputs
+ * also gives the demo its only chance to say who the key belongs to — the guest
+ * is never asked for one here, and a service that quietly runs on somebody
+ * else's key is a promise it cannot keep.
  */
-const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
-  id: adapter.id,
-  label: adapter.label,
-  keyHelpUrl: adapter.keyHelpUrl,
-  models: adapter.models,
-}));
-
-/*
- * The key is shown as already set, and that is the one step the demo skips on
- * purpose. A guest has no key to give, every possible answer to "save this key"
- * would be a lie, and inviting someone to type a real API secret into a demo is
- * a bad idea on its own. The rest of the walk — library, reviews, advice — is
- * real clicking.
- */
-const demoLlm = {
-  provider: "gemini" as const,
-  model: run.model,
-  keyMask: "AIza…7f2c",
-};
+const ready = [
+  s.demo.readyKey,
+  s.demo.readyLibrary(DEMO.stats.totalLibrary),
+  s.demo.readyReviews(DEMO.reviewCount),
+];
 ---
 
 <Layout title={s.demo.title}>
@@ -111,22 +92,26 @@ const demoLlm = {
           {s.demo.skipToEnd}
         </a>
       )}
-      {hasReviews && <a href="/try/demos" class="transition hover:text-white">{s.nav.demos}</a>}
+      <a href="/try/demos" class="transition hover:text-white">{s.nav.demos}</a>
       <a href="/" class="transition hover:text-white">{s.demo.backToLanding}</a>
     </div>
   </div>
 
-  {screen === "onboarding" ? (
-    <DemoOnboarding
-      client:load
-      providers={providers}
-      llm={demoLlm}
-      libraryCount={hasLibrary ? DEMO.stats.totalLibrary : 0}
-      reviewCount={0}
-      locale={locale}
-    />
-  ) : (
-    <DemoHub
+  {!hasAdvice && (
+    <div class="mb-8 rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
+      <ul class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-300">
+        {ready.map((line) => (
+          <li class="flex items-center gap-2">
+            <span class="text-emerald-400">✓</span>
+            {line}
+          </li>
+        ))}
+      </ul>
+      <p class="mt-3 text-xs leading-relaxed text-gray-500">{s.demo.readyKeyHint}</p>
+    </div>
+  )}
+
+  <DemoHub
       client:load
       picks={hasAdvice ? run.items : []}
       slots={hasAdvice
@@ -201,7 +186,6 @@ const demoLlm = {
       activeRunId={null}
       activeRunProgress={null}
     />
-  )}
 
   {/* The call to action belongs at the finish, where there is something to lose */}
   {hasAdvice && (

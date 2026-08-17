@@ -136,7 +136,7 @@ const RU = {
      */
     sponsorTitle: "Некоммерческий проект",
     sponsorText:
-      "Curio не берёт денег с пользователей и не будет: за нейросеть платит твой ключ напрямую провайдеру, своих расходов на неё у сервиса нет. Остаются хостинг и домен — на них и уходит поддержка, если захочется её оказать. Взамен она не даёт ничего: ни функций, ни приоритета, ни доступа. Всё работает одинаково, заплатил ты или нет.",
+      "Расходов на нейросеть у сервиса нет, а хостинг и домен остаются — на них и уходит поддержка, если захочется её оказать. Взамен она не даёт ничего: ни функций, ни приоритета, ни доступа. Всё работает одинаково, заплатил ты или нет.",
     sponsorCta: "Поддержать через GitHub Sponsors",
 
     footerDisclaimer:
@@ -225,6 +225,16 @@ const RU = {
     backToLanding: "На главную",
     /* Демо наполняется шагами, но заставлять проходить их — это тоже стена. */
     skipToEnd: "Показать готовое",
+    /*
+     * Что уже сделано за гостя. Единственное место, где демо вообще говорит про
+     * ключ, — поэтому оно обязано сказать, чей он: иначе бесплатность сервиса
+     * выглядит как обещание, которое кто-то потом отзовёт.
+     */
+    readyKey: "Ключ от нейросети подключён",
+    readyKeyHint:
+      "В приложении ключ приносишь ты: Curio работает на нём и сверх этого не берёт ничего.",
+    readyLibrary: (n: number) => `${n} ${plural(n, "игра", "игры", "игр")} в библиотеке`,
+    readyReviews: (n: number) => `${n} ${plural(n, "отзыв", "отзыва", "отзывов")}`,
   },
 
   dev: {
@@ -692,7 +702,7 @@ const EN: Dict = {
 
     sponsorTitle: "A non-commercial project",
     sponsorText:
-      "Curio doesn't charge its users and won't: the model is paid for by your key, straight to the provider, so the service carries no inference bill of its own. What's left is hosting and a domain — that is where support goes, if you feel like giving any. It buys nothing in return: no features, no priority, no access. Everything works the same whether you paid or not.",
+      "The service carries no inference bill of its own, but hosting and a domain remain — that is where support goes, if you feel like giving any. It buys nothing in return: no features, no priority, no access. Everything works the same whether you paid or not.",
     sponsorCta: "Sponsor via GitHub",
 
     footerDisclaimer:
@@ -773,6 +783,11 @@ const EN: Dict = {
     ctaButton: "Sign in with Steam",
     backToLanding: "Back to the homepage",
     skipToEnd: "Skip to the finished demo",
+    readyKey: "AI key connected",
+    readyKeyHint:
+      "In the real app the key is yours: Curio runs on it and takes nothing on top.",
+    readyLibrary: (n: number) => `${n} ${n === 1 ? "game" : "games"} in the library`,
+    readyReviews: (n: number) => `${n} ${n === 1 ? "review" : "reviews"}`,
   },
 
   dev: {

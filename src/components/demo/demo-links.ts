@@ -13,10 +13,6 @@ import type { MouseEvent } from "react";
 const REROUTE: Record<string, string> = {
   "/demos": "/try/demos",
   "/history": "/auth/login",
-  "/settings": "/auth/login",
-  // Onboarding's "write them by hand" link — writing is the one thing a guest cannot do
-  "/dashboard": "/auth/login",
-  "/onboarding": "/try",
 };
 
 export function rerouteAppLinks(event: MouseEvent<HTMLElement>): void {

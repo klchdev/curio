@@ -3,8 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
-import PickPreview from "../components/landing/PickPreview.astro";
-import { DEMO_RUN } from "../lib/demo-fixtures";
+import { DEMO_POOL } from "../lib/demo-fixtures";
 
 const user = await getSessionUser(Astro);
 if (user) return Astro.redirect("/dashboard");
@@ -30,15 +29,24 @@ const STEPS = [
 ];
 
 /*
- * A real advice card beats any illustration of one: it is the thing the product
- * makes, and the reason text argues from the diary rather than from a genre.
+ * Decoration above the headline, nothing more: covers say "games" at a glance
+ * and let the sentence underneath do the explaining. Hence no tiers, titles or
+ * reasons here — anything readable would compete with the headline.
  *
- * Straight from the demo fixtures, never from a real account — this page is
- * public and what somebody owns is their own business. Taken by tier rather
- * than by index, because the fixture run keeps being reshuffled and a fixed
- * position would quietly turn into whatever happens to sit there.
+ * `DEMO_POOL` rather than `DEMO_LIBRARY` only because it is that same library
+ * already carrying cover URLs; the fixtures keep their `header()` builder
+ * private, and a second copy of Valve's CDN path is not worth three images.
+ * Either way this is fixture data — never a real person's shelf on a public page.
  */
-const HERO_PICK = DEMO_RUN.items.find((item) => item.tier === "S") ?? DEMO_RUN.items[0]!;
+const ARC = DEMO_POOL.slice(0, 3).map((game, index, all) => {
+  const offset = index - (all.length - 1) / 2;
+  return {
+    image: game.headerImage,
+    rotate: offset * 8,
+    // Squared so the outer two dip evenly and the row reads as a curve
+    drop: offset * offset * 14,
+  };
+});
 
 const FEATURES = [
   { title: s.landing.featureDiary, text: s.landing.featureDiaryText },
@@ -69,6 +77,25 @@ const FEATURES = [
     <p class="reveal mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">
       Curio
     </p>
+
+    <!-- aria-hidden with empty alts: purely ornamental, and a screen reader
+         announcing three game names before the headline would be noise -->
+    <div class="reveal mb-6 flex items-start sm:mb-8" aria-hidden="true">
+      {ARC.map((cover, index) => (
+        <div
+          class={`arc-card ${index > 0 ? "-ml-5 sm:-ml-7" : ""}`}
+          style={`--rot: ${cover.rotate}deg; --drop: ${cover.drop}px`}
+        >
+          <img
+            src={cover.image}
+            alt=""
+            width="460"
+            height="215"
+            class="w-24 rounded-lg border border-gray-800 bg-gray-900 shadow-xl shadow-black/50 sm:w-36"
+          />
+        </div>
+      ))}
+    </div>
 
     <h1 class="reveal reveal-1 mb-6 text-5xl leading-[1.05] font-bold text-balance sm:text-6xl">
       {s.landing.heroTop}<br />
@@ -115,21 +142,7 @@ const FEATURES = [
       </p>
     </div>
 
-    <!--
-      Placed inside the first screen, right under the buttons: this is the one
-      thing that explains the product without being read, so it must not sit
-      below the fold behind three paragraphs of prose.
-    -->
-    <!-- Breaks out of the prose column on wide screens: the card is the exhibit, not a paragraph -->
-    <section class="reveal reveal-4 mb-20 lg:-mx-16">
-      <h2 class="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">{s.landing.pickEyebrow}</h2>
-      <div class="rounded-2xl border border-gray-800 bg-gray-900/40 p-6 sm:p-8">
-        <PickPreview pick={HERO_PICK} locale={locale} />
-      </div>
-      <p class="mt-3 text-xs text-gray-600">{s.landing.pickNote}</p>
-    </section>
-
-    <section class="reveal reveal-5 mb-20">
+    <section class="reveal reveal-4 mb-20">
       <h2 class="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">{s.landing.howTitle}</h2>
       <div class="grid gap-6 sm:grid-cols-3">
         {STEPS.map((step, index) => (
@@ -142,7 +155,7 @@ const FEATURES = [
       </div>
     </section>
 
-    <section class="reveal reveal-6 mb-20">
+    <section class="reveal reveal-5 mb-20">
       <h2 class="mb-6 text-sm tracking-[0.2em] text-gray-500 uppercase">
         {s.landing.featuresTitle}
       </h2>
