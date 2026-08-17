@@ -263,6 +263,8 @@ MIT — see [LICENSE](LICENSE).
 
 ## Support
 
+[![Sponsor Curio on GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%99%A5-ea4aaa?style=for-the-badge&logo=github-sponsors&logoColor=white&labelColor=1f2328)](https://github.com/sponsors/klchdev)
+
 Curio is not a business. If it turned out to be useful, there's
 [GitHub Sponsors](https://github.com/sponsors/klchdev) — it covers the hosting
 and the domain, and that's all it does. Nothing is locked behind it: there is no
