@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { getSessionUser } from "../lib/session";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
-import { DEMO_TIER_LIST } from "../lib/demo-fixtures";
+import { demoFixtures } from "../lib/demo-fixtures";
 import { TIER_STYLE } from "../lib/vocab";
 
 const user = await getSessionUser(Astro);
@@ -43,8 +43,10 @@ const STEPS = [
  * page. The four are taken from across the range on purpose — a wall of S would
  * say the advisor likes everything.
  */
+const shelfSource = demoFixtures(locale).tierList;
+
 const SHELF = ["S", "A", "C", "D"]
-  .map((tier) => DEMO_TIER_LIST.find((game) => game.tier === tier))
+  .map((tier) => shelfSource.find((game) => game.tier === tier))
   .filter((game) => game !== undefined)
   .map((game, index, all) => {
     const offset = index - (all.length - 1) / 2;

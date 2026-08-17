@@ -27,17 +27,7 @@
  *     the same fixture back is the one lie a demo cannot afford.
  */
 
-import {
-  DEMO_ACTIVE_SLOTS,
-  DEMO_ATTENTION,
-  DEMO_DEEP_DIVES,
-  DEMO_LIBRARY,
-  DEMO_POOL,
-  DEMO_RECORDS,
-  DEMO_RUN,
-  DEMO_STATS,
-  DEMO_TIER_LIST,
-} from "../../lib/demo-fixtures";
+import { demoFixtures, type DemoFixtures, type DemoRecord } from "../../lib/demo-fixtures";
 import { t, type Dict } from "../../lib/strings";
 import type { Locale } from "../../lib/i18n";
 import { RUN_PARAM, demoRun, nextRunVariant, runVariantFrom, type RunVariant } from "./demo-run";
@@ -48,20 +38,35 @@ type Body = Record<string, unknown>;
 /* ================= Indexes over the fixtures ================= */
 
 /*
+ * The fixtures answer in the visitor's language, and the language is only known
+ * once the island mounts — so they are taken at install time rather than at
+ * import. Everything below runs behind `installDemoApi`, which is what makes
+ * reading these safe.
+ */
+let demo: DemoFixtures;
+let demoLocale: Locale;
+
+/*
  * Cover art is collected from the ready-made sets rather than rebuilt from an
  * appid by hand: a second source of truth for that URL would drift away from
  * the fixtures silently, and the only symptom would be images that stop
  * loading.
  */
 const IMAGES = new Map<number, string>();
-for (const item of DEMO_TIER_LIST) if (item.gameImage) IMAGES.set(item.gameId, item.gameImage);
-for (const item of DEMO_POOL) if (item.headerImage) IMAGES.set(item.id, item.headerImage);
-for (const item of DEMO_ATTENTION.items) {
-  if (item.headerImage) IMAGES.set(item.gameId, item.headerImage);
-}
-for (const item of DEMO_RUN.items) if (item.headerImage) IMAGES.set(item.gameId, item.headerImage);
+const RECORDS = new Map<number, DemoRecord>();
 
-const RECORDS = new Map(DEMO_RECORDS.map((record) => [record.gameId, record]));
+function index(): void {
+  for (const item of demo.tierList) if (item.gameImage) IMAGES.set(item.gameId, item.gameImage);
+  for (const item of demo.pool) if (item.headerImage) IMAGES.set(item.id, item.headerImage);
+  for (const item of demo.attention.items) {
+    if (item.headerImage) IMAGES.set(item.gameId, item.headerImage);
+  }
+  for (const item of demo.recommendations.items) {
+    if (item.headerImage) IMAGES.set(item.gameId, item.headerImage);
+  }
+
+  for (const record of demo.records) RECORDS.set(record.gameId, record);
+}
 
 /* ================= Building responses ================= */
 
@@ -130,9 +135,8 @@ function searchLibrary(query: string) {
   const needle = query.trim().toLowerCase();
   if (needle.length < 2) return [];
 
-  return DEMO_LIBRARY.filter(
-    (game) => !game.isSoftware && game.title.toLowerCase().includes(needle)
-  )
+  return demo.library
+    .filter((game) => !game.isSoftware && game.title.toLowerCase().includes(needle))
     .sort((a, b) => b.playtimeMinutes - a.playtimeMinutes)
     .slice(0, 12)
     .map((game) => ({
@@ -163,11 +167,11 @@ const FIT_BY_TIER: Record<string, "yes" | "maybe" | "no"> = {
  * the moment a fixture for that game appears it is used instead.
  */
 function deepDive(gameId: number) {
-  const written = DEMO_DEEP_DIVES.find((dive) => dive.gameId === gameId);
+  const written = demo.deepDives.find((dive) => dive.gameId === gameId);
   if (written) return written;
 
-  const pick = DEMO_RUN.items.find((item) => item.gameId === gameId);
-  const game = DEMO_LIBRARY.find((item) => item.id === gameId);
+  const pick = demo.recommendations.items.find((item) => item.gameId === gameId);
+  const game = demo.library.find((item) => item.id === gameId);
   const tier = pick?.deepTier ?? pick?.tier ?? null;
 
   return {
@@ -248,11 +252,11 @@ function selectRun(variant: RunVariant): void {
  */
 function spin(): Response {
   const url = here();
-  const taken = new Set(DEMO_ACTIVE_SLOTS.map((entry) => entry.game.id));
+  const taken = new Set(demo.slots.map((entry) => entry.game.id));
   const spun = spinFrom(url.searchParams);
   if (spun !== null) taken.add(spun);
 
-  const pool = DEMO_POOL.filter((game) => !taken.has(game.id));
+  const pool = demo.pool.filter((game) => !taken.has(game.id));
   if (pool.length === 0) return json({ error: "" }, 400);
 
   const picked = pool[Math.floor(Math.random() * pool.length)];
@@ -284,7 +288,7 @@ function startRun(): Response {
     id: (lastRunId += 1),
     startedAt: Date.now(),
     target,
-    total: demoRun(target).items.length,
+    total: demoRun(target, demoLocale).items.length,
   };
   return json({ runId: mockRun.id });
 }
@@ -359,7 +363,7 @@ async function answer(url: URL, method: string, body: Body, s: Dict): Promise<Re
 
     case "POST /api/sync-library":
       await pause(STEAM_WORK_MS);
-      return json({ synced: DEMO_STATS.totalLibrary });
+      return json({ synced: demo.stats.totalLibrary });
 
     /*
      * The demo account already holds every review it is ever going to have, so
@@ -413,6 +417,10 @@ let installed = false;
 export function installDemoApi(locale: Locale): void {
   if (installed) return;
   installed = true;
+
+  demoLocale = locale;
+  demo = demoFixtures(locale);
+  index();
 
   const s = t(locale);
   const network = window.fetch.bind(window);

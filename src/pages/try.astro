@@ -32,12 +32,15 @@ import DemoHub from "../components/demo/DemoHub";
 import { demoRun, runVariantFrom } from "../components/demo/demo-run";
 import { spinFrom, stepFrom } from "../components/demo/demo-step";
 import type { Zone } from "../components/hub/Hub";
-import { DEMO } from "../lib/demo-fixtures";
+import { demoFixtures } from "../lib/demo-fixtures";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
 
 const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
+
+// The diary and the advice are prose, so the fixtures need the language too
+const demo = demoFixtures(locale);
 
 const hasAdvice = stepFrom(Astro.url.searchParams) === "advice";
 
@@ -46,7 +49,7 @@ const hasAdvice = stepFrom(Astro.url.searchParams) === "advice";
  * points this parameter at the other set on its way out — so the freshly
  * "generated" run is already in the first server-rendered frame.
  */
-const run = demoRun(runVariantFrom(Astro.url.searchParams));
+const run = demoRun(runVariantFrom(Astro.url.searchParams), locale);
 
 /*
  * A contract the visitor won on a blind roll. The roll reloads the page, so the
@@ -56,7 +59,7 @@ const run = demoRun(runVariantFrom(Astro.url.searchParams));
  * what gets played from here on.
  */
 const spunId = spinFrom(Astro.url.searchParams);
-const spun = spunId === null ? undefined : DEMO.pool.find((game) => game.id === spunId);
+const spun = spunId === null ? undefined : demo.pool.find((game) => game.id === spunId);
 const spunSlot = spun
   ? [{ slotId: 9999, gameId: spun.id, title: spun.title, image: spun.headerImage, played: 0 }]
   : [];
@@ -82,8 +85,8 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
  */
 const ready = [
   s.demo.readyKey,
-  s.demo.readyLibrary(DEMO.stats.totalLibrary),
-  s.demo.readyReviews(DEMO.reviewCount),
+  s.demo.readyLibrary(demo.stats.totalLibrary),
+  s.demo.readyReviews(demo.reviewCount),
 ];
 ---
 
@@ -92,8 +95,8 @@ const ready = [
 
   <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      {DEMO.user.avatarUrl && <img src={DEMO.user.avatarUrl} alt="" class="h-9 w-9 rounded-full" />}
-      <span class="font-medium">{DEMO.user.username}</span>
+      {demo.user.avatarUrl && <img src={demo.user.avatarUrl} alt="" class="h-9 w-9 rounded-full" />}
+      <span class="font-medium">{demo.user.username}</span>
     </div>
     <div class="flex items-center gap-4 text-sm text-gray-500">
       {/*
@@ -129,7 +132,7 @@ const ready = [
       picks={hasAdvice ? run.items : []}
       slots={[
         ...(hasAdvice
-          ? DEMO.slots.map(({ slot, game, currentPlaytime }) => ({
+          ? demo.slots.map(({ slot, game, currentPlaytime }) => ({
               slotId: slot.id,
               gameId: game.id,
               title: game.title,
@@ -139,7 +142,7 @@ const ready = [
           : []),
         ...spunSlot,
       ]}
-      updates={DEMO.attention.items
+      updates={demo.attention.items
         .filter((item) => item.reason === "update")
         .map((item) => ({
           gameId: item.gameId,
@@ -152,7 +155,7 @@ const ready = [
           rating: item.existingRating,
           tier: item.existingTier,
         }))}
-      queue={DEMO.attention.items
+      queue={demo.attention.items
         .filter((item) => item.reason === "triage")
         .map((item) => ({
           gameId: item.gameId,
@@ -161,14 +164,14 @@ const ready = [
           playtimeMinutes: item.playtimeMinutes,
           hasReview: item.hasReview,
         }))}
-      queueTotal={DEMO.attention.triageTotal}
-      tierGames={DEMO.tierList.map((g) => ({
+      queueTotal={demo.attention.triageTotal}
+      tierGames={demo.tierList.map((g) => ({
         gameId: g.gameId,
         title: g.gameTitle,
         image: g.gameImage,
         tier: g.tier,
       }))}
-      diary={DEMO.history
+      diary={demo.history
         .filter((entry) => entry.type === "reviewed")
         .slice(0, 6)
         .map((entry) => ({
@@ -183,20 +186,20 @@ const ready = [
           tier: entry.tier,
           origin: entry.origin,
         }))}
-      demos={DEMO.demos.slice(0, 8).map((d) => ({
+      demos={demo.demos.slice(0, 8).map((d) => ({
         gameId: d.gameId,
         title: d.title,
         headerImage: d.headerImage,
         tier: d.tier,
         note: d.note,
       }))}
-      stats={DEMO.stats}
-      reviewCount={DEMO.reviewCount}
-      poolSize={DEMO.pool.length}
-      freeSkips={DEMO.freeSkips.available}
+      stats={demo.stats}
+      reviewCount={demo.reviewCount}
+      poolSize={demo.pool.length}
+      freeSkips={demo.freeSkips.available}
       locale={locale}
       initialZone={initialZone}
-      lastSyncAt={DEMO.user.lastLibrarySync ? new Date(DEMO.user.lastLibrarySync).getTime() : null}
+      lastSyncAt={demo.user.lastLibrarySync ? new Date(demo.user.lastLibrarySync).getTime() : null}
       runProfile={hasAdvice ? run.profile : null}
       runDate={hasAdvice ? dateFormat.format(new Date(run.createdAt)) : null}
       activeRunId={null}

@@ -12,14 +12,16 @@
  * first painted frame already shows the new advice and nothing flickers.
  */
 
-import { DEMO_RUN, DEMO_RUN_ALT } from "../../lib/demo-fixtures";
+import { demoFixtures, type DemoRun } from "../../lib/demo-fixtures";
+import type { Locale } from "../../lib/i18n";
 
 export type RunVariant = "base" | "alt";
 
 export const RUN_PARAM = "run";
 
-export function demoRun(variant: RunVariant): typeof DEMO_RUN {
-  return variant === "alt" ? DEMO_RUN_ALT : DEMO_RUN;
+export function demoRun(variant: RunVariant, locale: Locale): DemoRun {
+  const demo = demoFixtures(locale);
+  return variant === "alt" ? demo.recommendationsAlt : demo.recommendations;
 }
 
 export function runVariantFrom(params: URLSearchParams): RunVariant {

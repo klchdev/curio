@@ -11,7 +11,7 @@ import Layout from "../../layouts/Layout.astro";
 import DemoBanner from "../../components/demo/DemoBanner.astro";
 import DemoCta from "../../components/demo/DemoCta.astro";
 import GameDemos from "../../components/demo/GameDemos";
-import { DEMO } from "../../lib/demo-fixtures";
+import { demoFixtures } from "../../lib/demo-fixtures";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
@@ -19,7 +19,7 @@ const locale = localeFrom(Astro.cookies, Astro.request);
 const s = t(locale);
 
 // The date travels to the island as json, and a `Date` is no longer a `Date` there
-const reviews = DEMO.demos.map((review) => ({
+const reviews = demoFixtures(locale).demos.map((review) => ({
   ...review,
   createdAt: review.createdAt.toISOString(),
 }));
