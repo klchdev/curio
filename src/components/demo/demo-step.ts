@@ -32,3 +32,20 @@ export function withStep(url: URL, step: DemoStep): URL {
   else url.searchParams.set(STEP_PARAM, step);
   return url;
 }
+
+/**
+ * The game a blind roll landed on.
+ *
+ * Same reasoning as the step above, for the same reason: the hub reloads the
+ * page as soon as a roll succeeds, so the winner has to survive the trip. The
+ * roll is the one action in the demo that has to invent something rather than
+ * read it out of the fixtures, and the address is where that invention lives —
+ * which also means a rolled contract can be linked to, and a refresh does not
+ * silently hand out a different game.
+ */
+export const SPIN_PARAM = "spin";
+
+export function spinFrom(params: URLSearchParams): number | null {
+  const id = Number(params.get(SPIN_PARAM));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}

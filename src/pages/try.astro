@@ -30,7 +30,7 @@ import DemoBanner from "../components/demo/DemoBanner.astro";
 import DemoCta from "../components/demo/DemoCta.astro";
 import DemoHub from "../components/demo/DemoHub";
 import { demoRun, runVariantFrom } from "../components/demo/demo-run";
-import { stepFrom } from "../components/demo/demo-step";
+import { spinFrom, stepFrom } from "../components/demo/demo-step";
 import type { Zone } from "../components/hub/Hub";
 import { DEMO } from "../lib/demo-fixtures";
 import { localeFrom } from "../lib/i18n";
@@ -47,6 +47,19 @@ const hasAdvice = stepFrom(Astro.url.searchParams) === "advice";
  * "generated" run is already in the first server-rendered frame.
  */
 const run = demoRun(runVariantFrom(Astro.url.searchParams));
+
+/*
+ * A contract the visitor won on a blind roll. The roll reloads the page, so the
+ * winner arrives in the address; without this it would flash and disappear, and
+ * the roulette would look broken rather than mocked. Playtime starts at zero
+ * because the pool is unplayed games by definition — the contract is judged by
+ * what gets played from here on.
+ */
+const spunId = spinFrom(Astro.url.searchParams);
+const spun = spunId === null ? undefined : DEMO.pool.find((game) => game.id === spunId);
+const spunSlot = spun
+  ? [{ slotId: 9999, gameId: spun.id, title: spun.title, image: spun.headerImage, played: 0 }]
+  : [];
 
 // The zone lives in the URL — the hub writes it there itself, and a link to a zone must work
 const zoneParam = Astro.url.searchParams.get("zone");
@@ -114,15 +127,18 @@ const ready = [
   <DemoHub
       client:load
       picks={hasAdvice ? run.items : []}
-      slots={hasAdvice
-        ? DEMO.slots.map(({ slot, game, currentPlaytime }) => ({
-            slotId: slot.id,
-            gameId: game.id,
-            title: game.title,
-            image: game.headerImage,
-            played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
-          }))
-        : []}
+      slots={[
+        ...(hasAdvice
+          ? DEMO.slots.map(({ slot, game, currentPlaytime }) => ({
+              slotId: slot.id,
+              gameId: game.id,
+              title: game.title,
+              image: game.headerImage,
+              played: (currentPlaytime ?? 0) - slot.playtimeOnStart,
+            }))
+          : []),
+        ...spunSlot,
+      ]}
       updates={DEMO.attention.items
         .filter((item) => item.reason === "update")
         .map((item) => ({

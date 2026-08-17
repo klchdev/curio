@@ -28,6 +28,7 @@
  */
 
 import {
+  DEMO_ACTIVE_SLOTS,
   DEMO_ATTENTION,
   DEMO_DEEP_DIVES,
   DEMO_LIBRARY,
@@ -40,7 +41,7 @@ import {
 import { t, type Dict } from "../../lib/strings";
 import type { Locale } from "../../lib/i18n";
 import { RUN_PARAM, demoRun, nextRunVariant, runVariantFrom, type RunVariant } from "./demo-run";
-import { stepFrom, withStep } from "./demo-step";
+import { SPIN_PARAM, spinFrom, stepFrom, withStep } from "./demo-step";
 
 type Body = Record<string, unknown>;
 
@@ -236,6 +237,30 @@ function selectRun(variant: RunVariant): void {
   window.history.replaceState(null, "", url);
 }
 
+/**
+ * Roll the pool and point the address at the winner.
+ *
+ * The hub reloads on success, so the pick is handed over the same way the
+ * advice sets are: written into the URL, read back by the server, already on
+ * screen in the first painted frame. Games already under contract are left out
+ * — being told to play what you are playing is the one answer a roulette must
+ * never give.
+ */
+function spin(): Response {
+  const url = here();
+  const taken = new Set(DEMO_ACTIVE_SLOTS.map((entry) => entry.game.id));
+  const spun = spinFrom(url.searchParams);
+  if (spun !== null) taken.add(spun);
+
+  const pool = DEMO_POOL.filter((game) => !taken.has(game.id));
+  if (pool.length === 0) return json({ error: "" }, 400);
+
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  url.searchParams.set(SPIN_PARAM, String(picked.id));
+  window.history.replaceState(null, "", url);
+  return json({ ok: true });
+}
+
 function startRun(): Response {
   /*
    * The first run is what turns an empty "Choose" zone into advice, so it lands
@@ -337,6 +362,17 @@ async function answer(url: URL, method: string, body: Body, s: Dict): Promise<Re
 
     case "POST /api/contract":
       return json({ slotId: (lastSlotId += 1) });
+
+    /*
+     * The blind roll is the one thing here a guest can genuinely be given: it
+     * picks out of a pool the demo already has, and picking is all it does. The
+     * production route also opens a contract on the winner, and the demo says
+     * yes to that for the same reason it says yes to a contract taken by hand —
+     * nothing is written anywhere, and refusing would leave the guest looking at
+     * a button that exists to be pressed and answers by declining.
+     */
+    case "POST /api/spin":
+      return spin();
 
     case "POST /api/set-tier":
       return json({ ok: true });

@@ -263,6 +263,13 @@ const RU = {
     synced: (count: number) => `Готово: ${count} игр`,
     syncAgo: (when: string) => `сверено ${when}`,
     syncNever: "ни разу не сверялось",
+    /*
+     * Что кнопка делает на самом деле. Наигранное подтягивается фоном каждые
+     * полчаса, поэтому обещать «обновить время» — значит звать нажимать ради
+     * уже сделанного. Свериться вручную стоит ровно тогда, когда изменился
+     * состав библиотеки: Steam спрашивают «во что ты играл», а не «что купил».
+     */
+    syncWhy: "Забирает купленное с прошлого раза. Наигранное время приезжает само, каждые полчаса.",
   },
 
   choose: {
@@ -816,6 +823,7 @@ const EN: Dict = {
     synced: (count: number) => `Done: ${count} games`,
     syncAgo: (when: string) => `checked ${when}`,
     syncNever: "never checked",
+    syncWhy: "Picks up whatever you bought since last time. Playtime arrives on its own, every half hour.",
   },
 
   choose: {

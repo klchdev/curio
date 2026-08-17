@@ -386,16 +386,24 @@ export default function Hub(props: Props) {
             label={s.dock.recap}
             hint={s.dock.recapHint(reviewCount)}
           />
+          {/*
+            An icon rather than a tile. Standing at full width beside the three
+            zones it read as a fourth place to go, which it is not: it is one
+            errand, needed only when the shelf itself changed. What it says out
+            loud lives in the tooltip instead — including the freshness line,
+            which nobody reads until they are already wondering.
+          */}
           <button
             onClick={sync}
             disabled={busy !== null}
-            className="shrink-0 rounded-xl border border-gray-800 px-4 py-2.5 text-left whitespace-nowrap transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
+            title={`${s.dock.sync} · ${syncResult ?? syncFreshness}\n${s.dock.syncWhy}`}
+            aria-label={s.dock.sync}
+            className="shrink-0 self-center rounded-xl border border-gray-800 px-3.5 py-3 text-lg transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
           >
-            <span className="block text-sm font-medium text-gray-300">
-              {busy === "sync" ? s.dock.syncing : s.dock.sync}
-            </span>
-            <span className={`block text-xs ${syncResult ? "text-emerald-400" : "text-gray-600"}`}>
-              {syncResult ?? syncFreshness}
+            <span
+              className={`block ${busy === "sync" ? "animate-spin" : ""} ${syncResult ? "text-emerald-400" : "text-gray-400"}`}
+            >
+              ⟳
             </span>
           </button>
         </div>
