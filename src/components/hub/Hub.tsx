@@ -421,19 +421,39 @@ export default function Hub(props: Props) {
             flex row the width comes from the content, so a ratio had nothing to
             work from and the button stretched into a tall pill. 14 is the height
             of a dock tile — two lines of text plus its padding.
+
+            The arrow is drawn rather than typed. As a "⟳" character it came out
+            small — a glyph's ink is smaller than the box it sits in — and it
+            wobbled while spinning, because the box it turns around is not
+            centred on the drawing inside it. A viewBox has no such gap.
           */}
           <button
             onClick={sync}
             disabled={busy !== null}
             title={`${s.dock.sync} · ${syncResult ?? syncFreshness}\n${s.dock.syncWhy}`}
             aria-label={s.dock.sync}
-            className="grid size-14 shrink-0 place-items-center self-center rounded-xl border border-gray-800 text-2xl transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
+            className="grid size-14 shrink-0 place-items-center self-center rounded-xl border border-gray-800 transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
           >
-            <span
-              className={`block leading-none ${busy === "sync" ? "animate-spin" : ""} ${syncResult ? "text-emerald-400" : "text-gray-400"}`}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className={`size-7 ${busy === "sync" ? "animate-spin" : ""} ${syncResult ? "text-emerald-400" : "text-gray-400"}`}
             >
-              ⟳
-            </span>
+              <path
+                d="M20.5 12a8.5 8.5 0 1 1-2.49-6.01"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M20.5 3.5v5h-5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
       </nav>
