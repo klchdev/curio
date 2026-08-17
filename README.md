@@ -2,6 +2,9 @@
 
 **A journal of what you've played that turns into advice on what to play next.**
 
+**[Try it without an account →](https://curio.klch.dev/try)** · a hosted
+instance, free, running on a made-up player's library.
+
 Curio connects to your Steam library and asks you to write not one review after
 you finish a game, but several along the way — whenever your opinion moves. Write
 after the first evening, or forty hours in, or the moment a game loses you; there
@@ -18,7 +21,7 @@ a deep dive over its Steam reviews.
 ![Curio suggesting what to play next, with the reasoning drawn from the player's own entries](docs/demo.gif)
 
 *Recorded in demo mode — the library and the diary belong to a made-up player.
-You can [walk through the same thing](https://curio.brainy.run/try) without an
+You can [walk through the same thing](https://curio.klch.dev/try) without an
 account.*
 
 ## How it works
