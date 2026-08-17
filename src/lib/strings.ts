@@ -138,6 +138,7 @@ const RU = {
     sponsorText:
       "Расходов на нейросеть у сервиса нет, а хостинг и домен остаются — на них и уходит поддержка, если захочется её оказать. Взамен она не даёт ничего: ни функций, ни приоритета, ни доступа. Всё работает одинаково, заплатил ты или нет.",
     sponsorCta: "Поддержать через GitHub Sponsors",
+    sponsorCtaBoosty: "Поддержать через Boosty",
 
     footerDisclaimer:
       "Not affiliated with Valve Corporation. Steam and the Steam logo are trademarks of Valve Corporation.",
@@ -711,6 +712,7 @@ const EN: Dict = {
     sponsorText:
       "The service carries no inference bill of its own, but hosting and a domain remain — that is where support goes, if you feel like giving any. It buys nothing in return: no features, no priority, no access. Everything works the same whether you paid or not.",
     sponsorCta: "Sponsor via GitHub",
+    sponsorCtaBoosty: "Sponsor via Boosty",
 
     footerDisclaimer:
       "Not affiliated with Valve Corporation. Steam and the Steam logo are trademarks of Valve Corporation.",

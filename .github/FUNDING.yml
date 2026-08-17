@@ -1,2 +1,7 @@
 # Turns on the Sponsor button on the repository page.
+#
+# Boosty is listed alongside GitHub Sponsors rather than instead of it: cards
+# issued in some of the countries this is written for are not accepted by one of
+# the two, and a support link a reader cannot use reads as a closed door.
 github: klchdev
+custom: ["https://boosty.to/klchdev"]

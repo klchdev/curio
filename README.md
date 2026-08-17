@@ -263,10 +263,13 @@ MIT — see [LICENSE](LICENSE).
 
 ## Support
 
-[![Sponsor Curio on GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%99%A5-ea4aaa?style=for-the-badge&logo=github-sponsors&logoColor=white&labelColor=1f2328)](https://github.com/sponsors/klchdev)
+[![Sponsor Curio on GitHub Sponsors](https://img.shields.io/badge/GitHub_Sponsors-%E2%99%A5-ea4aaa?style=for-the-badge&logo=github-sponsors&logoColor=white&labelColor=1f2328)](https://github.com/sponsors/klchdev)
+[![Support Curio on Boosty](https://img.shields.io/badge/Boosty-%E2%99%A5-f15f2c?style=for-the-badge&logoColor=white&labelColor=1f2328)](https://boosty.to/klchdev)
 
 Curio is not a business. If it turned out to be useful, there's
-[GitHub Sponsors](https://github.com/sponsors/klchdev) — it covers the hosting
+[GitHub Sponsors](https://github.com/sponsors/klchdev) and
+[Boosty](https://boosty.to/klchdev) — two doors to the same thing, because cards
+from some countries are turned away by one or the other. It covers the hosting
 and the domain, and that's all it does. Nothing is locked behind it: there is no
 paid tier, no sponsor-only feature, and the hosted instance works the same
 whether you give anything or not. The code is MIT, so the other way to support

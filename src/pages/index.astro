@@ -19,6 +19,14 @@ const GITHUB_URL = "https://github.com/klchdev/curio";
 const SPONSOR_URL = "https://github.com/sponsors/klchdev";
 
 /*
+ * A second door for the same donation. GitHub Sponsors cannot take a card from
+ * a good part of the audience this is written for, and a support link that a
+ * reader cannot actually use is worse than none — it reads as a lock rather
+ * than an offer.
+ */
+const BOOSTY_URL = "https://boosty.to/klchdev";
+
+/*
  * The three steps are literally the order a newcomer does things in, not a set
  * of abstract virtues: key, reviews, analysis. Lying here is expensive — on the
  * very first screen after signing in they run into exactly this order.
@@ -200,14 +208,24 @@ const FEATURES = [
     <section class="reveal reveal-6 mb-20 rounded-2xl border border-gray-800 bg-gray-900/40 p-6">
       <h2 class="mb-2 text-lg font-semibold text-gray-200">{s.landing.sponsorTitle}</h2>
       <p class="mb-5 text-sm leading-relaxed text-gray-400">{s.landing.sponsorText}</p>
-      <a
-        href={SPONSOR_URL}
-        target="_blank"
-        rel="noreferrer noopener"
-        class="inline-block rounded-xl border border-gray-700 px-5 py-2.5 text-sm text-gray-300 transition hover:border-gray-500 hover:text-white"
-      >
-        {s.landing.sponsorCta} ↗
-      </a>
+      <div class="flex flex-wrap gap-3">
+        <a
+          href={SPONSOR_URL}
+          target="_blank"
+          rel="noreferrer noopener"
+          class="inline-block rounded-xl border border-gray-700 px-5 py-2.5 text-sm text-gray-300 transition hover:border-gray-500 hover:text-white"
+        >
+          {s.landing.sponsorCta} ↗
+        </a>
+        <a
+          href={BOOSTY_URL}
+          target="_blank"
+          rel="noreferrer noopener"
+          class="inline-block rounded-xl border border-gray-700 px-5 py-2.5 text-sm text-gray-300 transition hover:border-gray-500 hover:text-white"
+        >
+          {s.landing.sponsorCtaBoosty} ↗
+        </a>
+      </div>
     </section>
 
     <footer class="reveal reveal-6 border-t border-gray-800 pt-6 text-xs leading-relaxed text-gray-600">
