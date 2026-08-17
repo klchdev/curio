@@ -398,10 +398,10 @@ export default function Hub(props: Props) {
             disabled={busy !== null}
             title={`${s.dock.sync} · ${syncResult ?? syncFreshness}\n${s.dock.syncWhy}`}
             aria-label={s.dock.sync}
-            className="shrink-0 self-center rounded-xl border border-gray-800 px-3.5 py-3 text-lg transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
+            className="grid aspect-square shrink-0 place-items-center self-stretch rounded-xl border border-gray-800 text-2xl transition hover:border-gray-700 hover:bg-gray-900/60 disabled:opacity-40"
           >
             <span
-              className={`block ${busy === "sync" ? "animate-spin" : ""} ${syncResult ? "text-emerald-400" : "text-gray-400"}`}
+              className={`block leading-none ${busy === "sync" ? "animate-spin" : ""} ${syncResult ? "text-emerald-400" : "text-gray-400"}`}
             >
               ⟳
             </span>
