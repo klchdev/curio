@@ -1,0 +1,762 @@
+---
+/**
+ * The impression diary: entries grouped into a thread per game.
+ *
+ * The markup lives in a component rather than on the page because there are two
+ * pages showing it — the signed-in diary and its guest twin under `/try`. A
+ * demo that redraws the diary in its own markup stops being a demonstration of
+ * the product within a month: the real page grows a field, the copy doesn't,
+ * and the visitor is shown an interface the app no longer has.
+ *
+ * So the two pages differ only in where the data comes from and in what the
+ * write actions are allowed to do. Everything below — the grouping, the
+ * mentions, the tags, the modal — is the same for both.
+ */
+import AddGameNoteButton from "./AddGameNoteButton";
+import {
+  formatPlaytime,
+  verdictLabel,
+  worthLabel,
+  WORTH_COLORS,
+  VERDICT_STYLE,
+  TIER_STYLE,
+} from "../lib/vocab";
+import type { Locale } from "../lib/i18n";
+import { t } from "../lib/strings";
+import type { getHistory } from "../lib/queries";
+import type { getDiaryMentions, getDiaryTags } from "../lib/entry-analysis";
+
+interface Props {
+  timeline: Awaited<ReturnType<typeof getHistory>>;
+  mentions: Awaited<ReturnType<typeof getDiaryMentions>>;
+  entryTags: Awaited<ReturnType<typeof getDiaryTags>>;
+  locale: Locale;
+  /** Where "back" leads: the dashboard for an account, the demo hub for a guest. */
+  backHref: string;
+  /**
+   * Where an action that needs an account should send the visitor. Null — there
+   * is an account, and the actions do their real work.
+   */
+  signInHref?: string | null;
+}
+
+const { timeline, mentions, entryTags, locale, backHref, signInHref = null } = Astro.props;
+
+const s = t(locale);
+
+/*
+ * Without an account nothing here may be written, and the page says so by
+ * leading to the sign-in instead of going through the motions: a tag that
+ * vanishes on click and is back after a reload is worse than a tag that never
+ * offered to be removed.
+ */
+const readOnly = signInHref !== null;
+
+/*
+ * The diary is grouped into per-game threads. A flat feed scattered entries
+ * about one game across the whole page, and the very thing the diary exists
+ * for — how an opinion changed — had to be pieced together by eye. Inside a
+ * thread entries run bottom-up in time: the first impression on top, edits
+ * after it.
+ */
+type Item = (typeof timeline)[number];
+
+interface Thread {
+  gameId: number;
+  title: string;
+  image: string | null;
+  steamAppId: number | null;
+  items: Item[];
+  /** Last activity: this is what threads are ordered by. */
+  touchedAt: number;
+  playtimeMinutes: number;
+  verdict: string | null;
+  rating: number | null;
+  tier: string | null;
+}
+
+const threads = new Map<number, Thread>();
+
+for (const item of timeline) {
+  const existing = threads.get(item.gameId);
+  const at = new Date(item.date).getTime();
+
+  const thread =
+    existing ??
+    ({
+      gameId: item.gameId,
+      title: item.gameTitle,
+      image: item.gameImage,
+      steamAppId: null,
+      items: [],
+      touchedAt: at,
+      playtimeMinutes: 0,
+      verdict: null,
+      rating: null,
+      tier: null,
+    } satisfies Thread);
+
+  thread.items.push(item);
+  thread.touchedAt = Math.max(thread.touchedAt, at);
+
+  /*
+   * The game's bottom line comes from the first entry we meet: the feed
+   * arrives newest-first, so that one is the card's current state.
+   */
+  if (item.type === "reviewed") {
+    thread.steamAppId ??= item.steamAppId;
+    if (thread.playtimeMinutes === 0) {
+      thread.playtimeMinutes = item.playtimeMinutes;
+      thread.verdict = item.currentVerdict;
+      thread.rating = item.currentRating;
+      thread.tier = item.currentTier;
+    }
+  }
+
+  if (!existing) threads.set(item.gameId, thread);
+}
+
+const grouped = [...threads.values()]
+  .map((thread) => {
+    // Inside a thread — oldest to newest: that is how an opinion reads as it evolves
+    const items = [...thread.items].reverse();
+
+    /*
+     * There is no point re-asking for a verdict that already exists if the
+     * person has written nothing since: the answer will be the same, and it
+     * would cost as much as a fresh one.
+     */
+    const own = items.filter((item) => item.type === "reviewed" && item.kind !== "advisor");
+    const take = [...items]
+      .reverse()
+      .find((item) => item.type === "reviewed" && item.kind === "advisor");
+    const lastOwn = own.at(-1);
+
+    return {
+      ...thread,
+      items,
+      takeText: take?.type === "reviewed" ? take.note : null,
+      takeFresh:
+        !!take && !!lastOwn && new Date(take.date).getTime() >= new Date(lastOwn.date).getTime(),
+    };
+  })
+  .sort((a, b) => b.touchedAt - a.touchedAt);
+
+/*
+ * Mentions live apart from the entry's text: the database holds the verbatim
+ * fragment and its offset, and the text itself is never touched. Here the
+ * markup is only laid over the rendering — and only when the fragment at its
+ * recorded offset matches character for character.
+ */
+type Mention = (typeof mentions)[number];
+
+const mentionsByEntry = new Map<number, Mention[]>();
+/** The other direction: where this game was brought up while talking about others. */
+const mentionsOfGame = new Map<number, Mention[]>();
+
+for (const mention of mentions) {
+  const inEntry = mentionsByEntry.get(mention.entryId);
+  if (inEntry) inEntry.push(mention);
+  else mentionsByEntry.set(mention.entryId, [mention]);
+
+  if (mention.targetGameId !== null && mention.targetGameId !== mention.sourceGameId) {
+    const ofGame = mentionsOfGame.get(mention.targetGameId);
+    if (ofGame) ofGame.push(mention);
+    else mentionsOfGame.set(mention.targetGameId, [mention]);
+  }
+}
+
+const tagsByEntry = new Map<number, (typeof entryTags)[number][]>();
+for (const tag of entryTags) {
+  const list = tagsByEntry.get(tag.entryId);
+  if (list) list.push(tag);
+  else tagsByEntry.set(tag.entryId, [tag]);
+}
+
+function tagsOf(entryId: number): (typeof entryTags)[number][] {
+  return tagsByEntry.get(entryId) ?? [];
+}
+
+/** Games with a thread of their own link into the diary, the rest link to the store. */
+const threadIds = new Set(grouped.map((thread) => thread.gameId));
+
+function linkFor(gameId: number | null, steamAppId: number | null): string | null {
+  if (gameId === null) return null;
+  if (threadIds.has(gameId)) return `#game-${gameId}`;
+  return steamAppId ? `https://store.steampowered.com/app/${steamAppId}` : null;
+}
+
+interface Segment {
+  text: string;
+  href: string | null;
+  title: string | null;
+}
+
+function splitNote(note: string, found: Mention[]): Segment[] {
+  const ordered = [...found].sort((a, b) => a.startOffset - b.startOffset);
+  const segments: Segment[] = [];
+  let cursor = 0;
+
+  for (const mention of ordered) {
+    const start = mention.startOffset;
+    const end = start + mention.surface.length;
+    // The markup cannot be older than the text, but the check is cheaper than a slipped highlight
+    if (start < cursor || note.slice(start, end) !== mention.surface) continue;
+
+    const href = linkFor(mention.targetGameId, mention.targetSteamAppId);
+    if (!href) continue;
+
+    if (start > cursor) segments.push({ text: note.slice(cursor, start), href: null, title: null });
+    segments.push({ text: mention.surface, href, title: mention.targetTitle });
+    cursor = end;
+  }
+
+  if (cursor < note.length) {
+    segments.push({ text: note.slice(cursor), href: null, title: null });
+  }
+  return segments;
+}
+
+const KIND_LABEL: Record<string, string> = {
+  first: s.pages.entryFirst,
+  update: s.pages.entryUpdate,
+  verdict: s.pages.entryVerdict,
+  advisor: s.pages.entryAdvisor,
+};
+
+/** Verdicts that close a thread: such an entry is the bottom line, not an edit. */
+const CLOSING_VERDICTS = new Set(["finished", "dropped", "endless"]);
+
+function entryLabel(kind: string, verdict: string | null): string {
+  if (kind === "verdict" && verdict && CLOSING_VERDICTS.has(verdict)) return s.pages.entryFinal;
+  return KIND_LABEL[kind] ?? kind;
+}
+
+const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+/*
+ * The two shapes the verdict control takes wear the same clothes: pressing it
+ * is the same gesture whether it opens the answer or asks you to sign in, and
+ * a second look-alike class list would drift from this one on the first edit.
+ */
+const ASK_CLASS =
+  "cursor-pointer rounded-lg border border-indigo-900/60 px-3 py-1.5 text-xs text-indigo-300/80 transition hover:border-indigo-700 hover:text-indigo-200 disabled:opacity-40";
+
+/** Copied from `AddGameNoteButton`: without an account this is a link, not an island. */
+const NOTE_CLASS =
+  "rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:border-indigo-500 hover:text-indigo-300";
+---
+
+<span class="hidden" id="take-labels" data-lede={s.pages.askCurioLede} data-close={s.pages.askCurioClose}></span>
+<div class="mb-8 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold">{s.pages.diary}</h1>
+    <p class="text-sm text-gray-500">
+      {s.pages.diaryCount(timeline.length)} · {s.pages.diaryGames(grouped.length)}
+    </p>
+  </div>
+  <a href={backHref} class="text-sm text-gray-400 transition hover:text-white">&larr; {s.pages.back}</a>
+</div>
+
+{grouped.length === 0 ? (
+  <p class="text-gray-500">{s.pages.diaryEmpty}</p>
+) : (
+  <div class="space-y-6">
+    {grouped.map((thread) => (
+      <section
+        id={`game-${thread.gameId}`}
+        class="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/30 scroll-mt-6"
+      >
+        <header class="flex flex-wrap items-center gap-4 border-b border-gray-800/80 bg-gray-900/40 p-4">
+          {thread.image && (
+            <img src={thread.image} alt="" class="header-art w-28 shrink-0 rounded-lg" />
+          )}
+
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-baseline gap-2">
+              {thread.steamAppId ? (
+                <a
+                  href={`https://store.steampowered.com/app/${thread.steamAppId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="text-lg font-semibold transition hover:text-emerald-400"
+                >
+                  {thread.title}
+                </a>
+              ) : (
+                <span class="text-lg font-semibold">{thread.title}</span>
+              )}
+              {thread.playtimeMinutes > 0 && (
+                <span class="text-xs text-gray-600">{formatPlaytime(thread.playtimeMinutes)}</span>
+              )}
+            </div>
+
+            <div class="mt-1 flex flex-wrap items-center gap-3 text-xs">
+              {thread.verdict && (
+                <span class="text-gray-400">
+                  {VERDICT_STYLE[thread.verdict as keyof typeof VERDICT_STYLE]?.icon}{" "}
+                  {verdictLabel(thread.verdict as keyof typeof VERDICT_STYLE)}
+                </span>
+              )}
+              {thread.rating && (
+                <span class={WORTH_COLORS[thread.rating - 1]}>{worthLabel(thread.rating)}</span>
+              )}
+              {thread.tier && (
+                <span
+                  class:list={[
+                    "flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold",
+                    TIER_STYLE[thread.tier as keyof typeof TIER_STYLE]?.bg,
+                    TIER_STYLE[thread.tier as keyof typeof TIER_STYLE]?.text,
+                  ]}
+                >
+                  {thread.tier}
+                </span>
+              )}
+              <span class="text-gray-600">
+                {thread.items.length > 1
+                  ? `${s.pages.diaryThread(thread.items.length)} · ${s.pages.diarySince}`
+                  : s.pages.diaryThread(thread.items.length)}
+              </span>
+            </div>
+          </div>
+
+          {/*
+            A game rarely ends explicitly: it gets dropped in silence, sits
+            in "still playing" for months, or gets finished while the verdict
+            is left untouched. Waiting for a closing verdict would mean
+            saying nothing almost ever — so asking is allowed at any moment.
+
+            Except where there is nobody to ask. A verdict already written is
+            in the thread and opens from there without touching the network,
+            so a guest gets the real thing; a verdict that would have to be
+            thought up costs a model call, and that is what an account is for.
+          */}
+          {!readOnly || thread.takeFresh ? (
+            <button
+              type="button"
+              class:list={["take-ask", ASK_CLASS]}
+              data-game={thread.gameId}
+              data-title={thread.title}
+              data-busy={s.pages.askCurioBusy}
+              data-failed={s.pages.askCurioFailed}
+              data-take={thread.takeFresh ? thread.takeText : undefined}
+            >
+              {s.pages.askCurio}
+            </button>
+          ) : (
+            <a href={signInHref} class={ASK_CLASS}>{s.pages.askCurio}</a>
+          )}
+
+          {readOnly ? (
+            <a href={signInHref} class={NOTE_CLASS}>{s.pages.addNote}</a>
+          ) : (
+            <AddGameNoteButton
+              client:visible
+              locale={locale}
+              gameId={thread.gameId}
+              gameTitle={thread.title}
+              currentPlaytime={thread.playtimeMinutes}
+              lastRecordedPlaytime={thread.playtimeMinutes}
+              currentVerdict={thread.verdict}
+              currentRating={thread.rating}
+              currentTier={thread.tier}
+            />
+          )}
+        </header>
+
+        {mentionsOfGame.has(thread.gameId) && (
+          <div class="border-b border-gray-800/60 px-4 py-2.5 text-xs text-gray-500">
+            {s.pages.mentionedIn(mentionsOfGame.get(thread.gameId)!.length)}:{" "}
+            {[
+              ...new Map(
+                mentionsOfGame
+                  .get(thread.gameId)!
+                  .map((mention) => [mention.sourceGameId, mention.sourceTitle])
+              ),
+            ].map(([gameId, title], index) => (
+              <>
+                {index > 0 && <span class="text-gray-700"> · </span>}
+                <a href={`#game-${gameId}`} class="text-gray-400 transition hover:text-sky-300">
+                  {title}
+                </a>
+              </>
+            ))}
+          </div>
+        )}
+
+        <ol class="relative m-4 ml-7 space-y-4 border-l border-gray-800 pl-5">
+          {thread.items.map((entry) => (
+            <li class="relative">
+              <span
+                class:list={[
+                  "absolute top-2 -left-[27px] h-2.5 w-2.5 rounded-full",
+                  entry.type === "skipped" ? "bg-rose-700" : "bg-gray-600",
+                ]}
+              />
+
+              {entry.type === "skipped" ? (
+                <div>
+                  <div class="flex flex-wrap items-baseline gap-2">
+                    <span
+                      class:list={[
+                        "rounded px-2 py-0.5 text-xs",
+                        entry.reasonType === "shame"
+                          ? "bg-rose-950/60 text-rose-300"
+                          : "bg-gray-800 text-gray-400",
+                      ]}
+                    >
+                      {entry.reasonType === "shame" ? s.pages.shame : s.pages.skipped}
+                    </span>
+                    <span class="ml-auto text-xs text-gray-600">
+                      {dateFormat.format(new Date(entry.date))}
+                    </span>
+                  </div>
+                  <p class="mt-1 text-sm text-gray-500">{entry.reasonText}</p>
+                </div>
+              ) : (
+                <div>
+                  <div class="flex flex-wrap items-baseline gap-2">
+                    <span class="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-500">
+                      {entryLabel(entry.kind, entry.verdict)}
+                    </span>
+                    <span class="text-xs text-gray-600">
+                      {formatPlaytime(entry.playtimeMinutes)}
+                      {entry.deltaMinutes > 0 && (
+                        <span class="text-indigo-400"> · +{formatPlaytime(entry.deltaMinutes)}</span>
+                      )}
+                    </span>
+                    {entry.origin === "steam" && (
+                      <span class="rounded border border-sky-900 px-1.5 py-0.5 text-[10px] text-sky-400/80">
+                        {s.pages.fromSteam}
+                      </span>
+                    )}
+                    <span class="ml-auto text-xs text-gray-600">
+                      {dateFormat.format(new Date(entry.date))}
+                    </span>
+                  </div>
+
+                  {entry.promptedBy && (
+                    <p class="mt-2 border-l-2 border-gray-800 pl-3 text-xs leading-relaxed text-gray-500 italic">
+                      {entry.promptedBy}
+                    </p>
+                  )}
+
+                  <p class="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-300">
+                    {splitNote(entry.note, mentionsByEntry.get(entry.entryId) ?? []).map((part) =>
+                      part.href ? (
+                        <a
+                          href={part.href}
+                          title={part.title}
+                          class="text-sky-300/90 underline decoration-sky-500/40 underline-offset-2 transition hover:text-sky-200"
+                        >
+                          {part.text}
+                        </a>
+                      ) : (
+                        part.text
+                      )
+                    )}
+                  </p>
+
+                  {/*
+                    Tags are proposed by the analysis and edited with a tap:
+                    the cross removes, the plus adds. No confirmations, no
+                    "pending review" state: a wrong tag costs one gesture,
+                    while having to confirm every one of them would cost the
+                    willingness to write anything at all.
+
+                    Without an account the gestures are gone rather than
+                    faked, and the row itself only appears when there is
+                    something in it to read.
+                  */}
+                  {(!readOnly || tagsOf(entry.entryId).length > 0) && (
+                    <div class="tag-row mt-2 flex flex-wrap items-center gap-1.5" data-entry={entry.entryId}>
+                      {tagsOf(entry.entryId).map((tag) => (
+                        <span
+                          class:list={[
+                            "group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
+                            tag.kind === "praise"
+                              ? "bg-emerald-950/50 text-emerald-300/80"
+                              : "bg-rose-950/40 text-rose-300/70",
+                          ]}
+                          data-tag={tag.tagId}
+                        >
+                          {tag.label}
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              class="tag-drop cursor-pointer opacity-0 transition group-hover:opacity-60 hover:!opacity-100"
+                              aria-label={s.pages.tagRemove}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          class="tag-add cursor-pointer rounded-full border border-dashed border-gray-700 px-2 py-0.5 text-[11px] text-gray-600 transition hover:border-gray-500 hover:text-gray-400"
+                        >
+                          + {s.pages.tagAdd}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                    {entry.verdict && (
+                      <span class="text-gray-400">
+                        {VERDICT_STYLE[entry.verdict as keyof typeof VERDICT_STYLE]?.icon}{" "}
+                        {verdictLabel(entry.verdict as keyof typeof VERDICT_STYLE)}
+                      </span>
+                    )}
+                    {entry.rating && (
+                      <span class={WORTH_COLORS[entry.rating - 1]}>{worthLabel(entry.rating)}</span>
+                    )}
+                    {entry.tier && (
+                      <span
+                        class:list={[
+                          "flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold",
+                          TIER_STYLE[entry.tier as keyof typeof TIER_STYLE]?.bg,
+                          TIER_STYLE[entry.tier as keyof typeof TIER_STYLE]?.text,
+                        ]}
+                      >
+                        {entry.tier}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))}
+  </div>
+)}
+
+<script>
+  /*
+   * Tag editing runs through delegation rather than an island per entry: the
+   * diary holds hundreds of entries, and three hundred reactive islands for
+   * the sake of two buttons is a cost with no upside. The server renders the
+   * markup, this handles only the clicks.
+   *
+   * Without an account none of those buttons is rendered, so the handlers here
+   * find nothing to bind to and cost nothing — except the one branch that opens
+   * an already-written verdict, which needs no server at all.
+   */
+  const ENDPOINT = "/api/entry-tag";
+
+  function chip(tagId: number, label: string, kind: string): HTMLElement {
+    const span = document.createElement("span");
+    span.className =
+      "group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] " +
+      (kind === "praise"
+        ? "bg-emerald-950/50 text-emerald-300/80"
+        : "bg-rose-950/40 text-rose-300/70");
+    span.dataset.tag = String(tagId);
+    span.textContent = label;
+
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className =
+      "tag-drop cursor-pointer opacity-0 transition group-hover:opacity-60 hover:!opacity-100";
+    drop.textContent = "✕";
+    span.append(drop);
+    return span;
+  }
+
+  function openEditor(row: HTMLElement, addButton: HTMLElement) {
+    if (row.querySelector(".tag-editor")) return;
+
+    const editor = document.createElement("span");
+    editor.className = "tag-editor inline-flex items-center gap-1";
+
+    const input = document.createElement("input");
+    input.className =
+      "w-36 rounded-full border border-gray-700 bg-transparent px-2 py-0.5 text-[11px] text-gray-200 outline-none focus:border-gray-500";
+    input.maxLength = 60;
+
+    const close = () => {
+      editor.remove();
+      addButton.classList.remove("hidden");
+    };
+
+    const submit = async (kind: "complaint" | "praise") => {
+      const label = input.value.trim();
+      if (label.length < 2) return close();
+
+      const res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: Number(row.dataset.entry), label, kind }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.tag) row.insertBefore(chip(data.tag.id, data.tag.label, kind), editor);
+      close();
+    };
+
+    for (const [kind, text] of [
+      ["complaint", "\u2212"],
+      ["praise", "+"],
+    ] as const) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className =
+        "cursor-pointer rounded-full border border-gray-700 px-1.5 py-0.5 text-[11px] text-gray-400 hover:border-gray-500 hover:text-gray-200";
+      button.textContent = text;
+      button.title = kind === "praise" ? "хвалю" : "ругаю";
+      button.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        submit(kind);
+      });
+      editor.append(button);
+    }
+
+    editor.prepend(input);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") submit(event.shiftKey ? "praise" : "complaint");
+      if (event.key === "Escape") close();
+    });
+    input.addEventListener("blur", () => setTimeout(close, 120));
+
+    addButton.classList.add("hidden");
+    addButton.before(editor);
+    input.focus();
+  }
+
+  /**
+   * The verdict is shown in a modal rather than inlined into the feed: it is
+   * stored in the thread as an entry and is not going anywhere, but the person
+   * is going to read it right now, and there is no reason to make them hunt
+   * for it down a long page.
+   */
+  function showTake(title: string, text: string, failed = false) {
+    const overlay = document.createElement("div");
+    overlay.className =
+      "fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6";
+
+    const card = document.createElement("div");
+    card.className =
+      "max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gray-800 bg-gray-950 p-6 sm:rounded-2xl";
+
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "text-xs tracking-[0.15em] text-gray-500 uppercase";
+    eyebrow.textContent = document.getElementById("take-labels")?.dataset.lede ?? "";
+
+    const heading = document.createElement("h2");
+    heading.className = "mt-1 mb-4 text-xl font-bold";
+    heading.textContent = title;
+
+    const body = document.createElement("p");
+    body.className = failed
+      ? "text-sm leading-relaxed whitespace-pre-line text-rose-300/80"
+      : "text-sm leading-relaxed whitespace-pre-line text-gray-200";
+    // Set the text as a property, not as markup: it came from the model
+    body.textContent = text;
+
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className =
+      "mt-5 w-full rounded-lg border border-gray-800 py-2 text-sm text-gray-400 transition hover:bg-gray-900";
+    close.textContent = document.getElementById("take-labels")?.dataset.close ?? "";
+
+    const dismiss = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss();
+    };
+
+    close.addEventListener("click", dismiss);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) dismiss();
+    });
+    document.addEventListener("keydown", onKey);
+
+    card.append(eyebrow, heading, body, close);
+    overlay.append(card);
+    document.body.append(overlay);
+  }
+
+  document.addEventListener("click", async (event) => {
+    const target = event.target as HTMLElement;
+
+    const ask = target.closest(".take-ask") as HTMLButtonElement | null;
+    if (ask) {
+      const title = ask.dataset.title ?? "";
+
+      // No point re-asking for a verdict that already exists and to which the
+      // person has added nothing since: same answer, price of a fresh one
+      if (ask.dataset.take) {
+        showTake(title, ask.dataset.take);
+        return;
+      }
+
+      const idle = ask.textContent ?? "";
+      const busy = ask.dataset.busy ?? "…";
+      ask.disabled = true;
+
+      /*
+       * A verdict takes half a minute of thinking, often longer. Without a
+       * counter, "reading" and "hung" look exactly alike from the other side
+       * of the screen, and this is the case where the person has already
+       * clicked and all that is left for them is to trust.
+       */
+      let seconds = 0;
+      ask.textContent = `${busy} 0 с`;
+      const ticking = setInterval(() => {
+        seconds += 1;
+        ask.textContent = `${busy} ${seconds} с`;
+      }, 1000);
+
+      const data = await fetch("/api/entry-closing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId: Number(ask.dataset.game), only: "take" }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null);
+
+      clearInterval(ticking);
+      ask.disabled = false;
+      ask.textContent = idle;
+
+      if (data?.take) {
+        ask.dataset.take = data.take;
+        showTake(title, data.take);
+      } else {
+        showTake(title, data?.error ?? (ask.dataset.failed ?? ""), true);
+      }
+      return;
+    }
+
+    const row = target.closest(".tag-row") as HTMLElement | null;
+    if (!row) return;
+
+    const drop = target.closest(".tag-drop");
+    if (drop) {
+      const tag = drop.closest("[data-tag]") as HTMLElement;
+      tag.remove();
+      fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove",
+          entryId: Number(row.dataset.entry),
+          tagId: Number(tag.dataset.tag),
+        }),
+      });
+      return;
+    }
+
+    const add = target.closest(".tag-add") as HTMLElement | null;
+    if (add) openEditor(row, add);
+  });
+</script>

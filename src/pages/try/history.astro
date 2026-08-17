@@ -1,0 +1,43 @@
+---
+/**
+ * The diary inside the demo.
+ *
+ * The hub's "the whole diary" link used to land a guest on the sign-in screen,
+ * which is the worst possible moment to ask for one: the diary is what the
+ * product is, and the visitor was clicking to find that out. Everything the
+ * page needs was already in the fixtures — entries, mentions, tags — so the
+ * twin costs nothing but the wiring.
+ *
+ * The screen is taken whole: `DiaryThreads` is the same component the signed-in
+ * page renders. What the demo changes is not the markup but the permissions —
+ * `signInHref` tells the component that nothing here may be written, and the
+ * actions that would have written lead to the sign-in instead.
+ */
+import Layout from "../../layouts/Layout.astro";
+import DemoBanner from "../../components/demo/DemoBanner.astro";
+import DemoCta from "../../components/demo/DemoCta.astro";
+import DiaryThreads from "../../components/DiaryThreads.astro";
+import { demoFixtures } from "../../lib/demo-fixtures";
+import { localeFrom } from "../../lib/i18n";
+import { t } from "../../lib/strings";
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+const demo = demoFixtures(locale);
+---
+
+<Layout title={s.pages.diary}>
+  <DemoBanner />
+
+  <DiaryThreads
+    timeline={demo.history}
+    mentions={demo.diaryMentions}
+    entryTags={demo.diaryTags}
+    locale={locale}
+    backHref="/try"
+    signInHref="/auth/login"
+  />
+
+  <DemoCta />
+</Layout>

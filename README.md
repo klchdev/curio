@@ -15,7 +15,11 @@ a game. The advice is built on that profile: your unplayed games get sorted into
 tiers with links back to your own words, and any single game can be put through
 a deep dive over its Steam reviews.
 
-<!-- TODO: screenshots from demo mode -->
+![Curio: picking what to play next from a diary of impressions](docs/demo.gif)
+
+*Recorded in demo mode — the library and the diary belong to a made-up player.
+You can [walk through the same thing](https://curio.brainy.run/try) without an
+account.*
 
 ## How it works
 

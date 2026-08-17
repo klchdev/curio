@@ -7,12 +7,13 @@ import type { MouseEvent } from "react";
  * an option — they are shared with the real app — so the click is caught on the
  * demo's own wrapper and sent to the twin screen instead.
  *
- * Where the demo has no twin, the honest destination is the sign-in: reading a
- * full diary or writing a review by hand is exactly what an account is for.
+ * Only the screens with a twin are listed. A link to anything else is left
+ * alone deliberately: the page behind it will ask for a session, which is the
+ * truth, and quietly swallowing the click would be worse than saying so.
  */
 const REROUTE: Record<string, string> = {
   "/demos": "/try/demos",
-  "/history": "/auth/login",
+  "/history": "/try/history",
 };
 
 export function rerouteAppLinks(event: MouseEvent<HTMLElement>): void {
