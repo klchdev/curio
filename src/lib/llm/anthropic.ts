@@ -120,6 +120,10 @@ export const anthropicAdapter: LlmAdapter = {
       return { kind: "auth", retriable: false, retryAfterMs: null };
     }
     if (err instanceof Anthropic.BadRequestError || err instanceof Anthropic.NotFoundError) {
+      // An empty balance arrives here as a 400 about the credit balance, not as a 429
+      if (/credit balance/i.test(err.message)) {
+        return { kind: "no_credit", retriable: false, retryAfterMs: null };
+      }
       return { kind: "bad_request", retriable: false, retryAfterMs: null };
     }
     if (err instanceof Anthropic.InternalServerError) {

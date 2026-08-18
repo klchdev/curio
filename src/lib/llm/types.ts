@@ -61,7 +61,23 @@ export interface JsonRequest {
  * OpenAI have typed exceptions — that cannot be picked apart in shared code.
  */
 export interface LlmErrorInfo {
-  kind: "rate_limit" | "overloaded" | "server" | "timeout" | "auth" | "bad_request" | "refusal" | "unknown";
+  /*
+   * `no_credit` is deliberately apart from `rate_limit`: both arrive as the same
+   * HTTP status from some providers, but a rate limit clears by itself and an
+   * empty balance never does. Retrying the second one only burns half a minute
+   * before showing a message that sends the person off to wait for a reset that
+   * will never come.
+   */
+  kind:
+    | "rate_limit"
+    | "no_credit"
+    | "overloaded"
+    | "server"
+    | "timeout"
+    | "auth"
+    | "bad_request"
+    | "refusal"
+    | "unknown";
   retriable: boolean;
   /** How long to wait, when the server named a delay itself. */
   retryAfterMs: number | null;

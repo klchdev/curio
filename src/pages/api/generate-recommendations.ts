@@ -89,13 +89,15 @@ async function runInBackground(
     const kind = adapterFor(creds.provider).classifyError(err).kind;
     const message = err instanceof LlmAuthError
       ? t(locale).llm.errorAuth
-      : kind === "rate_limit"
-        ? s.modelQuota
-        : kind === "overloaded" || kind === "server"
-          ? s.modelBusy
-          : err instanceof Error && !err.message.trim().startsWith("{")
-            ? err.message
-            : s.runFailedFallback;
+      : kind === "no_credit"
+        ? s.modelNoCredit
+        : kind === "rate_limit"
+          ? s.modelQuota
+          : kind === "overloaded" || kind === "server"
+            ? s.modelBusy
+            : err instanceof Error && !err.message.trim().startsWith("{")
+              ? err.message
+              : s.runFailedFallback;
     await failRecommendationRun(runId, message).catch(() => {});
   }
 }

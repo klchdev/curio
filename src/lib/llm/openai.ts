@@ -74,6 +74,17 @@ export const openaiAdapter: LlmAdapter = {
 
   classifyError(err): LlmErrorInfo {
     if (err instanceof OpenAI.RateLimitError) {
+      /*
+       * OpenAI answers an empty balance with the same 429 as a real rate limit,
+       * and the SDK gives both the same class — the difference is only in the
+       * body's `code`. Without this branch a person whose trial credits ran out
+       * waits through three retries and is then told about a daily quota that
+       * has nothing to do with it.
+       */
+      if (err.code === "insufficient_quota") {
+        return { kind: "no_credit", retriable: false, retryAfterMs: null };
+      }
+
       const header = err.headers?.get?.("retry-after");
       const seconds = header ? Number(header) : NaN;
       return {

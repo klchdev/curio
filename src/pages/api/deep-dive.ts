@@ -128,11 +128,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const kind = adapterFor(creds.provider).classifyError(err).kind;
     const message = err instanceof LlmAuthError
       ? s.llm.errorAuth
-      : kind === "rate_limit"
-        ? s.errors.modelQuota
-        : kind === "overloaded" || kind === "server"
-          ? s.errors.modelBusy
-          : s.errors.runFailedFallback;
+      : kind === "no_credit"
+        ? s.errors.modelNoCredit
+        : kind === "rate_limit"
+          ? s.errors.modelQuota
+          : kind === "overloaded" || kind === "server"
+            ? s.errors.modelBusy
+            : s.errors.runFailedFallback;
     return json({ error: message }, 502);
   }
 };
