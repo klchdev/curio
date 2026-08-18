@@ -91,13 +91,15 @@ async function runInBackground(
       ? t(locale).llm.errorAuth
       : kind === "no_credit"
         ? s.modelNoCredit
-        : kind === "rate_limit"
-          ? s.modelQuota
-          : kind === "overloaded" || kind === "server"
-            ? s.modelBusy
-            : err instanceof Error && !err.message.trim().startsWith("{")
-              ? err.message
-              : s.runFailedFallback;
+        : kind === "daily_quota"
+          ? s.modelQuotaDay
+          : kind === "rate_limit"
+            ? s.modelQuota
+            : kind === "overloaded" || kind === "server"
+              ? s.modelBusy
+              : err instanceof Error && !err.message.trim().startsWith("{")
+                ? err.message
+                : s.runFailedFallback;
     await failRecommendationRun(runId, message).catch(() => {});
   }
 }

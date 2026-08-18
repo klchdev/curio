@@ -185,11 +185,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         ? s.llm.errorAuth
         : kind === "no_credit"
           ? s.errors.modelNoCredit
-          : kind === "rate_limit"
-            ? s.errors.modelQuota
-            : kind === "overloaded" || kind === "server"
-              ? s.errors.modelBusy
-              : s.errors.generic;
+          : kind === "daily_quota"
+            ? s.errors.modelQuotaDay
+            : kind === "rate_limit"
+              ? s.errors.modelQuota
+              : kind === "overloaded" || kind === "server"
+                ? s.errors.modelBusy
+                : s.errors.generic;
       return "";
     }),
 

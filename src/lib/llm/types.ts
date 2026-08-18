@@ -67,9 +67,13 @@ export interface LlmErrorInfo {
    * empty balance never does. Retrying the second one only burns half a minute
    * before showing a message that sends the person off to wait for a reset that
    * will never come.
+   *
+   * `daily_quota` sits between the two: it does reset, but not inside a run,
+   * so it is worth naming apart from a per-minute limit the person can wait out.
    */
   kind:
     | "rate_limit"
+    | "daily_quota"
     | "no_credit"
     | "overloaded"
     | "server"

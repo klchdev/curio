@@ -98,12 +98,34 @@ export const geminiAdapter: LlmAdapter = {
     const seconds = /"retryDelay":\s*"(\d+(?:\.\d+)?)s"/.exec(message)?.[1];
     const retryAfterMs = seconds ? Math.ceil(Number(seconds) * 1000) : null;
 
-    if (code === 429) return { kind: "rate_limit", retriable: true, retryAfterMs };
+    if (code === 429) {
+      /*
+       * One 429 covers three different situations, and Google tells them apart
+       * only inside `QuotaFailure.violations[].quotaId` — a string like
+       * `GenerateRequestsPerDayPerProjectPerModel-FreeTier`.
+       *
+       * A per-minute limit is worth the wait; a per-day one won't come back
+       * within a run, so retrying it only costs the person half a minute before
+       * the same answer.
+       */
+      const quotaIds = [...message.matchAll(/"quotaId":\s*"([^"]+)"/g)].map((m) => m[1]!);
+
+      if (quotaIds.some((id) => /PerDay/i.test(id))) {
+        return { kind: "daily_quota", retriable: false, retryAfterMs: null };
+      }
+      return { kind: "rate_limit", retriable: true, retryAfterMs };
+    }
     // A 503 "high demand" on flash models is routine at peak and clears on its own
     if (code === 503) return { kind: "overloaded", retriable: true, retryAfterMs };
     if (code === 500 || code === 504) return { kind: "server", retriable: true, retryAfterMs };
     if (code === 401 || code === 403) return { kind: "auth", retriable: false, retryAfterMs: null };
-    if (code === 400) return { kind: "bad_request", retriable: false, retryAfterMs: null };
+    if (code === 400) {
+      // Google reports a project with billing switched off as a failed precondition
+      if (/FAILED_PRECONDITION|billing/i.test(message)) {
+        return { kind: "no_credit", retriable: false, retryAfterMs: null };
+      }
+      return { kind: "bad_request", retriable: false, retryAfterMs: null };
+    }
 
     return { kind: "unknown", retriable: false, retryAfterMs: null };
   },

@@ -130,11 +130,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       ? s.llm.errorAuth
       : kind === "no_credit"
         ? s.errors.modelNoCredit
-        : kind === "rate_limit"
-          ? s.errors.modelQuota
-          : kind === "overloaded" || kind === "server"
-            ? s.errors.modelBusy
-            : s.errors.runFailedFallback;
+        : kind === "daily_quota"
+          ? s.errors.modelQuotaDay
+          : kind === "rate_limit"
+            ? s.errors.modelQuota
+            : kind === "overloaded" || kind === "server"
+              ? s.errors.modelBusy
+              : s.errors.runFailedFallback;
     return json({ error: message }, 502);
   }
 };
