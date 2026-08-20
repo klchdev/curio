@@ -620,9 +620,16 @@ const sinceLabel = data.since
          * out zero long — while the Steam counter meanwhile credited four
          * minutes. "00:36–00:36, 4 min" adds up two different sources in one
          * line; showing the start and the duration separately is more honest.
+         *
+         * And the end of the range is counted off from the start rather than
+         * taken from the poll: the counter is exact to the minute, the poll is
+         * off by up to its own interval on either side. "22:37–00:40, 2 h 6 m"
+         * is a line that contradicts itself; the end shifts so that the range
+         * and the duration say the same thing.
          */
         const observed = end !== null && session.m > 0;
-        const when = observed ? `${clock(start)}–${clock(end!)}` : clock(start);
+        const until = observed ? new Date(start.getTime() + minutes * 60_000) : null;
+        const when = observed ? `${clock(start)}–${clock(until!)}` : clock(start);
         const source = session.gain > 0 ? s.byCounter : s.byClock;
 
         const item = document.createElement("li");
