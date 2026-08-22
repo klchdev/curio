@@ -1,18 +1,33 @@
 ---
 import "../styles/global.css";
 import { LOCALES, localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
 
 interface Props {
   title: string;
+  /** Overrides the site-wide one. Only the landing page needs its own. */
+  description?: string;
 }
 
-const { title } = Astro.props;
+const { title, description } = Astro.props;
 const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
 
-const description = {
-  ru: "Curio — что играть дальше из своей библиотеки, по твоим же отзывам",
-  en: "Curio — what to play next from your own library, judged by your own reviews",
-}[locale];
+/*
+ * A page that already carries the name keeps it as is: the dashboard passes
+ * "Curio" and used to come out as "Curio | Curio".
+ */
+const fullTitle = title.includes("Curio") ? title : `${title} | Curio`;
+const pageDescription = description ?? s.meta.description;
+
+/*
+ * The address as the visitor sees it. There is no `site` in the config — this
+ * runs on whatever host it was deployed to — so the request's own origin is
+ * the only truthful source for a canonical link and an og:url.
+ */
+const canonical = new URL(Astro.url.pathname, Astro.url.origin).href;
+
+const OG_LOCALE = { ru: "ru_RU", en: "en_US" }[locale];
 
 // Come back to where we already are: switching language must not drop you on the home page
 const back = Astro.url.pathname + Astro.url.search;
@@ -23,10 +38,26 @@ const back = Astro.url.pathname + Astro.url.search;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={description} />
+    <meta name="description" content={pageDescription} />
+    <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#030712" />
-    <title>{title} | Curio</title>
+    <title>{fullTitle}</title>
+
+    <!--
+      What a link to this page looks like when it is pasted into a chat or a
+      forum thread — the only channels this thing spreads through. Without them
+      a share renders as a bare URL and the name alone has to sell it.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Curio" />
+    <meta property="og:locale" content={OG_LOCALE} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={pageDescription} />
   </head>
   <body class="min-h-screen bg-gray-950 text-gray-100">
     <nav class="border-b border-gray-800 px-6 py-4">

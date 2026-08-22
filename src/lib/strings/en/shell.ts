@@ -94,3 +94,13 @@ export const dev: typeof Ru.dev = {
   deleteOne: "Delete",
   empty: "None yet",
 };
+
+/** What a search engine and a chat preview see. */
+export const meta: typeof Ru.meta = {
+  homeTitle: "Curio — what to play next from your Steam library, judged by your own reviews",
+  description:
+    "Curio reads the reviews you wrote and sorts the unplayed half of your Steam library into tiers, explaining why each game is for you. Not by genre, not by other people's scores. Open source, runs on your own model key.",
+  demoTitle: "Curio demo — backlog picks built from a made-up diary",
+  demoDescription:
+    "What a taste breakdown and a backlog tier list look like with nothing of your own set up: a fictional player's diary, with the picks already built from it. No sign-in, no key.",
+};
