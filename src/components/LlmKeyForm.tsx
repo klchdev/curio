@@ -129,6 +129,12 @@ export default function LlmKeyForm({
             </button>
           ))}
         </div>
+        {/* Price is the first thing anyone wants to know about a provider, and
+            the one thing that separates "I'll try it now" from "I'll come back
+            when I find a card". */}
+        {s.llm.keyCost[provider] && (
+          <p className="mt-1.5 text-xs text-gray-500">{s.llm.keyCost[provider]}</p>
+        )}
       </div>
 
       <div>
@@ -169,14 +175,33 @@ export default function LlmKeyForm({
           autoComplete="off"
           className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 font-mono text-sm text-gray-200"
         />
-        <a
-          href={meta.keyHelpUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="mt-1.5 inline-block text-xs text-indigo-400 hover:text-indigo-300"
-        >
-          {s.llm.whereToGet(meta.label)}
-        </a>
+        {/*
+          The link alone dropped a person into the provider's console, where
+          everything is named in words they were not looking for — and that is
+          where most of them stopped. So the steps are spelled out before the
+          jump, and they stay open exactly while there is no key yet: for
+          someone who already saved one this is clutter over the field they came
+          to replace.
+        */}
+        <details open={!mask} className="group mt-2">
+          <summary className="cursor-pointer list-none text-xs text-indigo-400 hover:text-indigo-300">
+            <span className="inline-block transition group-open:rotate-90">›</span>{" "}
+            {s.llm.keyStepsTitle}
+          </summary>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-gray-400 marker:text-gray-600">
+            {(s.llm.keySteps[provider] ?? []).map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <a
+            href={meta.keyHelpUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-2 inline-block text-xs text-indigo-400 hover:text-indigo-300"
+          >
+            {s.llm.whereToGet(meta.label)} ↗
+          </a>
+        </details>
       </div>
 
       <p className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/80">

@@ -40,5 +40,23 @@ const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
     <div class="mt-8 rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
       <LlmKeyForm client:load providers={providers} current={settings} locale={locale} />
     </div>
+
+    <!--
+      The threat model, spelled out, right under the field that asks for a key
+      somebody pays money on. Folded away rather than absent: the person who
+      does not care scrolls past a single line, and the person who does gets
+      the whole answer without having to read the source.
+    -->
+    <details class="group mt-6">
+      <summary
+        class="cursor-pointer list-none text-sm text-gray-400 transition hover:text-gray-200"
+      >
+        <span class="inline-block text-gray-600 transition group-open:rotate-90">›</span>
+        {s.llm.trustTitle}
+      </summary>
+      <ul class="mt-3 space-y-2.5 border-l border-gray-800 pl-4 text-xs leading-relaxed text-gray-500">
+        {s.llm.trustPoints.map((point) => <li>{point}</li>)}
+      </ul>
+    </details>
   </div>
 </Layout>
