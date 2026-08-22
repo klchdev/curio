@@ -20,7 +20,7 @@ export const landing: typeof Ru.landing = {
   step1Title: "Your own AI key",
   step1Text: "Gemini, Claude or GPT — a key takes a minute to get from the provider and goes into settings. Requests go out in your name: this service pays for none of them and keeps no key of its own.",
   step2Title: "Reviews of what you've played",
-  step2Text: `Whatever you wrote on Steam game pages comes over with one button, the rest you write by hand. From ${THRESHOLDS.MIN_REVIEWS_FOR_AI} reviews on, Curio has something to hold on to.`,
+  step2Text: `Whatever you wrote on Steam game pages comes over with one button, the rest you write by hand. ${THRESHOLDS.MIN_REVIEWS_TO_RUN} reviews are enough for a first breakdown; by ${THRESHOLDS.MIN_REVIEWS_FOR_CONFIDENCE} it turns confident.`,
   step3Title: "A read on your taste, picks and verdicts",
   step3Text: "The model reads everything you've written, puts your taste into words and sorts the unplayed part of your library into tiers — citing your own words, not genres.",
 

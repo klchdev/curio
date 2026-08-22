@@ -48,6 +48,8 @@ export const choose: typeof Ru.choose = {
     `Let's read your taste from ${reviews} ${reviews === 1 ? "review" : "reviews"}`,
   emptyText:
     "Curio reads everything you've written, finds patterns you never spelled out, and sorts the unplayed part of your library into tiers — explaining why each one is for you.",
+  thinNote: (reviews: number) =>
+    `${reviews} ${reviews === 1 ? "review" : "reviews"} so far — enough to work with, but the breakdown will be rough: patterns only start showing closer to ${THRESHOLDS.MIN_REVIEWS_FOR_CONFIDENCE}. The more you write, the less guessing.`,
   emptyCta: "Generate picks",
   emptyBusy: "Starting…",
   emptyHint: "Takes about a minute · you can leave the page",

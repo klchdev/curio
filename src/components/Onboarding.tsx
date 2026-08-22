@@ -45,7 +45,7 @@ export default function Onboarding({
   initialStep = null,
 }: Props) {
   const s = t(locale);
-  const need = THRESHOLDS.MIN_REVIEWS_FOR_AI;
+  const need = THRESHOLDS.MIN_REVIEWS_TO_RUN;
 
   /*
    * The tail of the key only ever comes from the server: the form doesn't hand

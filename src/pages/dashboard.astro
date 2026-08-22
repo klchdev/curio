@@ -103,7 +103,7 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
  * Staying silent is not an option here: without a key the AI features simply
  * answer nothing, and the person has no way of knowing it is not a breakage.
  */
-const reviewsLeft = THRESHOLDS.MIN_REVIEWS_FOR_AI - reviewCount;
+const reviewsLeft = THRESHOLDS.MIN_REVIEWS_TO_RUN - reviewCount;
 const setupGap: "key" | "library" | "reviews" | null = !llm.keyMask
   ? "key"
   : librarySize === 0

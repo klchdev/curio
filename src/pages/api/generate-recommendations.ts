@@ -128,8 +128,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     getRecommendationCandidates(userId).then((c) => c.length),
   ]);
 
-  if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
-    return json({ error: s.errors.needReviews(THRESHOLDS.MIN_REVIEWS_FOR_AI, reviewCount) }, 400);
+  if (reviewCount < THRESHOLDS.MIN_REVIEWS_TO_RUN) {
+    return json({ error: s.errors.needReviews(THRESHOLDS.MIN_REVIEWS_TO_RUN, reviewCount) }, 400);
   }
   if (candidateCount === 0) {
     return json({ error: s.errors.noCandidates }, 400);

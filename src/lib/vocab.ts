@@ -300,5 +300,17 @@ export const THRESHOLDS = {
   /** Triage: played a noticeable amount, but there is no verdict. */
   TRIAGE_MIN_MINUTES: 20,
   TRIAGE_PAGE_SIZE: 24,
-  MIN_REVIEWS_FOR_AI: 10,
+  /*
+   * Two numbers rather than one, because "enough to say something" and "enough
+   * to say it confidently" are different amounts.
+   *
+   * A single bar of ten locked the whole point of the app behind homework
+   * almost nobody arrives with: most people have never written ten reviews on
+   * Steam, and a newcomer who cannot see what any of this produces has no
+   * reason to write the tenth. Below TO_RUN there is genuinely nothing to read
+   * — four verdicts are still coincidence, not taste. Between the two the run
+   * goes ahead and says out loud that it is working on thin material.
+   */
+  MIN_REVIEWS_TO_RUN: 4,
+  MIN_REVIEWS_FOR_CONFIDENCE: 10,
 } as const;

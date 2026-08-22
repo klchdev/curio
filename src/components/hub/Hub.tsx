@@ -651,7 +651,7 @@ function ChooseZone({
       />
     );
   }
-  if (reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_AI) {
+  if (reviewCount < THRESHOLDS.MIN_REVIEWS_TO_RUN) {
     return (
       <GateCard reviewCount={reviewCount} s={s}>
         {blindSpin}
@@ -763,6 +763,13 @@ function ChooseZone({
         {runError && (
           <p className="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-4 py-2 text-sm text-red-300">
             {runError}
+          </p>
+        )}
+        {/* The same caveat travels with the finished picks: by the time someone
+            is reading a tier, the warning shown before the run is long gone. */}
+        {reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_CONFIDENCE && (
+          <p className="mb-4 rounded-lg border border-amber-900/60 bg-amber-950/20 px-4 py-2 text-xs leading-relaxed text-amber-200/80">
+            {s.choose.thinNote(reviewCount)}
           </p>
         )}
       </Reveal>
@@ -1414,7 +1421,7 @@ function GateCard({
   s: Dict;
   children?: React.ReactNode;
 }) {
-  const need = THRESHOLDS.MIN_REVIEWS_FOR_AI;
+  const need = THRESHOLDS.MIN_REVIEWS_TO_RUN;
   const left = Math.max(0, need - reviewCount);
   return (
     <Reveal>
@@ -1489,6 +1496,11 @@ function EmptyCard({
           {s.choose.emptyTitle(reviewCount)}
         </h2>
         <p className="mb-8 leading-relaxed text-gray-400">{s.choose.emptyText}</p>
+        {reviewCount < THRESHOLDS.MIN_REVIEWS_FOR_CONFIDENCE && (
+          <p className="mx-auto mb-6 max-w-md rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs leading-relaxed text-amber-200/80">
+            {s.choose.thinNote(reviewCount)}
+          </p>
+        )}
         <button
           onClick={onStart}
           disabled={busy}
