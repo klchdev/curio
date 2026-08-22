@@ -22,6 +22,7 @@ import {
   type ImpressionMode,
 } from "./vocab";
 import type { QueryError } from "./query-errors";
+import type { RatedGame } from "./taste-rules";
 
 const {
   UNPLAYED_MAX_MINUTES,
@@ -866,6 +867,8 @@ export interface CandidateGame {
    * for indies, and for anything released after its training, that is fiction.
    */
   genres: string | null;
+  /** How the game is played: single-player, co-op, PvP. Only the rules engine reads it. */
+  categories: string | null;
   description: string | null;
   releaseDate: string | null;
 }
@@ -938,6 +941,40 @@ export async function getFirstPassPick(
   return row?.tier ? { tier: row.tier, reason: row.reason } : null;
 }
 
+/**
+ * The rated half of the library, with what the store files each game under.
+ *
+ * The review corpus carries the words and the verdicts but nothing about the
+ * games themselves — a model does not need it, it knows what Prey is. The rules
+ * engine knows nothing at all, so its whole picture of taste is built here:
+ * verdicts on one side, genres on the other.
+ */
+export async function getRatedGames(userId: number): Promise<RatedGame[]> {
+  const rows = await db
+    .select({
+      title: games.title,
+      tier: gameRecords.tier,
+      rating: gameRecords.rating,
+      verdict: gameRecords.verdict,
+      minutes: gameRecords.playtimeAtLastEntry,
+      genres: games.genres,
+      categories: games.categories,
+    })
+    .from(gameRecords)
+    .innerJoin(games, eq(games.id, gameRecords.gameId))
+    .where(and(eq(gameRecords.userId, userId), eq(games.isDemo, false)));
+
+  return rows.map((row) => ({
+    title: row.title,
+    tier: row.tier,
+    rating: row.rating,
+    verdict: row.verdict,
+    hours: Math.round((row.minutes / 60) * 10) / 10,
+    genres: row.genres,
+    categories: row.categories,
+  }));
+}
+
 /** Untouched and barely started: the games worth recommending at all. */
 export async function getRecommendationCandidates(userId: number): Promise<CandidateGame[]> {
   const reviewedIds = await getReviewedGameIds(userId);
@@ -958,6 +995,7 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
       steamAppId: games.steamAppId,
       title: games.title,
       genres: games.genres,
+      categories: games.categories,
       description: games.shortDescription,
       releaseDate: games.releaseDate,
       minutes: userGames.playtimeMinutes,
@@ -986,6 +1024,7 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
       hours: Math.round((row.minutes / 60) * 10) / 10,
       lastPlayedAt: row.lastPlayedAt,
       genres: row.genres,
+      categories: row.categories,
       description: row.description,
       releaseDate: row.releaseDate,
     }));

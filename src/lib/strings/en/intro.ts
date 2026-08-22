@@ -70,9 +70,9 @@ export const onboarding: typeof Ru.onboarding = {
   finishing: "Opening…",
   resume: "Back to setup",
 
-  keyTitle: "AI key",
+  keyTitle: "AI key — optional",
   keyText:
-    "Breakdowns, picks and verdicts are made by an AI model running on your key — this service keeps none of its own. Gemini has a free tier: enough to try everything.",
+    "You get picks either way: without a key they are worked out from genres and your own tiers. A key is what lets Curio read the review texts themselves — that is where breakdowns, verdicts and explanations in your own phrasing come from. This service keeps no key of its own, and Gemini has a free tier.",
   keyDone: (mask: string) => `Key is in place (${mask})`,
 
   libraryTitle: "Library from Steam",
@@ -104,6 +104,8 @@ export const onboarding: typeof Ru.onboarding = {
     "Next stop is the \"Choose\" zone: Curio reads the diary and sorts the unplayed part into tiers. The first run takes about a minute.",
   readyGaps: "Still open:",
   readyGapsHint: "You can come back to setup any time — it isn't going anywhere.",
+  readyNoKey:
+    "Still no key, and that is fine: the picks will be worked out from genres. Whenever you want them read off your own words instead, the key is waiting in settings.",
 
   needLibraryTitle: "The library is empty",
   needLibraryText:

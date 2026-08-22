@@ -10,8 +10,10 @@ import {
   failRecommendationRun,
   hasActiveRun,
   getTasteProfile,
+  getRatedGames,
 } from "../../lib/queries";
 import { generateRecommendations } from "../../lib/recommendations";
+import { recommendByRules, RULES_MODEL } from "../../lib/taste-rules";
 import { adapterFor, LlmAuthError, type LlmCredentials } from "../../lib/llm";
 import { getLlmCredentials } from "../../lib/llm/credentials";
 import { THRESHOLDS } from "../../lib/vocab";
@@ -104,6 +106,38 @@ async function runInBackground(
   }
 }
 
+/**
+ * The keyless path. Same inputs, same stored shape, no network: the whole run
+ * is one pass over the library, so it is awaited rather than pushed into the
+ * background.
+ */
+async function runByRules(runId: number, userId: number, locale: Locale) {
+  try {
+    const [rated, candidates] = await Promise.all([
+      getRatedGames(userId),
+      getRecommendationCandidates(userId),
+    ]);
+
+    const result = recommendByRules(rated, candidates, locale);
+    const byAppId = new Map(candidates.map((game) => [game.steamAppId, game.gameId]));
+
+    await completeRecommendationRun(runId, {
+      profile: result.profile,
+      reviewsUsed: rated.length,
+      candidatesUsed: candidates.length,
+      items: result.picks.map((pick) => ({
+        gameId: byAppId.get(pick.steamAppId)!,
+        tier: pick.tier,
+        reason: pick.reason,
+        grounding: pick.grounding,
+      })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : t(locale).errors.generic;
+    await failRecommendationRun(runId, message).catch(() => {});
+  }
+}
+
 export const POST: APIRoute = async ({ cookies, request }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
@@ -116,12 +150,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   /*
-   * Everyone brings their own key, and a missing one is not a failure but an
-   * unfilled setting. A separate code so the interface points at settings
-   * instead of showing "something went wrong".
+   * A missing key is not a failure but an unfilled setting — and no longer a
+   * dead end either: without one the picks are worked out from genres and the
+   * player's own tiers instead. Worse advice than a model gives, and labelled
+   * as such, but the person gets to see what this app is for before going off
+   * to fetch a key for it.
    */
   const creds = await getLlmCredentials(userId);
-  if (!creds) return json({ error: "no_llm_key" }, 400);
 
   const [reviewCount, candidateCount] = await Promise.all([
     getReviewCorpusSize(userId),
@@ -135,8 +170,19 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: s.errors.noCandidates }, 400);
   }
 
-  // The run stores the model it was actually computed with
-  const runId = await createRecommendationRun(userId, creds.model);
+  // The run stores what it was actually computed with — a model, or the rules
+  const runId = await createRecommendationRun(userId, creds ? creds.model : RULES_MODEL);
+
+  /*
+   * The rules take milliseconds, so they finish inside the request: a progress
+   * screen for work that is already done would be theatre. The client still
+   * gets a run id and still polls once — the same path as after a model run,
+   * only it finds the run finished on the first ask.
+   */
+  if (!creds) {
+    await runByRules(runId, userId, locale);
+    return json({ ok: true, runId });
+  }
 
   // Deliberately not awaited: the response goes out at once, the work keeps going.
   void runInBackground(runId, userId, locale, creds);

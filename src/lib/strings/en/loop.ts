@@ -138,3 +138,24 @@ export const sheet: typeof Ru.sheet = {
     `${rating} has been standing for ${entries} ${entries === 1 ? "entry" : "entries"}, and the latest ones read ${suggested < rating ? "colder" : "warmer"}. Make it ${suggested}?`,
   driftApply: (suggested: number) => `Make it ${suggested}`,
 };
+
+/** Advice with no key: assembled from store genres and the player's own tiers. */
+export const rules: typeof Ru.rules = {
+  badge: "Worked out by rules, not by an AI",
+  badgeText:
+    "No key is connected, so the picks are built from Steam genres and categories weighted by your own tiers. The text of your reviews is not read — a breakdown in words needs a key.",
+  badgeCta: "Add a key",
+
+  example: (title: string, tier: string | null) => (tier ? `${title} (${tier})` : title),
+  forIt: (feature: string, examples: string) => `For: ${feature} — you have ${examples}.`,
+  againstIt: (feature: string, examples: string) => `Against: ${feature} — ${examples}.`,
+  nothingMatched:
+    "None of this game's genres show up among the things you have rated — there is nothing to go on, so this is a pure guess.",
+
+  profileLikes: (list: string) => `Above your average: ${list}.`,
+  profileDislikes: (list: string) => `Below it: ${list}.`,
+  withGames: (feature: string, games: number) =>
+    `${feature} (${games} ${games === 1 ? "game" : "games"})`,
+  profileHow:
+    "This is counted from Steam genres and categories rather than from your words: with no key the review texts are never read. With a key, Curio reads what you wrote and explains its picks in your own phrasing.",
+};

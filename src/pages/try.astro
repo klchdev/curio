@@ -130,6 +130,8 @@ const ready = [
   <DemoHub
       client:load
       picks={hasAdvice ? run.items : []}
+      runByRules={false}
+      hasLlmKey={true}
       slots={[
         ...(hasAdvice
           ? demo.slots.map(({ slot, game, currentPlaytime }) => ({

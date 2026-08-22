@@ -97,6 +97,10 @@ export interface Props {
   freeSkips: number;
   runProfile: string | null;
   runDate: string | null;
+  /** This run was worked out from genres rather than by a model: the picks say so. */
+  runByRules: boolean;
+  /** Whether a model key is configured at all — decides what the next run will be. */
+  hasLlmKey: boolean;
   activeRunId: number | null;
   /** The running job's state from the server: the first frame must not lie about the stage. */
   activeRunProgress: RunProgressState | null;
@@ -510,6 +514,8 @@ function ChooseZone({
   poolSize,
   runProfile,
   runDate,
+  runByRules,
+  hasLlmKey,
   locale,
   index,
   setIndex,
@@ -660,7 +666,13 @@ function ChooseZone({
   }
   if (picks.length === 0) {
     return (
-      <EmptyCard reviewCount={reviewCount} onStart={startRun} busy={busy === "run"} s={s}>
+      <EmptyCard
+        reviewCount={reviewCount}
+        hasLlmKey={hasLlmKey}
+        onStart={startRun}
+        busy={busy === "run"}
+        s={s}
+      >
         {blindSpin}
       </EmptyCard>
     );
@@ -772,6 +784,7 @@ function ChooseZone({
             {s.choose.thinNote(reviewCount)}
           </p>
         )}
+        {runByRules && <RulesNote s={s} className="mb-4" />}
       </Reveal>
 
       <Reveal delay={20}>
@@ -1475,14 +1488,34 @@ function BlindSpin({
   );
 }
 
+/**
+ * Says which engine did the work. Without a key the picks are still picks — the
+ * cards look exactly the same — so the difference has to be stated, or a guess
+ * off a genre list passes for a reading of what the person wrote.
+ */
+function RulesNote({ s, className = "" }: { s: Dict; className?: string }) {
+  return (
+    <div
+      className={`rounded-lg border border-sky-900/60 bg-sky-950/20 px-4 py-2.5 text-xs leading-relaxed text-sky-200/80 ${className}`}
+    >
+      <span className="font-medium text-sky-200">{s.rules.badge}.</span> {s.rules.badgeText}{" "}
+      <a href="/settings" className="whitespace-nowrap text-sky-300 underline hover:text-sky-200">
+        {s.rules.badgeCta}
+      </a>
+    </div>
+  );
+}
+
 function EmptyCard({
   reviewCount,
+  hasLlmKey,
   onStart,
   busy,
   s,
   children,
 }: {
   reviewCount: number;
+  hasLlmKey: boolean;
   onStart: () => void;
   busy: boolean;
   s: Dict;
@@ -1501,6 +1534,7 @@ function EmptyCard({
             {s.choose.thinNote(reviewCount)}
           </p>
         )}
+        {!hasLlmKey && <RulesNote s={s} className="mx-auto mb-6 max-w-md text-left" />}
         <button
           onClick={onStart}
           disabled={busy}

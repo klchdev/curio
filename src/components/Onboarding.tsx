@@ -7,12 +7,13 @@ import { THRESHOLDS } from "../lib/vocab";
 import type { ProviderId } from "../lib/llm/types";
 
 /**
- * The way into the product: key → library → reviews → done.
+ * The way into the product: library → reviews → key → done.
  *
- * This used to be a "nice to have": the key lived on the server, and a fresh
- * account could do at least something from the first second. Now everyone brings
- * their own key, and without it the app is an empty shop window, so the steps
- * are mandatory.
+ * The library and something written about it are what the app is made of, so
+ * they come first and they are required. The key comes last and is not: without
+ * one the picks are worked out from genres, and asking for somebody else's API
+ * key before showing a single pick loses the people who would have fetched one
+ * afterwards.
  *
  * One island for all four steps rather than four pages: each step calls its own
  * route and shows the result right away, and people move back and forth between
@@ -68,7 +69,7 @@ export default function Onboarding({
     ready: false,
   };
 
-  const order: StepId[] = ["key", "library", "reviews", "ready"];
+  const order: StepId[] = ["library", "reviews", "key", "ready"];
   // Otherwise open on the first unfinished step: no point scrolling past what's done
   const [step, setStep] = useState<StepId>(
     initialStep ?? order.find((id) => id !== "ready" && !done[id]) ?? "ready"
@@ -130,7 +131,7 @@ export default function Onboarding({
   }
 
   const gaps = order
-    .filter((id) => id !== "ready" && !done[id])
+    .filter((id) => id !== "ready" && id !== "key" && !done[id])
     .map((id) => LABELS[id](s));
 
   return (
@@ -148,7 +149,7 @@ export default function Onboarding({
                 locale={locale}
                 onSaved={() => {
                   setHasKey(true);
-                  setStep("library");
+                  setStep("ready");
                 }}
               />
             </div>
@@ -220,6 +221,11 @@ export default function Onboarding({
 
         {step === "ready" && (
           <Card title={s.onboarding.readyTitle} text={s.onboarding.readyText}>
+            {!hasKey && (
+              <div className="mb-4 rounded-xl border border-sky-900/60 bg-sky-950/20 px-4 py-3 text-sm leading-relaxed text-sky-200/80">
+                {s.onboarding.readyNoKey}
+              </div>
+            )}
             {gaps.length > 0 && (
               <div className="rounded-xl border border-amber-900/60 bg-amber-950/20 px-4 py-3">
                 <p className="text-sm text-amber-200/90">{s.onboarding.readyGaps}</p>

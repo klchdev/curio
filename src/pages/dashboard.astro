@@ -18,6 +18,7 @@ import Hub, { type Zone } from "../components/hub/Hub";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
 import { THRESHOLDS } from "../lib/vocab";
+import { RULES_MODEL } from "../lib/taste-rules";
 import { getLlmSettings } from "../lib/llm/credentials";
 import { db } from "../db";
 import { users, userGames } from "../db/schema";
@@ -103,20 +104,27 @@ const dateFormat = new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ru-RU", 
  * Staying silent is not an option here: without a key the AI features simply
  * answer nothing, and the person has no way of knowing it is not a breakage.
  */
+/*
+ * The key comes last now, and only once everything else is in place: without
+ * one the app still works — it falls back to genres — so leading with "you need
+ * a key" would demand a chore before showing anything worth the chore. A
+ * library and something written in it are still hard requirements.
+ */
 const reviewsLeft = THRESHOLDS.MIN_REVIEWS_TO_RUN - reviewCount;
-const setupGap: "key" | "library" | "reviews" | null = !llm.keyMask
-  ? "key"
-  : librarySize === 0
+const setupGap: "key" | "library" | "reviews" | null =
+  librarySize === 0
     ? "library"
     : reviewsLeft > 0
       ? "reviews"
-      : null;
+      : !llm.keyMask
+        ? "key"
+        : null;
 
 const GAP_NOTICE = {
   key: {
-    title: s.llm.missingTitle,
-    text: s.llm.missingText,
-    cta: s.llm.missingCta,
+    title: s.rules.badge,
+    text: s.rules.badgeText,
+    cta: s.rules.badgeCta,
     href: "/settings",
   },
   library: {
@@ -236,6 +244,8 @@ const notice = setupGap ? GAP_NOTICE[setupGap] : null;
     lastSyncAt={user.lastLibrarySync ? new Date(user.lastLibrarySync).getTime() : null}
     runProfile={run?.profile ?? null}
     runDate={run ? dateFormat.format(new Date(run.createdAt)) : null}
+    runByRules={run?.model === RULES_MODEL}
+    hasLlmKey={llm.keyMask !== null}
     activeRunId={activeRun?.id ?? null}
     activeRunProgress={
       activeRun
