@@ -206,7 +206,7 @@ export function formatPlaytime(minutes: number, locale: Locale = DEFAULT_LOCALE)
 export type ImpressionMode = "slot-first" | "entry" | "retro" | "quick" | "demo";
 
 export interface SheetRule {
-  /** Minimum note length, when the note is filled in at all. */
+  /** Minimum note length, when the note is filled in at all. 0 = no floor. */
   minNote: number;
   /** Saving without a note is not allowed. */
   noteRequired: boolean;
@@ -224,7 +224,7 @@ export interface SheetRule {
 
 export const SHEET_RULES: Record<ImpressionMode, SheetRule> = {
   "slot-first": {
-    minNote: 50,
+    minNote: 0,
     noteRequired: true,
     verdictRequired: true,
     showTier: false,
@@ -248,7 +248,7 @@ export const SHEET_RULES: Record<ImpressionMode, SheetRule> = {
     submit: { ru: "Записать", en: "Save" },
   },
   retro: {
-    minNote: 50,
+    minNote: 0,
     noteRequired: true,
     verdictRequired: true,
     showTier: true,

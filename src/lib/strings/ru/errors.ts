@@ -31,6 +31,7 @@ export const errors = {
   recordNotFound: "Запись об игре не найдена",
   noVerdict: "Выбери вердикт",
   noContract: "Не указан контракт",
+  noteEmpty: "Напиши пару слов о том, как игра прошла",
   noteTooShort: (min: number) => `Заметка минимум ${min} символов`,
   notEnoughPlaytime: (need: number, played: number) =>
     `Нужно наиграть минимум ${need} минут (сейчас ${played})`,

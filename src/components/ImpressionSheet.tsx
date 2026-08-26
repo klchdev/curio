@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SHEET_RULES,
   formatPlaytime,
@@ -83,6 +83,7 @@ export default function ImpressionSheet({
   const [take, setTake] = useState("");
   const [answering, setAnswering] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
+  const noteBox = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -115,15 +116,22 @@ export default function ImpressionSheet({
     verdict !== (currentVerdict ?? null) ||
     rating !== (currentRating ?? 3) ||
     tier !== (currentTier ?? null);
-  const hasNote = note.trim().length >= rule.minNote;
+  const trimmed = note.trim();
+  const hasNote = trimmed.length > 0 && trimmed.length >= rule.minNote;
   const canSubmit = rule.noteRequired ? hasNote : hasNote || changed;
 
+  /** Drops a question's opening into the box and puts the cursor after it. */
+  function seed(text: string) {
+    setNote((current) => (current.trim() ? `${current.replace(/\s*$/, "")}\n${text}` : text));
+    noteBox.current?.focus();
+  }
+
   async function submit() {
-    if (rule.noteRequired && !hasNote) {
-      setError(s.sheet.minChars(rule.minNote));
+    if (rule.noteRequired && !trimmed) {
+      setError(s.errors.noteEmpty);
       return;
     }
-    if (note.length > 0 && !hasNote) {
+    if (trimmed.length > 0 && trimmed.length < rule.minNote) {
       setError(s.sheet.minChars(rule.minNote));
       return;
     }
@@ -163,6 +171,13 @@ export default function ImpressionSheet({
       }
 
       /*
+       * The words are in the diary now, so the box lets go of them. It used to
+       * hold on, and once the closing questions ran out and the form came back,
+       * the entry that had just been saved sat there waiting to be saved again.
+       */
+      setNote("");
+
+      /*
        * The game has just been closed out — the perfect moment to ask about what
        * the review left out, while it's still fresh in mind. The questions come
        * from the background, and if there are none or the model didn't answer,
@@ -200,7 +215,8 @@ export default function ImpressionSheet({
   /** An answer to a question is an ordinary diary entry, just with the question beside it. */
   async function submitAnswer(question: string) {
     const text = answer.trim();
-    if (text.length < rule.minNote) return;
+    // The answer is sent as an "entry", so it answers to that rule, not the sheet's
+    if (!text || text.length < SHEET_RULES.entry.minNote) return;
 
     setLoading(true);
     try {
@@ -209,9 +225,20 @@ export default function ImpressionSheet({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "entry", gameId, note: text, promptedBy: question }),
       });
-      setQuestions((rest) => rest.filter((item) => item !== question));
+      const rest = questions.filter((item) => item !== question);
+      setQuestions(rest);
       setAnswering(null);
       setAnswer("");
+
+      /*
+       * Nothing left to answer and nothing left to read: the sheet is done. Left
+       * alone it would fall back to the form behind it, which is how the same
+       * review used to get written into the thread a second time.
+       */
+      if (rest.length === 0 && !take) {
+        if (rule.celebrate) setCelebrating(true);
+        else finish();
+      }
     } catch {
       setError(s.errors.network);
     } finally {
@@ -301,7 +328,7 @@ export default function ImpressionSheet({
                       <div className="mt-2 flex gap-2">
                         <button
                           onClick={() => submitAnswer(question)}
-                          disabled={loading || answer.trim().length < rule.minNote}
+                          disabled={loading || answer.trim().length < SHEET_RULES.entry.minNote}
                           className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-black transition disabled:opacity-40"
                         >
                           {s.sheet.answerSave}
@@ -458,17 +485,32 @@ export default function ImpressionSheet({
             </div>
           )}
 
+          {/*
+            * A character count is a target, and it gets hit: reviews used to
+            * arrive at exactly the length that unlocked the button, the same
+            * sentence pasted over and over. The three questions that were only
+            * a placeholder are chips now — they stay put, and each one opens a
+            * line instead of demanding a quota.
+            */}
           <label className="mb-5 block">
-            <span className="mb-1.5 flex items-baseline justify-between text-sm text-gray-400">
-              <span>
-                {s.sheet.impression}
-                {rule.noteRequired ? "" : s.sheet.optional}
-              </span>
-              <span className={note.length >= rule.minNote ? "text-emerald-500" : "text-gray-600"}>
-                {note.length} / {rule.minNote}
-              </span>
+            <span className="mb-1.5 block text-sm text-gray-400">
+              {s.sheet.impression}
+              {rule.noteRequired ? "" : s.sheet.optional}
             </span>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {s.sheet.notePrompts.map((prompt) => (
+                <button
+                  key={prompt.chip}
+                  type="button"
+                  onClick={() => seed(prompt.seed)}
+                  className="rounded-full border border-gray-800 px-2.5 py-1 text-xs text-gray-400 transition hover:border-gray-600 hover:text-gray-200"
+                >
+                  + {prompt.chip}
+                </button>
+              ))}
+            </div>
             <textarea
+              ref={noteBox}
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={5}

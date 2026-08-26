@@ -129,6 +129,16 @@ export const sheet = {
   impression: "Впечатление",
   optional: " (необязательно)",
   notePlaceholder: "Что зацепило, что раздражает, вернёшься ли",
+  /*
+   * The same three questions the placeholder used to ask, except a placeholder
+   * disappears at the first keystroke. As chips they stay, and each one drops
+   * its own opening into the box.
+   */
+  notePrompts: [
+    { chip: "зацепило", seed: "Зацепило: " },
+    { chip: "раздражало", seed: "Раздражало: " },
+    { chip: "вернусь ли", seed: "Вернусь ли: " },
+  ],
   cancel: "Отмена",
   saving: "Сохраняю…",
   minChars: (n: number) => `Заметка минимум ${n} символов`,

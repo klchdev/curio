@@ -122,6 +122,11 @@ export const sheet: typeof Ru.sheet = {
   impression: "Impression",
   optional: " (optional)",
   notePlaceholder: "What hooked you, what annoys you, will you come back",
+  notePrompts: [
+    { chip: "hooked me", seed: "Hooked me: " },
+    { chip: "annoyed me", seed: "Annoyed me: " },
+    { chip: "coming back", seed: "Coming back: " },
+  ],
   cancel: "Cancel",
   saving: "Saving…",
   minChars: (n: number) => `The note needs at least ${n} characters`,

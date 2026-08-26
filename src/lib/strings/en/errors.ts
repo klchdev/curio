@@ -33,6 +33,7 @@ export const errors: typeof Ru.errors = {
   recordNotFound: "Nothing recorded for this game yet",
   noVerdict: "Pick a verdict",
   noContract: "No contract specified",
+  noteEmpty: "Write a couple of words about how the game went",
   noteTooShort: (min: number) => `The note needs at least ${min} characters`,
   notEnoughPlaytime: (need: number, played: number) =>
     `Play at least ${need} minutes first — you're at ${played}`,

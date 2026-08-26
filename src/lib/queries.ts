@@ -1314,8 +1314,8 @@ export async function saveImpression(
   const rule = SHEET_RULES[input.mode];
   const note = input.note?.trim() ?? "";
 
-  if (rule.noteRequired && note.length < rule.minNote) {
-    return { error: { code: "noteTooShort", min: rule.minNote } };
+  if (rule.noteRequired && note.length === 0) {
+    return { error: { code: "noteEmpty" } };
   }
   if (note.length > 0 && note.length < rule.minNote) {
     return { error: { code: "noteTooShort", min: rule.minNote } };
@@ -1395,11 +1395,23 @@ export async function saveImpression(
 
   if (note.length >= rule.minNote && note.length > 0) {
     const existing = await db
-      .select({ id: gameEntries.id })
+      .select({ id: gameEntries.id, text: gameEntries.text })
       .from(gameEntries)
       .where(eq(gameEntries.recordId, recordId))
+      .orderBy(desc(gameEntries.createdAt))
       .limit(1)
       .then((rows) => rows[0]);
+
+    /*
+     * The same words twice in a row are a double submit, not a second thought.
+     * The sheet used to keep the note in its box after saving, so answering the
+     * closing questions and pressing save again wrote the opening entry anew.
+     * The box is cleared now; this stays as the guard that does not depend on
+     * which client is asking.
+     */
+    if (existing?.text === note) {
+      return { ok: true };
+    }
 
     /*
      * An entry that changes the verdict is not an update: it is the turning

@@ -18,6 +18,7 @@ export type QueryError =
   | { code: "contractNotFound" }
   | { code: "noGame" }
   | { code: "saveFailed" }
+  | { code: "noteEmpty" }
   | { code: "noteTooShort"; min: number }
   | { code: "notEnoughPlaytime"; need: number; played: number };
 
@@ -46,6 +47,8 @@ export function errorText(s: Dict, error: QueryError): string {
       return s.errors.noGame;
     case "saveFailed":
       return s.errors.saveFailed;
+    case "noteEmpty":
+      return s.errors.noteEmpty;
     case "noteTooShort":
       return s.errors.noteTooShort(error.min);
     case "notEnoughPlaytime":
