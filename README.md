@@ -1,4 +1,14 @@
-# Curio
+# Curio — CLI fork
+
+> This is a fork of [klchdev/curio](https://github.com/klchdev/curio). It adds
+> two providers that need no API key: **Claude Code (CLI)** and **Codex (CLI)**.
+> Pick one in settings and requests run through the CLI installed on the machine
+> that hosts the server, billed to its subscription (Claude Pro/Max or ChatGPT
+> Plus/Pro) instead of a metered key. This only makes sense when you self-host
+> on your own computer — the server spawns `claude` / `codex` locally, so the
+> binary must be on its PATH and logged in (`claude` once, or `codex login`).
+> Inside Docker there is no CLI unless you bake one into the image. The three
+> original key-based providers still work unchanged.
 
 **A journal of what you've played that turns into advice on what to play next.**
 

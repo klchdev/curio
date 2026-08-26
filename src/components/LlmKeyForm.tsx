@@ -21,6 +21,8 @@ export interface ProviderMeta {
   id: ProviderId;
   label: string;
   keyHelpUrl: string;
+  /** false — the provider runs on an installed CLI, the key field disappears. */
+  needsKey?: boolean;
   models: readonly { id: string; label: string }[];
 }
 
@@ -56,6 +58,7 @@ export default function LlmKeyForm({
   const [mask, setMask] = useState<string | null>(current.keyMask);
 
   const effectiveModel = model === CUSTOM_MODEL ? customModel.trim() : model;
+  const needsKey = meta.needsKey !== false;
 
   function switchProvider(next: ProviderId) {
     setProvider(next);
@@ -79,11 +82,13 @@ export default function LlmKeyForm({
 
       if (!res.ok) {
         setError(
-          data.error === "auth"
-            ? s.llm.errorAuth
-            : data.error === "bad_request"
-              ? s.llm.errorModel
-              : s.llm.errorGeneric
+          !needsKey
+            ? s.llm.errorCli
+            : data.error === "auth"
+              ? s.llm.errorAuth
+              : data.error === "bad_request"
+                ? s.llm.errorModel
+                : s.llm.errorGeneric
         );
         return;
       }
@@ -165,48 +170,66 @@ export default function LlmKeyForm({
         )}
       </div>
 
-      <div>
-        <label className="mb-1.5 block text-xs text-gray-500">{s.llm.key}</label>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder={mask ? s.llm.keySaved(mask) : s.llm.keyPlaceholder}
-          autoComplete="off"
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 font-mono text-sm text-gray-200"
-        />
-        {/*
-          The link alone dropped a person into the provider's console, where
-          everything is named in words they were not looking for — and that is
-          where most of them stopped. So the steps are spelled out before the
-          jump, and they stay open exactly while there is no key yet: for
-          someone who already saved one this is clutter over the field they came
-          to replace.
-        */}
-        <details open={!mask} className="group mt-2">
-          <summary className="cursor-pointer list-none text-xs text-indigo-400 hover:text-indigo-300">
-            <span className="inline-block transition group-open:rotate-90">›</span>{" "}
-            {s.llm.keyStepsTitle}
-          </summary>
-          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-gray-400 marker:text-gray-600">
-            {(s.llm.keySteps[provider] ?? []).map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
+      {needsKey ? (
+        <div>
+          <label className="mb-1.5 block text-xs text-gray-500">{s.llm.key}</label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={mask ? s.llm.keySaved(mask) : s.llm.keyPlaceholder}
+            autoComplete="off"
+            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 font-mono text-sm text-gray-200"
+          />
+          {/*
+            The link alone dropped a person into the provider's console, where
+            everything is named in words they were not looking for — and that is
+            where most of them stopped. So the steps are spelled out before the
+            jump, and they stay open exactly while there is no key yet: for
+            someone who already saved one this is clutter over the field they came
+            to replace.
+          */}
+          <details open={!mask} className="group mt-2">
+            <summary className="cursor-pointer list-none text-xs text-indigo-400 hover:text-indigo-300">
+              <span className="inline-block transition group-open:rotate-90">›</span>{" "}
+              {s.llm.keyStepsTitle}
+            </summary>
+            <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-gray-400 marker:text-gray-600">
+              {(s.llm.keySteps[provider] ?? []).map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <a
+              href={meta.keyHelpUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="mt-2 inline-block text-xs text-indigo-400 hover:text-indigo-300"
+            >
+              {s.llm.whereToGet(meta.label)} ↗
+            </a>
+          </details>
+        </div>
+      ) : (
+        <div>
+          <p className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2 text-xs text-gray-400">
+            {s.llm.cliHint}
+          </p>
           <a
             href={meta.keyHelpUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-2 inline-block text-xs text-indigo-400 hover:text-indigo-300"
+            className="mt-1.5 inline-block text-xs text-indigo-400 hover:text-indigo-300"
           >
-            {s.llm.whereToGet(meta.label)} ↗
+            {s.llm.cliDocs(meta.label)} ↗
           </a>
-        </details>
-      </div>
+        </div>
+      )}
 
-      <p className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/80">
-        {s.llm.privacyNote}
-      </p>
+      {needsKey && (
+        <p className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/80">
+          {s.llm.privacyNote}
+        </p>
+      )}
 
       {error && (
         <p className="rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
@@ -218,7 +241,7 @@ export default function LlmKeyForm({
         <button
           type="button"
           onClick={save}
-          disabled={busy || !apiKey.trim() || !effectiveModel}
+          disabled={busy || (needsKey && !apiKey.trim()) || !effectiveModel}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? s.llm.checking : s.llm.save}

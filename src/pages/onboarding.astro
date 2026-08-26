@@ -37,6 +37,7 @@ const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
   id: adapter.id,
   label: adapter.label,
   keyHelpUrl: adapter.keyHelpUrl,
+  needsKey: adapter.needsKey !== false,
   models: adapter.models,
 }));
 

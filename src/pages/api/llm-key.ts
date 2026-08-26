@@ -26,13 +26,21 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const { provider, model, apiKey } = await request.json();
 
   if (!isProviderId(provider)) return json({ error: "bad_provider" }, 400);
-  if (typeof apiKey !== "string" || apiKey.trim().length < 8) {
+
+  const adapter = adapterFor(provider);
+
+  /*
+   * CLI providers have no key: the subscription lives in the installed binary.
+   * A sentinel goes through the usual encrypted column so that nothing else —
+   * credentials, the "is AI configured" checks, deletion — needs a second path.
+   */
+  const needsKey = adapter.needsKey !== false;
+  if (needsKey && (typeof apiKey !== "string" || apiKey.trim().length < 8)) {
     return json({ error: "bad_key" }, 400);
   }
 
-  const adapter = adapterFor(provider);
   const chosenModel = typeof model === "string" && model.trim() ? model.trim() : adapter.models[0]!.id;
-  const key = apiKey.trim();
+  const key = needsKey ? apiKey.trim() : "cli";
 
   const result = await testLlmKey({ provider, apiKey: key, model: chosenModel });
 

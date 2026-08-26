@@ -11,7 +11,7 @@
  * one-off scripts.
  */
 
-export const PROVIDERS = ["gemini", "anthropic", "openai"] as const;
+export const PROVIDERS = ["gemini", "anthropic", "openai", "claude-code", "codex"] as const;
 export type ProviderId = (typeof PROVIDERS)[number];
 
 export function isProviderId(value: unknown): value is ProviderId {
@@ -115,6 +115,8 @@ export interface LlmAdapter {
   /** The first model in the list is the one offered by default. */
   readonly models: readonly ModelChoice[];
   readonly keyHelpUrl: string;
+  /** false — the provider runs on an installed CLI, there is no key to enter. */
+  readonly needsKey?: boolean;
   create(apiKey: string, model: string): LlmClient;
   classifyError(err: unknown): LlmErrorInfo;
 }

@@ -1,10 +1,11 @@
 import { geminiAdapter } from "./gemini";
 import { anthropicAdapter } from "./anthropic";
 import { openaiAdapter } from "./openai";
+import { claudeCodeAdapter, codexAdapter } from "./cli";
 import type { LlmAdapter, LlmClient, ProviderId } from "./types";
 
 export * from "./types";
-export { geminiAdapter, anthropicAdapter, openaiAdapter };
+export { geminiAdapter, anthropicAdapter, openaiAdapter, claudeCodeAdapter, codexAdapter };
 
 /**
  * One entry into the model for the whole project: provider, model, retries,
@@ -27,12 +28,16 @@ const ADAPTERS: Record<ProviderId, LlmAdapter> = {
   gemini: geminiAdapter,
   anthropic: anthropicAdapter,
   openai: openaiAdapter,
+  "claude-code": claudeCodeAdapter,
+  codex: codexAdapter,
 };
 
 export const ADAPTER_LIST: readonly LlmAdapter[] = [
   geminiAdapter,
   anthropicAdapter,
   openaiAdapter,
+  claudeCodeAdapter,
+  codexAdapter,
 ];
 
 export function adapterFor(provider: ProviderId): LlmAdapter {

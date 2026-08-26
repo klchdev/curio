@@ -35,7 +35,16 @@ export const llm: typeof Ru.llm = {
     "claude-haiku-4-5": "cheap, for bulk analysis",
     "gpt-4.1": "",
     "gpt-4.1-mini": "cheaper, for bulk analysis",
+    default: "whatever the CLI is set to",
+    opus: "the strongest, burns the limit faster",
+    sonnet: "balance of speed and quality",
+    haiku: "fast, for bulk analysis",
   } as Record<string, string>,
+  cliHint:
+    "No key needed: requests go through the CLI installed on the server machine and its subscription. Save runs a check that the CLI is there and logged in.",
+  cliDocs: (provider: string) => `How to install ${provider}`,
+  errorCli:
+    "The CLI didn't answer. Check that it is installed on the server machine, on PATH, and logged in (claude or codex login).",
   key: "Key",
   keyPlaceholder: "Paste your key",
   keySaved: (mask: string) => `Key saved (${mask}) — enter a new one to replace it`,
@@ -69,6 +78,8 @@ export const llm: typeof Ru.llm = {
     gemini: "Has a free tier — no card needed",
     anthropic: "Paid only, needs a card",
     openai: "Paid only, needs a card",
+    "claude-code": "Already paid for by a Claude Pro/Max subscription",
+    codex: "Already paid for by a ChatGPT Plus/Pro subscription",
   } as Record<string, string>,
   privacyNote:
     "Your entries and game list are sent to the AI provider. On Gemini's free tier Google may use request content to improve its models — if that doesn't work for you, use a paid tier or another provider.",

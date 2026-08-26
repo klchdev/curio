@@ -18,7 +18,7 @@ export const users = pgTable("users", {
    * and choosing between the cheap one and the smart one is up to the person
    * paying the bill.
    */
-  llmProvider: text("llm_provider", { enum: ["gemini", "anthropic", "openai"] }),
+  llmProvider: text("llm_provider", { enum: ["gemini", "anthropic", "openai", "claude-code", "codex"] }),
   llmKeyEncrypted: text("llm_key_encrypted"),
   llmModel: text("llm_model"),
 
