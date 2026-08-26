@@ -236,6 +236,13 @@ mode — for them only the counter readings survive, with no session boundaries.
 What is stored, where it goes and how to delete all of it — in
 [PRIVACY.md](docs/PRIVACY.md).
 
+One thing worth naming here: the public pages (the landing page and `/try`)
+carry a Yandex.Metrika counter, and everything behind the login carries no
+third-party script at all. The counter id comes from `YANDEX_METRIKA_ID`, which
+is empty by default — a copy you run yourself counts nothing until you put your
+own counter there. Visitors can switch it off for their browser from the
+landing footer or the settings page.
+
 ## Contributing
 
 Bugs and ideas go to issues, patches to pull requests. Details in

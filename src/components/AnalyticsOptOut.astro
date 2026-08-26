@@ -1,0 +1,102 @@
+---
+import { YANDEX_METRIKA_ID } from "astro:env/server";
+import { ANALYTICS_OPT_OUT_KEY } from "../lib/analytics";
+import { localeFrom } from "../lib/i18n";
+import { t } from "../lib/strings";
+
+/*
+ * The switch that makes the counter honest. It has to be reachable by a guest
+ * too — the counter runs on the pages where nobody is signed in yet — so it
+ * sits in the landing footer as well as in the settings, and it stores the
+ * answer where a guest has storage: their own browser.
+ *
+ * Without a counter id there is nothing to switch off, and a self-hosted copy
+ * shouldn't grow a control over something it doesn't run.
+ */
+const enabled = Boolean(YANDEX_METRIKA_ID);
+
+const locale = localeFrom(Astro.cookies, Astro.request);
+const s = t(locale);
+
+interface Props {
+  /** The landing footer is grey and tiny; the settings card is not. */
+  class?: string;
+}
+
+const { class: className = "" } = Astro.props;
+---
+
+{
+  enabled && (
+    <p class={`flex flex-wrap items-center gap-x-2 gap-y-1 ${className}`} data-analytics-optout>
+      {/*
+        The status is rendered as "counted" and corrected by the script if the
+        browser says otherwise. Server-side rendering cannot know the answer —
+        the flag lives in localStorage — and a switch that reads "off" for a
+        moment on every load would be a lie in the other direction.
+      */}
+      <span data-analytics-status>{s.analytics.statusOn}</span>
+      <button
+        type="button"
+        data-analytics-toggle
+        class="cursor-pointer underline decoration-dotted underline-offset-4 transition hover:text-gray-300"
+      >
+        {s.analytics.turnOff}
+      </button>
+    </p>
+  )
+}
+
+{
+  enabled && (
+    <script
+      is:inline
+      define:vars={{
+        optOutKey: ANALYTICS_OPT_OUT_KEY,
+        labels: {
+          statusOn: s.analytics.statusOn,
+          statusOff: s.analytics.statusOff,
+          turnOff: s.analytics.turnOff,
+          turnOn: s.analytics.turnOn,
+        },
+      }}
+    >
+      (function () {
+        var read = function () {
+          try { return localStorage.getItem(optOutKey) === "off"; } catch (e) { return false; }
+        };
+
+        var write = function (off) {
+          try {
+            if (off) { localStorage.setItem(optOutKey, "off"); }
+            else { localStorage.removeItem(optOutKey); }
+            return true;
+          } catch (e) {
+            // Storage denied: the choice cannot be remembered, so don't claim it was.
+            return false;
+          }
+        };
+
+        var paint = function (root, off) {
+          var status = root.querySelector("[data-analytics-status]");
+          var button = root.querySelector("[data-analytics-toggle]");
+          if (status) { status.textContent = off ? labels.statusOff : labels.statusOn; }
+          if (button) { button.textContent = off ? labels.turnOn : labels.turnOff; }
+        };
+
+        var roots = document.querySelectorAll("[data-analytics-optout]");
+        for (var i = 0; i < roots.length; i++) {
+          (function (root) {
+            paint(root, read());
+            var button = root.querySelector("[data-analytics-toggle]");
+            if (!button) return;
+            button.addEventListener("click", function () {
+              var next = !read();
+              if (write(next)) { paint(root, next); }
+            });
+          })(roots[i]);
+        }
+      })();
+    </script>
+  )
+}

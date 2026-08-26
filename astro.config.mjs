@@ -46,6 +46,17 @@ export default defineConfig({
         optional: true,
         default: "",
       }),
+      /*
+       * Yandex.Metrika counter id for the public pages. Not a secret — it ends
+       * up in the page source — but it has no default on purpose: a hard-coded
+       * id would make every self-hosted copy report its visitors to this
+       * instance's owner. Empty means no counter anywhere.
+       */
+      YANDEX_METRIKA_ID: envField.string({
+        context: "server",
+        access: "public",
+        optional: true,
+      }),
     },
   },
 

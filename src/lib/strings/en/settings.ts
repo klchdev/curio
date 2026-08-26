@@ -86,9 +86,19 @@ export const llm: typeof Ru.llm = {
     "What is stored is the model's answer — picks, verdicts, breakdowns: that is what your account consists of. The requests themselves are not kept, and the key is never written to the logs.",
     "What the provider does with the content of a request is decided by their tier, not by this service. On Gemini's free tier the content may be used to improve models — the paid tiers of all three generally do not.",
     "Whoever runs this server has access to its database and its environment — which means they can technically decrypt the keys. No encryption anywhere protects against that; what does is that the code is open and you can run your own instance.",
-    "There is no analytics, no counters and no third-party scripts on these pages. The key is removed with the button below, the whole account on the “My data” page.",
+    "The pages inside the account carry no analytics and no third-party scripts: the visit counter (Yandex.Metrika) runs only on the landing page and the demo — where nobody has signed in yet. You can switch it off for your own browser below. The key is removed with the button below, the whole account on the “My data” page.",
   ],
   missingTitle: "An AI key is needed",
   missingText: "This runs on your own key. Add one in settings — it takes a minute.",
   missingCta: "Add a key",
+};
+
+export const analytics = {
+  title: "Counting visits",
+  text: "The pages that open without signing in — the landing page and the demo — carry a Yandex.Metrika counter. It answers exactly one question: how many people arrived and where from. Inside the account there is none: the diary, the chronology, the settings and “My data” load no third-party script at all.",
+  statusOn: "Visits from this browser are counted",
+  statusOff: "Visits from this browser are not counted",
+  turnOff: "Don't count me",
+  turnOn: "Count me",
+  note: "The choice is kept in this browser and does not carry over to another device. Switching it off takes effect on the next page load: the counter simply isn't loaded, so Yandex doesn't even get a request.",
 };

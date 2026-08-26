@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import { LOCALES, localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
+import Analytics from "../components/Analytics.astro";
 
 interface Props {
   title: string;
@@ -58,6 +59,9 @@ const back = Astro.url.pathname + Astro.url.search;
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={pageDescription} />
+
+    {/* Renders nothing unless this is a public page and a counter id is configured */}
+    <Analytics />
   </head>
   <body class="min-h-screen bg-gray-950 text-gray-100">
     <nav class="border-b border-gray-800 px-6 py-4">

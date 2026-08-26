@@ -1,6 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import LlmKeyForm, { type ProviderMeta } from "../components/LlmKeyForm";
+import AnalyticsOptOut from "../components/AnalyticsOptOut.astro";
 import { getSessionUser } from "../lib/session";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
@@ -58,5 +59,18 @@ const providers: ProviderMeta[] = ADAPTER_LIST.map((adapter) => ({
         {s.llm.trustPoints.map((point) => <li>{point}</li>)}
       </ul>
     </details>
+
+    <!--
+      The counter is named on the same screen that lists what the server sees,
+      and the switch stands right under the sentence describing it. Anything
+      else — a mention in a policy file nobody opens — would be the polite
+      version of not saying it.
+    -->
+    <section class="mt-6 rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
+      <h2 class="text-sm font-medium text-gray-300">{s.analytics.title}</h2>
+      <p class="mt-2 text-xs leading-relaxed text-gray-500">{s.analytics.text}</p>
+      <AnalyticsOptOut class="mt-3 text-xs text-gray-400" />
+      <p class="mt-2 text-xs leading-relaxed text-gray-600">{s.analytics.note}</p>
+    </section>
   </div>
 </Layout>

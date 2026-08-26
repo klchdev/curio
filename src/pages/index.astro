@@ -1,5 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import AnalyticsOptOut from "../components/AnalyticsOptOut.astro";
 import { getSessionUser } from "../lib/session";
 import { localeFrom } from "../lib/i18n";
 import { t } from "../lib/strings";
@@ -248,6 +249,11 @@ const FEATURES = [
         </a>
       </div>
       <p>{s.landing.footerDisclaimer}</p>
+      <!--
+        This is the page the counter actually runs on, so the switch belongs
+        here too: a guest has no settings page to find it in.
+      -->
+      <AnalyticsOptOut class="mt-3 text-gray-600" />
     </footer>
   </div>
 </Layout>

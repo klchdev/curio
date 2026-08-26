@@ -1,0 +1,67 @@
+---
+import { YANDEX_METRIKA_ID } from "astro:env/server";
+import { ANALYTICS_OPT_OUT_KEY, isPublicPage } from "../lib/analytics";
+
+/*
+ * Yandex.Metrika on the public pages only — see analytics.ts for which ones
+ * and why the rest are left out.
+ *
+ * The counter id comes from the environment and has no default. A hard-coded
+ * id would mean every self-hosted copy silently reporting its visitors to
+ * whoever owns this instance; an empty variable means no counter at all, which
+ * is the right behaviour for someone who cloned the repo to run it for
+ * themselves.
+ *
+ * Webvisor and the session recording that comes with it are deliberately left
+ * off: it records what is on the screen, and that is a different promise from
+ * "we count how many of you arrived".
+ */
+const id = YANDEX_METRIKA_ID;
+const enabled = Boolean(id) && isPublicPage(Astro.url.pathname);
+---
+
+{
+  enabled && (
+    <Fragment>
+      <script is:inline define:vars={{ metrikaId: id, optOutKey: ANALYTICS_OPT_OUT_KEY }}>
+        (function () {
+          var off = false;
+          // Private mode can throw on the very first read; a visit that cannot
+          // check the flag is counted rather than dropped.
+          try { off = localStorage.getItem(optOutKey) === "off"; } catch (e) {}
+          if (off) return;
+
+          var src = "https://mc.yandex.ru/metrika/tag.js?id=" + metrikaId;
+
+          (function (m, e, t, r, i, k, a) {
+            m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments) };
+            m[i].l = 1 * new Date();
+            for (var j = 0; j < document.scripts.length; j++) {
+              if (document.scripts[j].src === r) { return; }
+            }
+            k = e.createElement(t); a = e.getElementsByTagName(t)[0];
+            k.async = 1; k.src = r; a.parentNode.insertBefore(k, a);
+          })(window, document, "script", src, "ym");
+
+          ym(metrikaId, "init", {
+            ssr: true,
+            clickmap: true,
+            trackLinks: true,
+            accurateTrackBounce: true,
+            referrer: document.referrer,
+            url: location.href
+          });
+        })();
+      </script>
+      <noscript>
+        <div>
+          <img
+            src={`https://mc.yandex.ru/watch/${id}`}
+            style="position:absolute; left:-9999px;"
+            alt=""
+          />
+        </div>
+      </noscript>
+    </Fragment>
+  )
+}
