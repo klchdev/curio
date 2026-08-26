@@ -32,7 +32,7 @@ export const llm = {
    */
   modelNotes: {
     "gemini-3.7-flash": "быстрая, есть бесплатный тариф",
-    "gemini-3.7-pro": "умнее и дороже",
+    "gemini-pro-latest": "умнее и дороже",
     "claude-sonnet-5": "баланс цены и качества",
     "claude-opus-5": "самая сильная, дороже",
     "claude-haiku-4-5": "дешёвая, для массовых разборов",

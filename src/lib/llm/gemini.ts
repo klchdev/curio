@@ -49,7 +49,7 @@ export const geminiAdapter: LlmAdapter = {
   keyHelpUrl: "https://aistudio.google.com/apikey",
   models: [
     { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash" },
-    { id: "gemini-3.7-pro", label: "Gemini 3.7 Pro" },
+    { id: "gemini-pro-latest", label: "Gemini Pro" },
   ],
 
   create(apiKey: string, model: string): LlmClient {

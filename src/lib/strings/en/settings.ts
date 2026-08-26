@@ -29,7 +29,7 @@ export const llm: typeof Ru.llm = {
   customModelHint: "Exact model name",
   modelNotes: {
     "gemini-3.7-flash": "fast, has a free tier",
-    "gemini-3.7-pro": "smarter and pricier",
+    "gemini-pro-latest": "smarter and pricier",
     "claude-sonnet-5": "balance of cost and quality",
     "claude-opus-5": "the strongest, pricier",
     "claude-haiku-4-5": "cheap, for bulk analysis",
