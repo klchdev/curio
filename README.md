@@ -1,14 +1,4 @@
-# Curio — CLI fork
-
-> This is a fork of [klchdev/curio](https://github.com/klchdev/curio). It adds
-> two providers that need no API key: **Claude Code (CLI)** and **Codex (CLI)**.
-> Pick one in settings and requests run through the CLI installed on the machine
-> that hosts the server, billed to its subscription (Claude Pro/Max or ChatGPT
-> Plus/Pro) instead of a metered key. This only makes sense when you self-host
-> on your own computer — the server spawns `claude` / `codex` locally, so the
-> binary must be on its PATH and logged in (`claude` once, or `codex login`).
-> Inside Docker there is no CLI unless you bake one into the image. The three
-> original key-based providers still work unchanged.
+# Curio
 
 **A journal of what you've played that turns into advice on what to play next.**
 
@@ -136,7 +126,7 @@ stops recording. Both go away on a paid plan.
 
 ### Railway
 
-Create a project from your fork at [railway.com/new](https://railway.com/new),
+Create a project from your repository at [railway.com/new](https://railway.com/new),
 then add a PostgreSQL to it from the same canvas. Railway picks up
 [`railway.json`](railway.json), builds the `Dockerfile` and starts the server —
 no guessing at what the project is. Set the variables on the service:
@@ -195,7 +185,7 @@ everyone pays for their own. Curio keeps no shared key: you enter yours in the
 settings, it gets encrypted (AES-256-GCM), and that encrypted form is the only
 one the database ever holds.
 
-Three providers are supported:
+Three key-based providers are supported:
 
 - **Google Gemini** — https://aistudio.google.com/apikey
 - **Anthropic Claude** — https://console.anthropic.com/settings/keys
@@ -205,6 +195,20 @@ Gemini has a free tier, and it's enough to try everything except running a large
 journal through analysis in one go. Do keep in mind that on the free tier Google
 reserves the right to use the contents of your requests to improve its models;
 the details are in [PRIVACY.md](docs/PRIVACY.md).
+
+### Without a key: Claude Code and Codex
+
+Two more providers need no key at all — **Claude Code (CLI)** and **Codex
+(CLI)**. Pick one in settings and requests run through the CLI installed on the
+machine that hosts the server, billed to its subscription (Claude Pro/Max or
+ChatGPT Plus/Pro) instead of a metered key.
+
+This only makes sense when you self-host on your own computer: the server spawns
+`claude` / `codex` locally, so the binary has to be on its PATH and logged in
+(run `claude` once, or `codex login`). Inside Docker there is no CLI unless you
+bake one into the image. Neither CLI enforces a response schema the way the APIs
+do, so the answers are held to a looser guarantee — that is the price of not
+paying per token.
 
 ## Playtime tracker
 
