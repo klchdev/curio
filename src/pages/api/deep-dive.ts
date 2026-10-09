@@ -1,13 +1,11 @@
 import type { APIRoute } from "astro";
 import { getUserId } from "../../lib/auth";
 import { db } from "../../db";
-import { games, deepDives } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
-import { getAppReviews } from "../../lib/steam";
-import { generateDeepDive } from "../../lib/deep-dive";
-import { getReviewCorpus, getFirstPassPick, getTasteProfile } from "../../lib/queries";
-import { adapterFor, LlmAuthError } from "../../lib/llm";
+import { games } from "../../db/schema";
+import { eq } from "drizzle-orm";
+import { getCachedDeepDive, diveAndSave } from "../../lib/deep-dive-store";
 import { getLlmCredentials } from "../../lib/llm/credentials";
+import { modelErrorText } from "../../lib/query-errors";
 import { localeFrom } from "../../lib/i18n";
 import { t } from "../../lib/strings";
 
@@ -26,44 +24,22 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const userId = getUserId(cookies);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  const s = t(localeFrom(cookies, request));
+  const locale = localeFrom(cookies, request);
+  const s = t(locale);
   const { gameId, refresh } = await request.json();
   if (!Number.isInteger(gameId)) return json({ error: s.errors.noGame }, 400);
 
-  const game = await db
-    .select({
-      id: games.id,
-      steamAppId: games.steamAppId,
-      title: games.title,
-      genres: games.genres,
-      description: games.shortDescription,
-      releaseDate: games.releaseDate,
-    })
+  const exists = await db
+    .select({ id: games.id })
     .from(games)
     .where(eq(games.id, gameId))
     .limit(1)
-    .then((rows) => rows[0]);
+    .then((rows) => rows.length > 0);
 
-  if (!game) return json({ error: s.errors.gameNotFound }, 404);
+  if (!exists) return json({ error: s.errors.gameNotFound }, 404);
 
-  const cached = await db
-    .select()
-    .from(deepDives)
-    .where(and(eq(deepDives.userId, userId), eq(deepDives.gameId, gameId)))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (cached && !refresh) {
-    return json({
-      fit: cached.fit,
-      tier: cached.tier,
-      summary: cached.summary,
-      forYou: cached.forYou,
-      against: cached.against,
-      complaints: cached.complaints ? cached.complaints.split("\n") : [],
-      cached: true,
-    });
-  }
+  const cached = await getCachedDeepDive(userId, gameId);
+  if (cached && !refresh) return json(cached);
 
   /*
    * We check the key only after the cache: an analysis that already exists is
@@ -73,70 +49,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   if (!creds) return json({ error: "no_llm_key" }, 400);
 
   try {
-    const [reviews, corpus, firstPass, profile] = await Promise.all([
-      getAppReviews(game.steamAppId),
-      getReviewCorpus(userId),
-      getFirstPassPick(userId, gameId),
-      getTasteProfile(userId),
-    ]);
-
-    const dive = await generateDeepDive(
-      {
-        title: game.title,
-        genres: game.genres,
-        releaseDate: game.releaseDate,
-        description: game.description,
-        reviews,
-        corpus,
-        profile,
-        firstPass,
-      },
-      creds,
-      localeFrom(cookies, request)
-    );
-
-    await db
-      .insert(deepDives)
-      .values({
-        userId,
-        gameId,
-        fit: dive.fit,
-        tier: dive.tier,
-        summary: dive.summary,
-        forYou: dive.forYou,
-        against: dive.against,
-        complaints: dive.complaints.join("\n"),
-        reviewsUsed: reviews?.reviews.length ?? 0,
-      })
-      .onConflictDoUpdate({
-        target: [deepDives.userId, deepDives.gameId],
-        set: {
-          fit: dive.fit,
-          tier: dive.tier,
-          summary: dive.summary,
-          forYou: dive.forYou,
-          against: dive.against,
-          complaints: dive.complaints.join("\n"),
-          reviewsUsed: reviews?.reviews.length ?? 0,
-          createdAt: new Date(),
-        },
-      });
-
-    return json({ ...dive, reviewsUsed: reviews?.reviews.length ?? 0, cached: false });
+    const dive = await diveAndSave(userId, gameId, creds, locale);
+    if (!dive) return json({ error: s.errors.gameNotFound }, 404);
+    return json(dive);
   } catch (err) {
     console.error("[deep-dive]", err);
-    const kind = adapterFor(creds.provider).classifyError(err).kind;
-    const message = err instanceof LlmAuthError
-      ? s.llm.errorAuth
-      : kind === "no_credit"
-        ? s.errors.modelNoCredit
-        : kind === "daily_quota"
-          ? s.errors.modelQuotaDay
-          : kind === "rate_limit"
-            ? s.errors.modelQuota
-            : kind === "overloaded" || kind === "server"
-              ? s.errors.modelBusy
-              : s.errors.runFailedFallback;
-    return json({ error: message }, 502);
+    return json({ error: modelErrorText(s, err, creds.provider) }, 502);
   }
 };

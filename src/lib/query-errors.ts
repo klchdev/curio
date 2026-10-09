@@ -1,4 +1,5 @@
 import type { Dict } from "./strings";
+import { adapterFor, LlmAuthError, type ProviderId } from "./llm";
 
 /**
  * The data layer has no request locale, so it names the failure instead of
@@ -54,4 +55,19 @@ export function errorText(s: Dict, error: QueryError): string {
     case "notEnoughPlaytime":
       return s.errors.notEnoughPlaytime(error.need, error.played);
   }
+}
+
+/**
+ * A model call that failed, worded for the person. The SDK's own message
+ * carries the provider's raw JSON — a wall of text on screen — so the known
+ * kinds of failure get human wording and the rest falls back to a generic line.
+ */
+export function modelErrorText(s: Dict, err: unknown, provider: ProviderId): string {
+  if (err instanceof LlmAuthError) return s.llm.errorAuth;
+  const kind = adapterFor(provider).classifyError(err).kind;
+  if (kind === "no_credit") return s.errors.modelNoCredit;
+  if (kind === "daily_quota") return s.errors.modelQuotaDay;
+  if (kind === "rate_limit") return s.errors.modelQuota;
+  if (kind === "overloaded" || kind === "server") return s.errors.modelBusy;
+  return s.errors.runFailedFallback;
 }

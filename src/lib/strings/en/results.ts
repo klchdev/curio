@@ -94,3 +94,36 @@ export const chrono: typeof Ru.chrono = {
   rangeAll: "All time",
   weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
 };
+
+/** The finder chat: a request in your own words, answered from the library and the store. */
+export const finder: typeof Ru.finder = {
+  tabPicks: "Picks",
+  tabAsk: "Ask",
+  title: "Find by request",
+  lede: "Describe what you're after: a mood, mechanics, what it should feel like from games you've played. Curio shortlists games from your library and the store and reads each one against Steam reviews and your taste.",
+  placeholder: "E.g. something like Disco Elysium, but shorter and without combat",
+  followUp: "Narrow it down: no roguelikes, shorter, for one evening…",
+  send: "Find",
+  reset: "New request",
+  examples: [
+    "Something atmospheric for a couple of evenings, like Inside",
+    "Tactics with a story, like the ones I finished and rated high",
+    "What I dropped that deserves a second chance",
+  ],
+  stageShortlist: "Curio is shortlisting games for the request",
+  stageStore: "Looking them up in the Steam store",
+  diving: (done: number, total: number) => `Reading reviews: ${done} of ${total}`,
+  owned: "Already yours",
+  buy: "Worth buying",
+  noneOwned: "Nothing fitting in your library",
+  noneStore: "Nothing fitting in the store",
+  missed: (titles: string) => `Not found on Steam: ${titles}`,
+  openStore: "Open in Steam",
+  more: "Details",
+  less: "Collapse",
+  waiting: "waiting for its read",
+  needKey: "Finding by request needs a model — connect one in settings.",
+  toSettings: "Open settings",
+  emptyRequest: "Write what you're after",
+  streamBroken: "The connection dropped — some reads didn't arrive",
+};

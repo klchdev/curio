@@ -1030,6 +1030,55 @@ export async function getRecommendationCandidates(userId: number): Promise<Candi
     }));
 }
 
+export interface FinderLibraryGame {
+  gameId: number;
+  steamAppId: number;
+  title: string;
+  headerImage: string | null;
+  playtimeMinutes: number;
+  genres: string | null;
+  verdict: string | null;
+  tier: string | null;
+  hasRecord: boolean;
+}
+
+/**
+ * The whole library for the finder chat, played part included.
+ *
+ * The advisor run only looks at the untouched, but a request like "something
+ * I dropped that's worth going back to" is about the rest — so whether a
+ * played game fits is the model's call, made against the request.
+ */
+export async function getFinderLibrary(userId: number): Promise<FinderLibraryGame[]> {
+  const rows = await db
+    .select({
+      gameId: games.id,
+      steamAppId: games.steamAppId,
+      title: games.title,
+      headerImage: games.headerImage,
+      playtimeMinutes: userGames.playtimeMinutes,
+      genres: games.genres,
+      verdict: gameRecords.verdict,
+      tier: gameRecords.tier,
+      recordId: gameRecords.id,
+    })
+    .from(userGames)
+    .innerJoin(games, eq(games.id, userGames.gameId))
+    .leftJoin(gameRecords, and(eq(gameRecords.gameId, games.id), eq(gameRecords.userId, userId)))
+    .where(
+      and(
+        eq(userGames.userId, userId),
+        eq(games.isDemo, false),
+        eq(games.isSoftware, false),
+        eq(userGames.excluded, false)
+      )
+    )
+    .orderBy(desc(userGames.playtimeMinutes))
+    .limit(2000);
+
+  return rows.map(({ recordId, ...row }) => ({ ...row, hasRecord: recordId !== null }));
+}
+
 async function getReviewedGameIds(userId: number): Promise<Set<number>> {
   const rows = await db
     .select({ gameId: gameRecords.gameId })
