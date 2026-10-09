@@ -17,14 +17,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
-    "@astrojs/node": "^10.0.4",
-    "@astrojs/react": "^5.0.3",
+    "@astrojs/node": "^11.1.7",
+    "@astrojs/react": "^7.0.1",
     "@google/genai": "^2.15.0",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "astro": "^6.1.4",
-    "drizzle-orm": "^0.45.2",
+    "astro": "^7.3.8",
+    "drizzle-orm": "^0.45.4",
     "openai": "^7.4.0",
     "openid": "^2.0.15",
     "pg": "^8.20.0",
@@ -35,7 +35,7 @@
     "@astrojs/check": "^0.9.10",
     "@tailwindcss/vite": "^4.2.2",
     "@types/openid": "^2.0.5",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3"
   }

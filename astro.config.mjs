@@ -9,6 +9,8 @@ import react from "@astrojs/react";
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
+  // Astro 7 defaults to "jsx", which drops spaces between inline elements
+  compressHTML: true,
 
   security: {
     checkOrigin: false,
