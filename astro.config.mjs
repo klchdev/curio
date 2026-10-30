@@ -53,10 +53,15 @@ export default defineConfig({
        * up in the page source — but it has no default on purpose: a hard-coded
        * id would make every self-hosted copy report its visitors to this
        * instance's owner. Empty means no counter anywhere.
+       *
+       * Declared "secret" anyway: Astro inlines public server variables at
+       * build time, and the Docker build sees no runtime variables, so a
+       * "public" id was baked in as undefined and the counter never rendered.
+       * Secrets are read when the server starts, like everything else here.
        */
       YANDEX_METRIKA_ID: envField.string({
         context: "server",
-        access: "public",
+        access: "secret",
         optional: true,
       }),
     },
