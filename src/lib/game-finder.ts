@@ -1,6 +1,7 @@
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { FinderLibraryGame, ReviewCorpusItem, TasteTag } from "./queries";
 import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
+import { WORTH_SCALE_NOTE, worthForPrompt } from "./vocab";
 
 /**
  * The finder chat's first pass: a request in the player's own words turned
@@ -97,9 +98,9 @@ function formatReviews(reviews: ReviewCorpusItem[]): string {
     .map((review) => {
       const meta = [
         review.tier ? `тир ${review.tier}` : null,
-        review.rating ? `оценка ${review.rating}/5` : null,
+        review.rating ? worthForPrompt(review.rating) : null,
         review.verdict,
-        `${review.hours}ч`,
+        review.elsewhere ? "играл не в Steam" : `${review.hours}ч`,
       ]
         .filter(Boolean)
         .join(", ");
@@ -171,7 +172,7 @@ export async function generateShortlist(
     creds,
     async (client) => {
       const text = await client.generateJson({
-        system: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
+        system: `${SYSTEM_INSTRUCTION}\n\n${WORTH_SCALE_NOTE}\n\n${OUTPUT_LANGUAGE[locale]}`,
         prompt,
         schema: RESPONSE_SCHEMA,
       });

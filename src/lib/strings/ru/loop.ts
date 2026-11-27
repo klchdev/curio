@@ -24,6 +24,8 @@ export const choose = {
   taken: (title: string) => `Контракт взят: ${title}`,
   takenGo: "Открыть «Сейчас»",
   next: "Дальше",
+  playedElsewhere: "Уже играл на другой платформе",
+  playedElsewhereHint: "Оставь отзыв — игра уйдёт из советов, а следующий прогон учтёт её во вкусе.",
   contractNote: `Контракт — обязательство сыграть минимум ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} минут и записать первое впечатление. Одновременно их может быть ${THRESHOLDS.MAX_ACTIVE_SLOTS}.`,
   profileSummary: "Что Кьюрио понял про тебя",
   groundingDescription: "сужу по описанию из магазина",
@@ -91,6 +93,7 @@ export const now = {
   queue: "Требует ответа",
   queueCount: (total: number) => `${total} игр сыграно, но вердикта нет`,
   hasReview: "отзыв есть — нужен вердикт",
+  recentlyPlayed: (days: number) => (days <= 0 ? "играл сегодня" : `играл ${days} дн. назад`),
   setVerdict: "Вердикт",
   finished: "Прошёл",
   endless: "В ротации",
@@ -151,9 +154,14 @@ export const sheet = {
   answerSkip: "Пропустить",
   questionsDone: "Готово",
   quotesLede: "Как ты говорил об этой игре раньше",
-  driftHint: (rating: number, suggested: number, entries: number) =>
-    `Оценка ${rating} стоит уже ${entries} ${plural(entries, "запись", "записи", "записей")}, а последние звучат ${suggested < rating ? "холоднее" : "теплее"}. Поставить ${suggested}?`,
-  driftApply: (suggested: number) => `Ставлю ${suggested}`,
+  driftHint: (current: string, suggested: string, entries: number, colder: boolean) =>
+    `«${current}» стоит уже ${entries} ${plural(entries, "запись", "записи", "записей")}, а последние звучат ${colder ? "холоднее" : "теплее"}. Сдвинуть на «${suggested}»?`,
+  driftApply: (suggested: string) => `Сдвинуть на «${suggested}»`,
+  worthHint: "Насколько ты рад, что попробовал. Середина — «нормально», это не минус.",
+  saved: "Записал ✓",
+  thinking: "Кьюрио перечитывает твой дневник об игре и готовит пару вопросов — обычно до полуминуты.",
+  thinkingSkip: "Не ждать",
+  elsewhereBadge: "Играл не в Steam — время из библиотеки не учитываем",
 };
 
 /**

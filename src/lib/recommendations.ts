@@ -1,6 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { CandidateGame, ReviewCorpusItem, TasteTag } from "./queries";
-import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
+import { ADVISOR_TIER_VALUES, WORTH_SCALE_NOTE, worthForPrompt, type AdvisorTier } from "./vocab";
 import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
 
 export const MAX_PICKS = 40;
@@ -29,7 +29,7 @@ const SYSTEM_INSTRUCTION = `Ты разбираешь вкус игрока по
 Берутся только из списка КАНДИДАТОВ: это нетронутое или запущенное на пару минут, вкус по ним ещё не сформирован.
 - Советуй ТОЛЬКО игры из списка кандидатов, строго по их steamAppId. Ничего не выдумывай.
 - Тир D — «не трать время»: то, что противоречит его антипрофилю. Такие тоже включай, 3-8 штук, с объяснением.
-- В reason обязательно ссылайся на его конкретные отзывы по названиям игр («Expeditions: Rome у тебя A/5 и пройдена»). Без общих слов вроде «отличная игра» и «тебе понравится».
+- В reason обязательно ссылайся на его конкретные отзывы по названиям игр («Expeditions: Rome у тебя в тире A и пройдена»). Без общих слов вроде «отличная игра» и «тебе понравится».
 - reason — 1-2 предложения, по делу.
 - Всего ${MAX_PICKS} игр максимум.
 
@@ -116,9 +116,9 @@ function formatReviews(reviews: ReviewCorpusItem[]): string {
   const lines = reviews.map((review) => {
     const meta = [
       review.tier ? `тир ${review.tier}` : null,
-      review.rating ? `оценка ${review.rating}/5` : null,
+      review.rating ? worthForPrompt(review.rating) : null,
       review.verdict,
-      `${review.hours}ч`,
+      review.elsewhere ? "играл не в Steam" : `${review.hours}ч`,
       review.isDemo ? "демка" : null,
     ]
       .filter(Boolean)
@@ -206,7 +206,7 @@ export async function generateRecommendations(
 
       return client.streamJson(
         {
-          system: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
+          system: `${SYSTEM_INSTRUCTION}\n\n${WORTH_SCALE_NOTE}\n\n${OUTPUT_LANGUAGE[locale]}`,
           prompt,
           schema: RESPONSE_SCHEMA,
         },

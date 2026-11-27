@@ -1,4 +1,5 @@
 import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
+import { WORTH_SCALE_NOTE, worthForPrompt } from "./vocab";
 
 /**
  * Questions about a review that was just closed out.
@@ -20,6 +21,8 @@ export interface QuestionInput {
   verdict: string | null;
   rating: number | null;
   tier: string | null;
+  /** Played on another platform: the hours on the entries are Steam's and mean nothing. */
+  elsewhere?: boolean;
   /** How the player rated other games — so a comparison has something to stand on. */
   neighbours: Array<{ title: string; tier: string | null; rating: number | null }>;
 }
@@ -62,8 +65,8 @@ export async function generateQuestions(
   const feed = input.entries
     .map((entry) => {
       const meta = [
-        `${entry.hours}ч`,
-        entry.rating ? `оценка ${entry.rating}/5` : null,
+        input.elsewhere ? null : `${entry.hours}ч`,
+        entry.rating ? worthForPrompt(entry.rating) : null,
         entry.tier ? `тир ${entry.tier}` : null,
       ]
         .filter(Boolean)
@@ -74,7 +77,7 @@ export async function generateQuestions(
 
   const neighbours = input.neighbours
     .map((game) => {
-      const meta = [game.tier ? `тир ${game.tier}` : null, game.rating ? `${game.rating}/5` : null]
+      const meta = [game.tier ? `тир ${game.tier}` : null, game.rating ? worthForPrompt(game.rating) : null]
         .filter(Boolean)
         .join(", ");
       return `- ${game.title}${meta ? ` (${meta})` : ""}`;
@@ -83,7 +86,7 @@ export async function generateQuestions(
 
   const verdict = [
     input.verdict ? `вердикт ${input.verdict}` : null,
-    input.rating ? `оценка ${input.rating}/5` : null,
+    input.rating ? worthForPrompt(input.rating) : null,
     input.tier ? `тир ${input.tier}` : null,
   ]
     .filter(Boolean)
@@ -92,6 +95,7 @@ export async function generateQuestions(
   const prompt = [
     `# Игра: ${input.gameTitle}`,
     `Итог: ${verdict || "не выставлен"}`,
+    input.elsewhere ? "Играл не в Steam, на другой платформе — наигранных часов нет, не спрашивай про них." : "",
     "",
     "# Лента записей, от первой к последней",
     feed,
@@ -102,7 +106,7 @@ export async function generateQuestions(
 
   const raw = await withLlm(creds, async (client) => {
     const answer = await client.generateJson({
-      system: SYSTEM_INSTRUCTION,
+      system: `${SYSTEM_INSTRUCTION}\n\n${WORTH_SCALE_NOTE}`,
       prompt,
       schema: RESPONSE_SCHEMA,
       /*

@@ -2,7 +2,7 @@ import { DEFAULT_LOCALE, type Locale } from "./i18n";
 import type { ReviewCorpusItem, TasteTag } from "./queries";
 import type { AppReviews } from "./steam";
 import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
-import { ADVISOR_TIER_VALUES, type AdvisorTier } from "./vocab";
+import { ADVISOR_TIER_VALUES, WORTH_SCALE_NOTE, worthForPrompt, type AdvisorTier } from "./vocab";
 
 /**
  * A deep dive on a single game: the store description plus other players'
@@ -113,8 +113,8 @@ function formatCorpus(corpus: ReviewCorpusItem[]): string {
       const meta = [
         item.verdict,
         item.tier ? `тир ${item.tier}` : null,
-        item.rating ? `оценка ${item.rating}/5` : null,
-        `${item.hours}ч`,
+        item.rating ? worthForPrompt(item.rating) : null,
+        item.elsewhere ? "играл не в Steam" : `${item.hours}ч`,
       ]
         .filter(Boolean)
         .join(", ");
@@ -180,7 +180,7 @@ export async function generateDeepDive(
 
   const raw = await withLlm(creds, async (client) => {
     const text = await client.generateJson({
-      system: `${SYSTEM_INSTRUCTION}\n\n${OUTPUT_LANGUAGE[locale]}`,
+      system: `${SYSTEM_INSTRUCTION}\n\n${WORTH_SCALE_NOTE}\n\n${OUTPUT_LANGUAGE[locale]}`,
       prompt,
       schema: RESPONSE_SCHEMA,
     });

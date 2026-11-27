@@ -1365,7 +1365,7 @@ interface RawRecord {
   verdict: "finished" | "endless" | "playing" | "dropped" | "later" | null;
   tier: "S" | "A" | "B" | "C" | "D" | "F" | null;
   rating: number | null;
-  origin: "roulette" | "retro" | "triage" | "demo" | "steam";
+  origin: "roulette" | "retro" | "triage" | "demo" | "steam" | "elsewhere";
   playtimeAtLastEntry: number;
   entries: RawEntry[];
 }

@@ -76,3 +76,47 @@
     animation: none;
   }
 }
+
+/*
+ * The "glad I tried it" slider. The track fills up to the thumb so the scale
+ * reads as one quantity growing, not five unrelated marks.
+ */
+.worth-slider {
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+      to right,
+      var(--color-gray-400) 0,
+      var(--color-gray-400) var(--worth, 50%),
+      var(--color-gray-800) var(--worth, 50%)
+    );
+  cursor: pointer;
+}
+.worth-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: white;
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.4);
+}
+.worth-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 9999px;
+  background: white;
+}
+
+/* An honest "still working" for the closing questions: no fake percentage. */
+@keyframes thinking {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.thinking-bar {
+  animation: thinking 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-bar { animation: none; }
+}

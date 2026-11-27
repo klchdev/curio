@@ -141,8 +141,12 @@ export const gameRecords = pgTable(
     verdict: text("verdict", { enum: ["finished", "endless", "playing", "dropped", "later"] }),
     tier: text("tier", { enum: ["S", "A", "B", "C", "D", "F"] }),
     rating: integer("rating"),
-    /** Where the record came from — an invisible storage detail, not a filter in the UI. */
-    origin: text("origin", { enum: ["roulette", "retro", "triage", "demo", "steam"] })
+    /**
+     * Where the record came from — an invisible storage detail, not a filter in the UI.
+     * elsewhere — played on another platform: the Steam playtime says nothing
+     * about it. A plain text column, so the new value needs no migration.
+     */
+    origin: text("origin", { enum: ["roulette", "retro", "triage", "demo", "steam", "elsewhere"] })
       .notNull()
       .default("retro"),
     slotId: integer("slot_id").references(() => slots.id),

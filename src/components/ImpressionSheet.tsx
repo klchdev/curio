@@ -5,6 +5,7 @@ import {
   tiers,
   verdicts,
   worthLabels,
+  WORTH_BG,
   WORTH_COLORS,
   type ImpressionMode,
   type Tier,
@@ -32,6 +33,8 @@ interface Props {
   currentRating?: number | null;
   currentTier?: string | null;
   locale?: Locale;
+  /** Played on another platform: the Steam playtime says nothing about it. */
+  elsewhere?: boolean;
   onClose: () => void;
   onSaved?: () => void;
 }
@@ -53,6 +56,7 @@ export default function ImpressionSheet({
   currentRating,
   currentTier,
   locale = DEFAULT_LOCALE,
+  elsewhere = false,
   onClose,
   onSaved,
 }: Props) {
@@ -66,6 +70,13 @@ export default function ImpressionSheet({
   const [appIdOrUrl, setAppIdOrUrl] = useState("");
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  /*
+   * Saving takes a second; the closing questions take up to half a minute of
+   * model time. Both used to hide behind one "Saving…", and a saved review
+   * looked like a hung one. The second phase gets its own words and a way out.
+   */
+  const [thinking, setThinking] = useState(false);
+  const thinkingAbort = useRef<AbortController | null>(null);
   const [celebrating, setCelebrating] = useState(false);
   const [error, setError] = useState("");
 
@@ -160,6 +171,7 @@ export default function ImpressionSheet({
           rating: rule.showRating ? rating : undefined,
           tier: rule.showTier ? tier : undefined,
           note: note.trim() || undefined,
+          elsewhere: elsewhere || undefined,
           previous: { verdict: currentVerdict, rating: currentRating, tier: currentTier },
         }),
       });
@@ -184,13 +196,22 @@ export default function ImpressionSheet({
        * the sheet simply closes, as it used to.
        */
       if (gameId && verdict && CLOSING_VERDICTS.has(verdict)) {
+        const abort = new AbortController();
+        thinkingAbort.current = abort;
+        setThinking(true);
         const closing = await fetch("/api/entry-closing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ gameId }),
+          signal: abort.signal,
         })
           .then((res) => (res.ok ? res.json() : null))
           .catch(() => null);
+        thinkingAbort.current = null;
+        setThinking(false);
+
+        // "Don't wait" was pressed: the review is saved, the sheet is already closing
+        if (abort.signal.aborted) return;
 
         if (closing?.take || closing?.questions?.length) {
           setTake(closing.take ?? "");
@@ -246,6 +267,14 @@ export default function ImpressionSheet({
     }
   }
 
+  /** The review is already in the diary; only the questions are given up. */
+  function skipThinking() {
+    thinkingAbort.current?.abort();
+    setThinking(false);
+    if (rule.celebrate) setCelebrating(true);
+    else finish();
+  }
+
   function finish() {
     if (onSaved) {
       onSaved();
@@ -278,7 +307,10 @@ export default function ImpressionSheet({
               {rule.title[locale]}
             </p>
             <h2 className="mt-1 text-xl font-bold">{gameTitle}</h2>
-            {currentPlaytime > 0 && (
+            {elsewhere && (
+              <p className="mt-1 text-sm text-violet-300/80">{s.sheet.elsewhereBadge}</p>
+            )}
+            {!elsewhere && currentPlaytime > 0 && (
               <p className="mt-1 text-sm text-gray-500">
                 {s.sheet.played(formatPlaytime(currentPlaytime, locale))}
                 {delta != null && delta > 0 && (
@@ -294,7 +326,24 @@ export default function ImpressionSheet({
             <img src={gameImage} alt="" className="header-art mb-5 w-full rounded-xl" />
           )}
 
-          {take || questions.length > 0 ? (
+          {thinking ? (
+            <div className="space-y-4 py-2" role="status" aria-live="polite">
+              <p className="text-sm font-medium text-emerald-400">{s.sheet.saved}</p>
+              <div className="flex items-start gap-3 rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
+                <CurioMark className="mt-0.5 h-5 w-5 shrink-0 animate-pulse text-indigo-300" />
+                <p className="text-sm leading-relaxed text-gray-300">{s.sheet.thinking}</p>
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-gray-800">
+                <div className="thinking-bar h-full w-1/3 rounded-full bg-indigo-500/70" />
+              </div>
+              <button
+                onClick={skipThinking}
+                className="w-full rounded-lg border border-gray-800 py-2 text-sm text-gray-400 transition hover:bg-gray-900"
+              >
+                {s.sheet.thinkingSkip}
+              </button>
+            </div>
+          ) : take || questions.length > 0 ? (
             <div className="space-y-3">
               {take && (
                 <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-3">
@@ -424,25 +473,32 @@ export default function ImpressionSheet({
           {rule.showRating && (
             <div className="mb-5">
               <span className="mb-2 block text-sm text-gray-400">{s.sheet.worth}</span>
-              <div className="flex gap-1.5">
-                {worthLabels(locale).map((label, index) => (
-                  <button
-                    key={label}
-                    title={label}
-                    onClick={() => setRating(index + 1)}
-                    className={`h-9 flex-1 rounded-lg border text-xs transition ${
-                      rating === index + 1
-                        ? "border-gray-500 bg-gray-800"
-                        : "border-gray-800 hover:bg-gray-900"
-                    }`}
-                  >
-                    {index + 1}
-                  </button>
-                ))}
+              {/*
+                A slider, not five numbered buttons: the digits made it a school
+                mark, and a "3" read as a complaint. It is one continuous
+                question — how glad are you that you tried it — and the words
+                under the thumb are the only scale shown.
+              */}
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={rating}
+                onChange={(event) => setRating(Number(event.target.value))}
+                aria-valuetext={worthLabels(locale)[rating - 1]}
+                className="worth-slider w-full"
+                style={{ ["--worth" as string]: `${((rating - 1) / 4) * 100}%` }}
+              />
+              <div className="mt-1 flex justify-between text-[11px] text-gray-600">
+                <span>{worthLabels(locale)[0]}</span>
+                <span>{worthLabels(locale)[4]}</span>
               </div>
-              <p className={`mt-1.5 text-sm ${WORTH_COLORS[rating - 1]}`}>
+              <p className={`mt-1.5 flex items-center gap-2 text-sm font-medium ${WORTH_COLORS[rating - 1]}`}>
+                <span className={`inline-block h-2 w-2 rounded-full ${WORTH_BG[rating - 1]}`} />
                 {worthLabels(locale)[rating - 1]}
               </p>
+              <p className="mt-1 text-xs text-gray-600">{s.sheet.worthHint}</p>
 
               {drift && rating === drift.rating && (
                 /*
@@ -451,12 +507,17 @@ export default function ImpressionSheet({
                  * anyway. One tap and it disappears along with the question.
                  */
                 <p className="mt-2 text-xs leading-relaxed text-amber-300/70">
-                  {s.sheet.driftHint(drift.rating, drift.suggested, drift.entries)}{" "}
+                  {s.sheet.driftHint(
+                    worthLabels(locale)[drift.rating - 1]!,
+                    worthLabels(locale)[drift.suggested - 1]!,
+                    drift.entries,
+                    drift.suggested < drift.rating
+                  )}{" "}
                   <button
                     onClick={() => setRating(drift.suggested)}
                     className="text-amber-200 underline underline-offset-2 transition hover:text-amber-100"
                   >
-                    {s.sheet.driftApply(drift.suggested)}
+                    {s.sheet.driftApply(worthLabels(locale)[drift.suggested - 1]!)}
                   </button>
                 </p>
               )}

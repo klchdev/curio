@@ -24,6 +24,8 @@ export const choose: typeof Ru.choose = {
   taken: (title: string) => `Contract taken: ${title}`,
   takenGo: "Open \"Now\"",
   next: "Next",
+  playedElsewhere: "Already played on another platform",
+  playedElsewhereHint: "Leave a review — the game leaves the picks, and the next run counts it toward your taste.",
   contractNote: `A contract is a commitment: at least ${THRESHOLDS.MIN_PLAYTIME_TO_REVIEW} minutes and a written first impression. You can hold ${THRESHOLDS.MAX_ACTIVE_SLOTS} at a time.`,
   profileSummary: "What Curio figured out about you",
   groundingDescription: "judging by the store description",
@@ -84,6 +86,7 @@ export const now: typeof Ru.now = {
   queue: "Needs an answer",
   queueCount: (total: number) => `${total} games played with no verdict`,
   hasReview: "review written — needs a verdict",
+  recentlyPlayed: (days: number) => (days <= 0 ? "played today" : `played ${days}d ago`),
   setVerdict: "Verdict",
   finished: "Finished",
   endless: "In rotation",
@@ -139,9 +142,14 @@ export const sheet: typeof Ru.sheet = {
   answerSkip: "Skip",
   questionsDone: "Done",
   quotesLede: "How you talked about this game before",
-  driftHint: (rating: number, suggested: number, entries: number) =>
-    `${rating} has been standing for ${entries} ${entries === 1 ? "entry" : "entries"}, and the latest ones read ${suggested < rating ? "colder" : "warmer"}. Make it ${suggested}?`,
-  driftApply: (suggested: number) => `Make it ${suggested}`,
+  driftHint: (current: string, suggested: string, entries: number, colder: boolean) =>
+    `"${current}" has been standing for ${entries} ${entries === 1 ? "entry" : "entries"}, and the latest ones read ${colder ? "colder" : "warmer"}. Move it to "${suggested}"?`,
+  driftApply: (suggested: string) => `Move to "${suggested}"`,
+  worthHint: "How glad you are you tried it. The middle is \"Fine\" — not a minus.",
+  saved: "Saved ✓",
+  thinking: "Curio is rereading your diary on this game and drafting a couple of questions — usually under half a minute.",
+  thinkingSkip: "Don't wait",
+  elsewhereBadge: "Played outside Steam — library playtime is ignored",
 };
 
 /** Advice with no key: assembled from store genres and the player's own tiers. */

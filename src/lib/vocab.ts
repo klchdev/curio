@@ -186,6 +186,30 @@ export function worthLabel(rating: number, locale: Locale = DEFAULT_LOCALE): str
   return WORTH_LABEL[locale][Math.min(Math.max(rating, 1), 5) - 1]!;
 }
 
+/**
+ * The rating as a model should read it.
+ *
+ * "3/5" reads as a school mark, and a model took it for disappointment: the
+ * closing questions opened with "you gave it 3 out of 5" to a player who had
+ * picked "Fine". The scale is not good-to-bad, it is how glad the player is
+ * they tried the game, and its middle step is a calm yes. So prompts get the
+ * player's own words, never the digit.
+ */
+const WORTH_PROMPT_LABEL = [
+  "зря потратил время",
+  "скорее не стоило",
+  "нормально",
+  "скорее рад, что попробовал",
+  "рад, что попробовал",
+] as const;
+
+export function worthForPrompt(rating: number): string {
+  return `доволен: «${WORTH_PROMPT_LABEL[Math.min(Math.max(rating, 1), 5) - 1]}»`;
+}
+
+/** Goes into every system prompt that sees the rating. */
+export const WORTH_SCALE_NOTE = `Про «доволен»: это не школьная оценка, а ответ на вопрос «рад ли я, что попробовал эту игру», по ступеням: зря потратил время → скорее не стоило → нормально → скорее рад → рад, что попробовал. «Нормально» — спокойное «да, нормальная игра», а не недовольство. Никогда не пересказывай это цифрой вроде «3 из 5» или «3/5»: называй его словами («тебе было нормально», «ты рад, что попробовал»).`;
+
 /* ---------- Time ---------- */
 
 export function formatPlaytime(minutes: number, locale: Locale = DEFAULT_LOCALE): string {

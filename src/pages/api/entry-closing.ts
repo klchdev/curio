@@ -63,6 +63,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       verdict: gameRecords.verdict,
       rating: gameRecords.rating,
       tier: gameRecords.tier,
+      origin: gameRecords.origin,
       title: games.title,
     })
     .from(gameRecords)
@@ -148,6 +149,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     verdict: record.verdict,
     rating: record.rating,
     tier: record.tier,
+    elsewhere: record.origin === "elsewhere",
     entries: own.map((entry) => ({
       hours: Math.round((entry.playtimeMinutes / 60) * 10) / 10,
       text: entry.text,

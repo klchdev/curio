@@ -1,4 +1,5 @@
 import { withLlm, type JsonSchema, type LlmCredentials } from "./llm";
+import { WORTH_SCALE_NOTE, worthForPrompt } from "./vocab";
 
 /**
  * What Curio says once it has read the review through.
@@ -20,6 +21,8 @@ export interface TakeInput {
   verdict: string | null;
   rating: number | null;
   tier: string | null;
+  /** Played on another platform: the hours on the entries are Steam's and mean nothing. */
+  elsewhere?: boolean;
   /** Entry tones in order: shows which way the mood was moving. */
   tones: number[];
   /** Their vocabulary: how often each complaint and praise has come up overall. */
@@ -61,7 +64,9 @@ export async function generateTake(
   input: TakeInput,
   creds: LlmCredentials | null
 ): Promise<string> {
-  const feed = input.entries.map((entry) => `[${entry.hours}ч] ${entry.text}`).join("\n\n");
+  const feed = input.entries
+    .map((entry) => (input.elsewhere ? entry.text : `[${entry.hours}ч] ${entry.text}`))
+    .join("\n\n");
 
   const profile = input.profile
     .map((tag) => `- ${tag.label} (${tag.kind === "praise" ? "хвалит" : "ругает"}, игр: ${tag.games})`)
@@ -69,7 +74,7 @@ export async function generateTake(
 
   const related = input.related
     .map((game) => {
-      const meta = [game.tier ? `тир ${game.tier}` : null, game.rating ? `${game.rating}/5` : null]
+      const meta = [game.tier ? `тир ${game.tier}` : null, game.rating ? worthForPrompt(game.rating) : null]
         .filter(Boolean)
         .join(", ");
       return `- ${game.title}${meta ? ` (${meta})` : ""}: ${game.labels.join(", ")}`;
@@ -78,7 +83,7 @@ export async function generateTake(
 
   const neighbours = input.neighbours
     .map((game) => {
-      const meta = [game.tier ? `тир ${game.tier}` : null, game.rating ? `${game.rating}/5` : null]
+      const meta = [game.tier ? `тир ${game.tier}` : null, game.rating ? worthForPrompt(game.rating) : null]
         .filter(Boolean)
         .join(", ");
       return `- ${game.title}${meta ? ` (${meta})` : ""}`;
@@ -87,7 +92,7 @@ export async function generateTake(
 
   const verdict = [
     input.verdict ? `вердикт ${input.verdict}` : null,
-    input.rating ? `оценка ${input.rating}/5` : null,
+    input.rating ? worthForPrompt(input.rating) : null,
     input.tier ? `тир ${input.tier}` : null,
   ]
     .filter(Boolean)
@@ -96,6 +101,7 @@ export async function generateTake(
   const prompt = [
     `# Игра: ${input.gameTitle}`,
     `Итог: ${verdict || "не выставлен"}`,
+    input.elsewhere ? "Играл не в Steam, на другой платформе — наигранных часов нет, не рассуждай о них." : "",
     input.tones.length > 1 ? `Тон записей по порядку: ${input.tones.join(" → ")} (от -2 до 2)` : "",
     "",
     "# Что он написал об этой игре",
@@ -109,7 +115,7 @@ export async function generateTake(
 
   const raw = await withLlm(creds, async (client) => {
     const answer = await client.generateJson({
-      system: SYSTEM_INSTRUCTION,
+      system: `${SYSTEM_INSTRUCTION}\n\n${WORTH_SCALE_NOTE}`,
       prompt,
       schema: RESPONSE_SCHEMA,
       /*

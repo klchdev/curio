@@ -12,7 +12,7 @@ import {
   tags,
   entryTags,
 } from "../db/schema";
-import { eq, and, or, sql, ne, lte, desc, asc, gt, lt, inArray } from "drizzle-orm";
+import { eq, and, or, sql, ne, lte, desc, asc, gt, lt, inArray, isNotNull } from "drizzle-orm";
 import {
   THRESHOLDS,
   isValidVerdict,
@@ -240,6 +240,16 @@ export type AttentionItem =
       existingTier: string | null;
     };
 
+/** How long a game counts as "just played" in triage. */
+const RECENT_PLAY_MS = 21 * 24 * 60 * 60 * 1000;
+
+/** The timestamp when the game was played recently, else 0 — a sort key. */
+function recentAt(lastPlayedAt: string | null): number {
+  if (!lastPlayedAt) return 0;
+  const at = Date.parse(lastPlayedAt);
+  return Number.isFinite(at) && Date.now() - at <= RECENT_PLAY_MS ? at : 0;
+}
+
 export async function getAttentionQueue(
   userId: number,
   options?: { triageLimit?: number }
@@ -354,10 +364,19 @@ export async function getAttentionQueue(
       })
     )
     /*
-     * The ones that already have text go first: they are a single click short,
-     * and among four hundred untouched games they would otherwise just sink.
+     * What was played in the last few weeks goes first, newest on top. The
+     * list used to run by total hours, so a game just finished outside a
+     * contract — ten hours of Mafia — sank under Counter-Strike's hundreds and
+     * never made the eight cards shown: the one game worth asking about right
+     * now was the one nobody was asked about. After the fresh ones come those
+     * that already have text (a single click short), then the rest by hours.
      */
-    .sort((a, b) => Number(b.hasReview) - Number(a.hasReview));
+    .sort((a, b) => {
+      const ra = recentAt(a.lastPlayedAt);
+      const rb = recentAt(b.lastPlayedAt);
+      if (ra || rb) return rb - ra;
+      return Number(b.hasReview) - Number(a.hasReview);
+    });
 
   return {
     items: [...updates, ...triage.slice(0, triageLimit)],
@@ -728,6 +747,8 @@ export interface ReviewCorpusItem {
   verdict: string | null;
   hours: number;
   isDemo: boolean;
+  /** Played on another platform: `hours` is Steam's and means nothing here. */
+  elsewhere: boolean;
   note: string | null;
   /** What the analysis drew from this game's entries: "stifling grind", "living cast". */
   labels: string[];
@@ -774,6 +795,7 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
       verdict: gameRecords.verdict,
       minutes: gameRecords.playtimeAtLastEntry,
       isDemo: games.isDemo,
+      origin: gameRecords.origin,
     })
     .from(gameRecords)
     .innerJoin(games, eq(games.id, gameRecords.gameId))
@@ -840,6 +862,7 @@ export async function getReviewCorpus(userId: number): Promise<ReviewCorpusItem[
       verdict: record.verdict,
       hours: Math.round((record.minutes / 60) * 10) / 10,
       isDemo: record.isDemo,
+      elsewhere: record.origin === "elsewhere",
       note: note || null,
       labels: [...(labelsByRecord.get(record.recordId) ?? [])],
     };
@@ -1234,6 +1257,18 @@ export async function getLatestRecommendations(userId: number) {
     ).map((row) => row.gameId)
   );
 
+  /*
+   * A verdict written since the run decides it too — "played it on another
+   * platform" is exactly that, and without this the card kept offering the
+   * game until the next run.
+   */
+  for (const row of await db
+    .select({ gameId: gameRecords.gameId })
+    .from(gameRecords)
+    .where(and(eq(gameRecords.userId, userId), isNotNull(gameRecords.verdict)))) {
+    decided.add(row.gameId);
+  }
+
   const items = await db
     .select({
       gameId: recommendations.gameId,
@@ -1330,6 +1365,8 @@ export interface ImpressionInput {
   promptedBy?: string | null;
   /** Absolute playtime: the slot works out the delta from the contract's start. */
   currentPlaytime: number;
+  /** Played on another platform — the record is marked so the playtime is not read as Steam's. */
+  elsewhere?: boolean;
   /** What the record held before the edit — to tell "left alone" from "cleared". */
   previous?: {
     verdict?: string | null;
@@ -1438,7 +1475,7 @@ export async function saveImpression(
     // A quick verdict leaves the other fields alone
     tier: input.mode === "quick" ? undefined : input.tier,
     rating: input.mode === "quick" ? undefined : input.rating,
-    origin: input.mode === "quick" ? "triage" : "retro",
+    origin: input.elsewhere ? "elsewhere" : input.mode === "quick" ? "triage" : "retro",
     playtimeMinutes: input.currentPlaytime,
   });
 
@@ -1494,7 +1531,7 @@ interface RecordPatch {
   tier?: Tier | null;
   rating?: number | null;
   /** steam — the review was imported from the profile, not written here. */
-  origin?: "roulette" | "retro" | "triage" | "demo" | "steam";
+  origin?: "roulette" | "retro" | "triage" | "demo" | "steam" | "elsewhere";
   slotId?: number | null;
   playtimeMinutes: number;
   /** The entry's date when it is not "now": a Steam import is backdated. */
@@ -1530,6 +1567,8 @@ async function upsertRecord(
     if (patch.tier !== undefined) update.tier = patch.tier;
     if (patch.rating !== undefined) update.rating = patch.rating;
     if (patch.slotId !== undefined) update.slotId = patch.slotId;
+    // The one origin worth overwriting: it changes how the playtime is read
+    if (patch.origin === "elsewhere") update.origin = "elsewhere";
 
     await db.update(gameRecords).set(update).where(eq(gameRecords.id, existing.id));
     return existing.id;

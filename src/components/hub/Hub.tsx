@@ -50,6 +50,8 @@ export interface QueueItem {
   title: string;
   headerImage: string | null;
   playtimeMinutes: number;
+  /** ISO time; within the last weeks it puts a "played N days ago" on the card. */
+  lastPlayedAt?: string | null;
 }
 
 export interface DiaryEntry {
@@ -592,6 +594,8 @@ function PicksView({
   const [asked, setAsked] = useState<LibraryGame | null>(null);
   const [askOpen, setAskOpen] = useState(false);
   const [sheet, setSheet] = useState<{ mode: "retro" | "entry"; item: LibraryGame } | null>(null);
+  /** A pick already played on a console or another store: reviewed here, gone from the picks. */
+  const [elsewhere, setElsewhere] = useState<Pick | null>(null);
 
   /** A game already played asks for a review, not for a commitment. */
   function actionFor(game: { playtimeMinutes: number; hasRecord: boolean }) {
@@ -909,6 +913,18 @@ function PicksView({
         />
       )}
 
+      {elsewhere && (
+        <ImpressionSheet
+          mode="retro"
+          elsewhere
+          gameId={elsewhere.gameId}
+          gameTitle={elsewhere.title}
+          gameImage={elsewhere.headerImage}
+          locale={locale}
+          onClose={() => setElsewhere(null)}
+        />
+      )}
+
       <Reveal delay={40}>
         <div className={dice === "idle" ? "" : "mb-8"}>
           {dice === "confirm" && (
@@ -1007,6 +1023,13 @@ function PicksView({
                 {s.choose.next}
               </button>
             </div>
+            <button
+              onClick={() => setElsewhere(pick)}
+              title={s.choose.playedElsewhereHint}
+              className="mt-4 text-sm text-violet-300/80 underline decoration-violet-900 underline-offset-4 transition hover:text-violet-200"
+            >
+              🎮 {s.choose.playedElsewhere}
+            </button>
             {/*
               While slots are free, this is the rule of the game. Once they're
               taken the rule is useless: what's needed is why the button is dead
@@ -1678,7 +1701,14 @@ function QueueCard({
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+
+  const playedAt = game.lastPlayedAt ? Date.parse(game.lastPlayedAt) : NaN;
+  const recentDays =
+    Number.isFinite(playedAt) && Date.now() - playedAt <= 21 * 86_400_000
+      ? Math.floor((Date.now() - playedAt) / 86_400_000)
+      : null;
 
   /*
    * The menu lives in a portal, not inside the card. Reveal animates transform
@@ -1689,16 +1719,33 @@ function QueueCard({
   useEffect(() => {
     if (!open) return;
 
+    /*
+     * Below the button when it fits, above it when it doesn't. The lower rows
+     * of the queue sit right over the dock, and the menu used to open
+     * downwards off the screen, "Review" and all. The right edge is measured
+     * against clientWidth — innerWidth counts the scrollbar and pushed the
+     * menu sideways by its width.
+     */
     function place() {
       const rect = button.current?.getBoundingClientRect();
-      if (rect) setAt({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+      if (!rect) return;
+      const height = menu.current?.offsetHeight ?? 290;
+      const below = window.innerHeight - rect.bottom;
+      const top =
+        below < height + 12 && rect.top > below
+          ? Math.max(8, rect.top - 6 - height)
+          : rect.bottom + 6;
+      setAt({ top, right: Math.max(8, document.documentElement.clientWidth - rect.right) });
     }
 
     place();
+    // The first pass guesses the height; once the menu is in the DOM it is measured
+    const frame = requestAnimationFrame(place);
     // The menu is pinned to the viewport, so on scroll it has to be moved along
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
@@ -1714,9 +1761,27 @@ function QueueCard({
         <p className="truncate text-sm font-medium">{game.title}</p>
         <p className="truncate text-xs text-gray-600">
           {formatPlaytime(game.playtimeMinutes, locale)}
+          {recentDays !== null && (
+            <span className="ml-2 text-indigo-300/90">· {s.now.recentlyPlayed(recentDays)}</span>
+          )}
           {game.hasReview && <span className="ml-2 text-emerald-500/80">· {s.now.hasReview}</span>}
         </p>
       </div>
+
+      {/*
+        A game played in the last weeks is the one worth writing about while
+        it's fresh, so the review is a button of its own rather than the last
+        line of a menu.
+      */}
+      {recentDays !== null && (
+        <button
+          onClick={onReview}
+          disabled={busy}
+          className="shrink-0 rounded-lg border border-indigo-800 px-3 py-1.5 text-xs text-indigo-200 transition hover:bg-indigo-950/60 disabled:opacity-40"
+        >
+          📝 {s.now.review}
+        </button>
+      )}
 
       <button
         ref={button}
@@ -1732,6 +1797,7 @@ function QueueCard({
           {/* A click outside closes the menu — without this it only shuts on a second press */}
           <div className="fixed inset-0 z-50" onClick={() => setOpen(false)} />
           <div
+            ref={menu}
             style={{ top: at.top, right: at.right }}
             className="fixed z-50 w-52 overflow-hidden rounded-xl border border-gray-700 bg-gray-950 py-1 shadow-xl shadow-black/60"
           >
